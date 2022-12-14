@@ -207,6 +207,10 @@ jobs:
       - name: NuGet restore solution
         run: nuget restore "AutomationScript.sln" -OutputDirectory ${{ github.workspace }}/packages
 
+      - name: Logging
+        shell: pwsh
+        run: Get-ChildItem -Recurse "${{ github.workspace }}" | Where { ! $_.PSIsContainer } | Select Name,FullName,Length
+
       - name: (Development) Upload artifact Package
         if: inputs.referenceType == 'branch'
         id: upload-step-development
