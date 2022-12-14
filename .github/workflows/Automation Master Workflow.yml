@@ -99,7 +99,7 @@ jobs:
       - name: Prepare Building
         uses: microsoft/setup-msbuild@v1 
       - name: Restore NuGet
-        run: nuget restore
+        run: nuget restore 
       - name: Building
         run: msbuild.exe AutomationScript.sln /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release  "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" # /verbosity:minimal
       - name: Run Test Project Detector
@@ -208,9 +208,9 @@ jobs:
         run: nuget restore "AutomationScript.sln" -OutputDirectory ${{ github.workspace }}/packages
 
       - name: Logging
-        shell: pwsh
-        run: Get-ChildItem -Recurse "${{ github.workspace }}" | Where { ! $_.PSIsContainer } | Select FullName
-        
+        #run: Get-ChildItem -Recurse "${{ github.workspace }}" | Where { ! $_.PSIsContainer } | Select FullName
+        run: find ${{ github.workspace }} -type f
+
       - name: (Development) Upload artifact Package
         if: inputs.referenceType == 'branch'
         id: upload-step-development
