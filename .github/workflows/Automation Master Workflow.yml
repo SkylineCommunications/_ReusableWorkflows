@@ -44,7 +44,6 @@ jobs:
   artifact_creation_registration:
     name: Artifact Registration and Upload 
     runs-on: ubuntu-latest
-    needs: validate_skyline_quality_gate
     env:
       result-artifact-id: none
     outputs:
