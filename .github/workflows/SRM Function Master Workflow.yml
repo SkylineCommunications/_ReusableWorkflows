@@ -93,13 +93,13 @@ jobs:
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
         run: |
-          echo "sonarCloudProjectStatus=$(curl https://${{ secrets.SONAR_TOKEN }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
+          echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
         continue-on-error: true
       - name: Trigger Initial Analysis
         if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
         run: |
             dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.login="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
             dotnet build -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
@@ -108,7 +108,7 @@ jobs:
       - name: Analyze
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
         run: |
             dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.login="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
             dotnet build -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
