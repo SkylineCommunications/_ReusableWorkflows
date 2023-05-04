@@ -267,7 +267,7 @@ jobs:
           # The path to the .sln file of the solution. Atm only DataMiner Automation Script solutions are supported. E.g ./Example/Script.sln.
           solution-path: ./AutomationScript.sln
           # The chosen name of the artifact. E.g. MyName.
-          artifact-name: ${{ env.GITHUB_REPOSITORY }} ${{ inputs.referenceName }}
+          artifact-name: ${{ inputs.repository }} ${{ inputs.referenceName }}
           # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1
           version: ${{ inputs.referenceName }}
       - name: (Release) Set artifact Id
