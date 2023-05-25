@@ -46,7 +46,7 @@ jobs:
       name: Check Visual Solution Project Types
       runs-on: windows-latest
       outputs:
-        isSdk: ${{ steps.results.isSdk}}
+        isSdk: ${{ steps.checker.outputs.isSdk}}
 
       steps:
         # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -83,15 +83,15 @@ jobs:
           shell: pwsh
 
         - name: Run SDKChecker
-          id: results
+          id: checker
           run: |
-            $output = $(SDKChecker --workspace "${{ github.workspace }}")
-            if ($output) {
+            if ($output -eq '') {
               echo "isSdk=true" >> $env:GITHUB_OUTPUT
             } else {
               echo "isSdk=false" >> $env:GITHUB_OUTPUT
             }
           shell: pwsh
+        
 
         # - name:  Run SDKChecker
         #   run: |
