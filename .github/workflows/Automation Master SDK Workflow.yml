@@ -62,122 +62,64 @@ jobs:
         with:
           java-version: 11
           distribution: 'zulu'
-      - name: Cache SonarCloud packages
-        uses: actions/cache@v3
-        with:
-          path: ~\sonar\cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-      - name: Cache SonarCloud scanner
-        id: cache-sonar-scanner
-        uses: actions/cache@v3
-        with:
-          path: .\.sonar\scanner
-          key: ${{ runner.os }}-sonar-scanner
-          restore-keys: ${{ runner.os }}-sonar-scanner
+ 
+      - name: Find .sln file
+        id: findSlnFile        
+        run: |
+          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+        shell: bash  
+        
+      - name: Building
+        run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
+
+      - name: Unit Tests
+      # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
+        id: unit-tests
+        run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
+        continue-on-error: true
+
       - name: Install SonarCloud scanner
-        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
         run: |
-          dotnet tool install dotnet-sonarscanner --tool-path .\.sonar\scanner
-      - name: Install TestProjectDetector
-        run: |
-          dotnet tool install --tool-path .\.tools\TestProjectDetector Skyline.DataMiner.CICD.Tools.TestProjectDetector --version 1.0.1-Alpha
-      - name: Install NuGetPackageConfigDetector
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
+          dotnet tool install dotnet-sonarscanner --global
+  
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
         run: |
           import os
           env_file = os.getenv('GITHUB_ENV')
           with open(env_file, "a") as myfile:
-               myfile.write("cleanOwner=" + str.lower("${{ inputs.owner }}"))
+              myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
         shell: python
-      # - name: Detect Solution
-      #   run: echo "todo"
-      # - name: Validate Solution
-      #   run: echo "todo"
-      # - name: Prepare Solution
-      #   run: echo "todo"
 
-      - name: Check NuGet packages.config usage
-        run: |
-          output=$(NuGetPackageConfigDetector --workspace "${{ github.workspace }}")
-          if [[ -n "$output" ]]; then
-            echo "Repository contains projects using packages.config ($output). Please migrate the nugets from packages.config to packagereference."
-            exit 1
-          fi  
-        shell: bash
-      - name: Prepare Building
-        uses: microsoft/setup-msbuild@v1 
-      - name: Restore NuGet
-        run: nuget restore
-      - name: Building
-        run: msbuild.exe AutomationScript.sln /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release  "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" # /verbosity:minimal
-      - name: Run Test Project Detector
-        id: detect-unit-tests
-        run: |
-          echo "testProjectDetectionOutput=$(.\.tools\TestProjectDetector\TestprojectDetector.exe --solutionFilePath AutomationScript.sln)" >> $env:GITHUB_OUTPUT
-      - name: Test Project Detector Output
-        if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  != null
-        run: |
-          print("An error occurred during detection of test projects: ${{ fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error }}")
-          exit(1)
-        shell: python
-        continue-on-error: true
-      - name: Process Unit Test Projects
-        if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  == null
-        run: |
-          echo 'detected-unit-tests=${{ join(fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).UnitTestAssemblies, '"" ""') }}' >> $env:GITHUB_ENV
-      - name: Setup VSTest
-        if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
-        uses: darenm/Setup-VSTest@v1.2
-      - name: Install OpenCover
-        if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
-        run: nuget install OpenCover -OutputDirectory ".\.dotcover"
-      # - name: Test Error
-      #   if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error == null
-      #   run: |
-      #     echo "No errors found"
-      # - name: Output detected unit tests
-      #   run: |
-      #     echo ${{ env.detected-unit-tests }}
-        #if: steps.detected-unit-tests.outputs.testProjectDetectionOutput != ""
-        #  echo "Detected tests Test: " ${{ steps.detect-unit-tests.outputs.testProjectDetectionOutputTest }}
-        #  echo "Detected tests Test json: " ${{ steps.detect-unit-tests.outputs.testProjectDetectionOutputTestJson }}
-        #shell: cmd
-      - name: Unit Tests
-        id: unit-tests
-        if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
-        #run: vstest.console.exe **\bin\**\*.UnitTests.dll **\bin\**\*.Tests.dll **\bin\**\*Tests.dll /logger:trx # https://learn.microsoft.com/en-us/visualstudio/test/vstest-console-options?view=vs-2022
-        run: .\.dotcover\OpenCover.4.7.1221\tools\OpenCover.Console.exe -target:"vstest.console.exe" -targetargs:"""${{ env.detected-unit-tests }}"" /Platform:x86" -returntargetcode -output:coverage.xml -register:administrator -mergeoutput
-        continue-on-error: true
-        shell: cmd
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
         run: |
           echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
         continue-on-error: true
+
       - name: Trigger Initial Analysis
         if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
         run: |
-            .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.cleanOwner }}" /d:sonar.login="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage.xml
-            msbuild.exe AutomationScript.sln /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls"
-            .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.login="${{ secrets.sonarCloudToken }}"
+            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.login="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+            dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
+            dotnet sonarscanner end /d:sonar.login="${{ secrets.sonarCloudToken }}"
         continue-on-error: true
+        
       - name: Analyze
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
         run: |
-            .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.cleanOwner }}" /d:sonar.login="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage.xml
-            msbuild.exe AutomationScript.sln /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls"
-            .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.login="${{ secrets.sonarCloudToken }}"
+            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.login="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+            dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
+            dotnet sonarscanner end /d:sonar.login="${{ secrets.sonarCloudToken }}"
         continue-on-error: true
-      - name: SonarQube Quality Gate check
-        id: sonarqube-quality-gate-check
+
+      - name: SonarCloud Quality Gate check
+        id: sonarcloud-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
@@ -186,6 +128,7 @@ jobs:
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+   
       - name: Quality Gate
         id: quality-step
         run: |
