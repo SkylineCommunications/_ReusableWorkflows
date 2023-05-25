@@ -75,7 +75,7 @@ jobs:
         - name: Run SDKChecker
           id: run-sdk-checker
           run: |
-            echo "allLegacy=$(SDKChecker --workspace ${{ github.workspace }})" >> $env:GITHUB_OUTPUT
+            echo "allLegacy=$(SDKChecker --workspace '${{ github.workspace }}')" >> $env:GITHUB_OUTPUT
           shell: bash
           
         - name: Process Results
