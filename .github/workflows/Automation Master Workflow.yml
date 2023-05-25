@@ -77,11 +77,14 @@ jobs:
           run: |
             echo "allLegacy=$(SDKChecker --workspace '${{ github.workspace }}')" >> $env:GITHUB_OUTPUT
           shell: bash
-          
+
+        - name: Post Actions
+          run: echo  ${{ steps.run-sdk-checker.outputs.allLegacy}}
+
         - name: Process Results
           id: results
           run: |
-              echo "isSdk=$(steps.run-sdk-checker.outputs.allLegacy == '')" >> $env:GITHUB_OUTPUT
+              echo "isSdk=$( ${{ steps.run-sdk-checker.outputs.allLegacy}} == '')" >> $env:GITHUB_OUTPUT
           shell: bash
 
   CI_Legacy:
