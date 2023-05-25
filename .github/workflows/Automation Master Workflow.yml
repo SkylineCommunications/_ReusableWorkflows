@@ -79,7 +79,7 @@ jobs:
           shell: bash
 
         - name: Post Actions
-          run: echo  ${{ steps.run-sdk-checker.outputs.allLegacy}}
+          run: echo ${{ steps.run-sdk-checker.outputs.allLegacy}}
 
         - name: Process Results
           id: results
