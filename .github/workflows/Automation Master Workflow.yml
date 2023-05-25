@@ -75,8 +75,8 @@ jobs:
         - name: Run Test Project Detector
           id: detect-unit-tests
           run: |
-            echo "allLegacy=$(.\.tools\SDKChecker\SDKChecker.exe --workspace '${{ github.workspace }}')" >> $env:GITHUB_OUTPUT
-            
+            echo "allLegacy=$(.\.tools\SDKChecker\Skyline.DataMiner.CICD.Tools.SDKChecker.exe --workspace '${{ github.workspace }}')" >> $env:GITHUB_OUTPUT
+
         # # Not geting the return value from just running SDKChecker using the dotnet tool commandline.
         # - name: Install SDKChecker
         #   run: |
