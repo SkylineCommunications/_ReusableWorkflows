@@ -87,9 +87,9 @@ jobs:
             output=$(SDKChecker --workspace "${{ github.workspace }}")
             if [[ -n "$output" ]]; 
             then
-              echo "isSdk=$(true)" >> $env:GITHUB_OUTPUT
+              echo "isSdk=$('true')" >> $env:GITHUB_OUTPUT
             else
-              echo "isSdk=$(false)" >> $env:GITHUB_OUTPUT
+              echo "isSdk=$('false')" >> $env:GITHUB_OUTPUT
             fi  
           shell: bash
 
