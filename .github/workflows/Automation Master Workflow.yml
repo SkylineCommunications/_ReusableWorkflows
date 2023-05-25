@@ -79,9 +79,9 @@ jobs:
               echo "isSdk=$(steps.run-sdk-checker.outputs.allLegacy == '')" >> $env:GITHUB_OUTPUT
 
   CI_Legacy:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/nested/Automation Master Legacy Workflow.yml@DevNesting
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master Legacy Workflow.yml@DevNesting
     needs: check_solution_type
-    if: jobs.check_solution_type.outputs.isSdk == 'false'
+    if: !needs.check_solution_type.outputs.isSdk
     with:
       referenceName: ${{ github.ref_name }}
       runNumber: ${{ github.run_number }}
@@ -95,9 +95,9 @@ jobs:
       sonarCloudToken: ${{ secrets.SONAR_TOKEN }}
 
   CI_SDK:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/nested/Automation Master SDK Workflow.yml@DevNesting
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master SDK Workflow.yml@DevNesting
     needs: check_solution_type
-    if: jobs.check_solution_type.outputs.isSdk == 'true'
+    if: needs.check_solution_type.outputs.isSdk
     with:
       referenceName: ${{ github.ref_name }}
       runNumber: ${{ github.run_number }}
