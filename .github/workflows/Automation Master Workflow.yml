@@ -69,8 +69,8 @@ jobs:
 
         - name: Install SDKChecker
           run: |
-            dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --version 1.0.1-Beta1 --global
-          shell: powershell
+            dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --version "1.0.1-Beta1" --global
+          shell: bash
 
         - name: Run SDKChecker
           id: run-sdk-checker
