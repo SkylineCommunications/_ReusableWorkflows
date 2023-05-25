@@ -72,11 +72,12 @@ jobs:
         - name: Run SDKChecker
           id: checker
           run: |
-            if ($output -eq '') {
+            if ([String]::IsNullOrWhiteSpace($output)) {
               echo "isSdk=true" >> $env:GITHUB_OUTPUT
             } else {
               echo "isSdk=false" >> $env:GITHUB_OUTPUT
             }
+            Write-Host "Output: $output"
           shell: pwsh       
 
   log:
