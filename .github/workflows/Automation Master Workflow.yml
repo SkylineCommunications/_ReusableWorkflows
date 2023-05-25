@@ -56,7 +56,7 @@ jobs:
         #     dotnet-version: '3.1.x'
 
         - name: readDir
-          run: ls   
+          run: dir   
 
         - name: Initialize
           run: |
@@ -80,18 +80,27 @@ jobs:
         - name: Install SDKChecker
           run: |
             dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --version "1.0.1-Beta1" --global
-          shell: bash
+          shell: pwsh
 
-        - name:  Run SDKChecker
+        - name: Run SDKChecker
           run: |
-            output=$(SDKChecker --workspace "${{ github.workspace }}")
-            if [[ -n "$output" ]]; 
-            then
-              echo "isSdk=$('true')" >> $env:GITHUB_OUTPUT
-            else
-              echo "isSdk=$('false')" >> $env:GITHUB_OUTPUT
-            fi  
-          shell: bash
+            $output = $(SDKChecker --workspace "${{ github.workspace }}")
+            if ($output) {
+              echo "isSdk=true" >> $env:GITHUB_OUTPUT
+            } else {
+              echo "isSdk=false" >> $env:GITHUB_OUTPUT
+            }
+          shell: pwsh
+        # - name:  Run SDKChecker
+        #   run: |
+        #     output=$(SDKChecker --workspace "${{ github.workspace }}")
+        #     if [[ -n "$output" ]]; 
+        #     then
+        #       echo "isSdk=$('true')" >> $env:GITHUB_OUTPUT
+        #     else
+        #       echo "isSdk=$('false')" >> $env:GITHUB_OUTPUT
+        #     fi  
+        #   shell: bash
 
   CI_Legacy:
     uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master Legacy Workflow.yml@DevNesting
