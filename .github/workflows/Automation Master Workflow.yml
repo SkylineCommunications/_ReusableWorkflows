@@ -83,6 +83,7 @@ jobs:
           shell: pwsh
 
         - name: Run SDKChecker
+          id: results
           run: |
             $output = $(SDKChecker --workspace "${{ github.workspace }}")
             if ($output) {
@@ -91,6 +92,7 @@ jobs:
               echo "isSdk=false" >> $env:GITHUB_OUTPUT
             }
           shell: pwsh
+
         # - name:  Run SDKChecker
         #   run: |
         #     output=$(SDKChecker --workspace "${{ github.workspace }}")
