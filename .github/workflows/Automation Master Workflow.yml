@@ -43,7 +43,7 @@ on:
 
 jobs:
   check_solution_type:
-      name: Check Visual Solution Project Types
+      name: Check Project Types
       runs-on: windows-latest
       outputs:
         isSdk: ${{ steps.checker.outputs.isSdk}}
@@ -51,10 +51,7 @@ jobs:
       steps:
         # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
         - uses: actions/checkout@v3
-        # - uses: actions/setup-dotnet@v3
-        #   with:
-        #     dotnet-version: '3.1.x'
-
+        
         - name: readDir
           run: dir   
 
@@ -66,16 +63,6 @@ jobs:
             echo "ref type" ${{ inputs.referenceType }}
             echo "repository" ${{ inputs.repository }}
             echo "sonarCloudProjectName" ${{ inputs.sonarCloudProjectName }}
-
-
-        # - name: Install SDKChecker
-        #   run: |
-        #     dotnet tool install --tool-path .\.tools\SDKChecker Skyline.DataMiner.CICD.Tools.SDKChecker --version 1.0.1-Beta1
-
-        # - name: Run Test Project Detector
-        #   id: detect-unit-tests
-        #   run: |
-        #     echo "allLegacy=$(.\.tools\SDKChecker\SDKChecker.exe --workspace '${{ github.workspace }}')" >> $env:GITHUB_OUTPUT
 
         - name: Install SDKChecker
           run: |
@@ -90,21 +77,8 @@ jobs:
             } else {
               echo "isSdk=false" >> $env:GITHUB_OUTPUT
             }
-          shell: pwsh
-        
+          shell: pwsh       
 
-        # - name:  Run SDKChecker
-        #   run: |
-        #     output=$(SDKChecker --workspace "${{ github.workspace }}")
-        #     if [[ -n "$output" ]]; 
-        #     then
-        #       echo "isSdk=$('true')" >> $env:GITHUB_OUTPUT
-        #     else
-        #       echo "isSdk=$('false')" >> $env:GITHUB_OUTPUT
-        #     fi  
-        #   shell: bash
-
-        
   log:
     name: Log
     runs-on: windows-latest
