@@ -80,7 +80,8 @@ jobs:
 
         - name: Post Actions
           run: echo ${{ steps.run-sdk-checker.outputs.allLegacy}}
-
+          shell: bash
+          
         - name: Process Results
           id: results
           run: |
