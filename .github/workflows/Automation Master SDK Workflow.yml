@@ -171,11 +171,17 @@ jobs:
           echo "ref type" ${{ inputs.referenceType }}
           echo "repository" ${{ inputs.repository }}
 
+      - name: Find .sln file
+        id: findSlnFile        
+        run: |
+          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+        shell: bash  
+
       - name: Set up NuGet
         uses: nuget/setup-nuget@v1.1.1
       
       - name: NuGet restore solution
-        run: nuget restore "AutomationScript.sln" -OutputDirectory ${{ github.workspace }}/packages
+        run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages
 
       - name: (Development) Upload artifact Package
         if: inputs.referenceType == 'branch'
@@ -190,7 +196,7 @@ jobs:
           # The API-key generated in the DCP Admin app as authentication for a certain DataMiner System. E.g. g597e77412e34297b827c2570a8fa2bc
           api-key: ${{ secrets.api-key }}
           # The path to the .sln file of the solution. Atm only DataMiner Automation Script solutions are supported. E.g ./Example/Script.sln.
-          solution-path: ./AutomationScript.sln
+          solution-path: ./${{ steps.findSlnFile.outputs.solutionFilePath }}
           # The chosen name of the artifact. E.g. MyName.
           artifact-name: ${{ inputs.repository }} ${{ inputs.referenceName }}_B${{ inputs.runNumber }}
           # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1
@@ -208,7 +214,7 @@ jobs:
           # The API-key generated in the DCP Admin app as authentication for a certain DataMiner System. E.g. g597e77412e34297b827c2570a8fa2bc
           api-key: ${{ secrets.api-key }}
           # The path to the .sln file of the solution. Atm only DataMiner Automation Script solutions are supported. E.g ./Example/Script.sln.
-          solution-path: ./AutomationScript.sln
+          solution-path: ./${{ steps.findSlnFile.outputs.solutionFilePath }}
           # The chosen name of the artifact. E.g. MyName.
           artifact-name: ${{ inputs.repository }} ${{ inputs.referenceName }}
           # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1
