@@ -42,7 +42,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   validate_skyline_quality_gate:
-    name: Skyline Quality Gate 
+    name: SDK Skyline Quality Gate 
     runs-on: windows-latest
     env:
       detected-unit-tests: none

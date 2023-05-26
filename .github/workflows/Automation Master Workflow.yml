@@ -81,14 +81,6 @@ jobs:
             Write-Host "Output: $output"
           shell: pwsh       
 
-  log:
-    name: Log
-    runs-on: windows-latest
-    needs: check_solution_type
-    steps:
-      - name: Debug Output
-        run: echo "isSdk=${{ needs.check_solution_type.outputs.isSdk }}"
-
   CI_Legacy:
     uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master Legacy Workflow.yml@DevNesting
     needs: check_solution_type
