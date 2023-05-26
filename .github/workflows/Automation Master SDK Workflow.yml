@@ -35,7 +35,7 @@ on:
         type: string
     secrets:
       api-key:
-        required: true
+        required: false
       sonarCloudToken:
         required: true
 
@@ -183,27 +183,6 @@ jobs:
       - name: NuGet restore solution
         run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages
 
-      - name: (Development) Upload artifact Package
-        if: inputs.referenceType == 'branch'
-        id: upload-step-development
-        env:
-          NUGET_PACKAGES: ${{ github.workspace }}/packages
-        # uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@UseReusableModuleNuGets
-        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
-        with:
-          # Stage upload
-          stage: Upload
-          # The API-key generated in the DCP Admin app as authentication for a certain DataMiner System. E.g. g597e77412e34297b827c2570a8fa2bc
-          api-key: ${{ secrets.api-key }}
-          # The path to the .sln file of the solution. Atm only DataMiner Automation Script solutions are supported. E.g ./Example/Script.sln.
-          solution-path: ./${{ steps.findSlnFile.outputs.solutionFilePath }}
-          # The chosen name of the artifact. E.g. MyName.
-          artifact-name: ${{ inputs.repository }} ${{ inputs.referenceName }}_B${{ inputs.runNumber }}
-          # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1
-          build-number: ${{ inputs.runNumber }}
-      - name: (Development) Set artifact Id
-        if: inputs.referenceType == 'branch'
-        run: echo "result-artifact-id=${{ steps.upload-step-development.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV
       - name: (Release) Upload artifact Package
         if: inputs.referenceType == 'tag'
         id: upload-step-release
@@ -217,10 +196,8 @@ jobs:
           solution-path: ./${{ steps.findSlnFile.outputs.solutionFilePath }}
           # The chosen name of the artifact. E.g. MyName.
           artifact-name: ${{ inputs.repository }} ${{ inputs.referenceName }}
-          # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1
+          # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1. Can also be a pre-release version 1.0.1.1-abc
           version: ${{ inputs.referenceName }}
       - name: (Release) Set artifact Id
         if: inputs.referenceType == 'tag'
         run: echo "result-artifact-id=${{ steps.upload-step-release.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV
-      - name: Post Actions
-        run: echo  ${{ steps.upload-step-development.outputs.ARTIFACT_ID }}
