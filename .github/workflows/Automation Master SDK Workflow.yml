@@ -136,9 +136,9 @@ jobs:
             print("Quality gate failed due to:")
           if "${{ steps.unit-tests.outcome }}" == "failure":
             print("- Test failures")
-          if "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure":
+          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
             print("- Could not retrieve SonarCloud quality gate status")
-          if "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("- Code analysis quality gate failed")
           if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             exit(1)

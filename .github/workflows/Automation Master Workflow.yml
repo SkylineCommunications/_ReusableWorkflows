@@ -1,19 +1,18 @@
 name: Automation Master Workflow
 
 # Controls when the workflow will run
+env:
+  result-artifact-id: none
 on:
   # Allows you to run this workflow from another workflow
   workflow_call:
     outputs:
       quality_gate: 
         description: "Results from Skyline Quality Gate."
-        value:  ${{ jobs.validate_skyline_quality_gate.outputs.quality}}
-      #artifact-id-release: 
+        value:   ${{ jobs.CI_SDK.outputs.quality_gate}}${{ jobs.CI_Legacy.outputs.quality_gate}}
       artifact-id: 
         description: "Artifact ID of uploaded Package if successful."
-        value:  ${{ jobs.artifact_creation_registration.outputs.artifact-id }}
-      # artifact-id-development: 
-      #   description: "Artifact ID of dev uploaded Package if successful."
+        value: ${{ jobs.CI_SDK.outputs.artifact-id}}${{ jobs.CI_Legacy.outputs.artifact-id}}
     inputs:
       referenceName:
         required: true
@@ -38,9 +37,7 @@ on:
         required: true
       sonarCloudToken:
         required: true
-
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
-
 jobs:
   check_solution_type:
       name: Check Project Types
@@ -91,11 +88,20 @@ jobs:
       referenceType: ${{ github.ref_type }}
       repository: ${{ github.repository }}
       owner: ${{ github.repository_owner }}
-      sonarCloudProjectName: ${{ github.sonarCloudProjectName }}
+      sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
     secrets:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}
       sonarCloudToken: ${{ secrets.sonarCloudToken }}
+
+  # CI_Legacy_Register_Result:
+  #   needs: CI_Legacy
+  #   runs-on: windows-latest
+  #   outputs:
+  #     quality: ${{ steps.register}}
+  #   steps:
+  #     - name: register
+  #       run: echo "result-artifact-id=${{ needs.CI_Legacy.outputs.artifact-id }}" >> $GITHUB_ENV
 
   CI_SDK:
     uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master SDK Workflow.yml@DevNesting
@@ -107,7 +113,7 @@ jobs:
       referenceType: ${{ github.ref_type }}
       repository: ${{ github.repository }}
       owner: ${{ github.repository_owner }}
-      sonarCloudProjectName: ${{ github.sonarCloudProjectName }}
+      sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
     secrets:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}
