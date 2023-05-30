@@ -183,10 +183,10 @@ jobs:
       - name: NuGet restore solution
         run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages
 
-      - name: (Release) Upload artifact Package
+      - name: Upload artifact Package
         if: inputs.referenceType == 'tag'
         id: upload-step-release
-        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
+        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action/Actions/DockerFile@ProtocolTypeVersionFix
         with:
           # Stage upload
           stage: Upload
