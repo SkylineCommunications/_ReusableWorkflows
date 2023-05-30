@@ -147,7 +147,8 @@ jobs:
         run: echo "todo" 
 
   artifact_creation_registration:
-    name: Artifact Registration and Upload 
+    name: Artifact Registration and Upload
+    if: inputs.referenceType == 'tag'
     runs-on: ubuntu-latest
     needs: validate_skyline_quality_gate
     env:
@@ -184,7 +185,6 @@ jobs:
         run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages
 
       - name: Upload artifact Package
-        if: inputs.referenceType == 'tag'
         id: upload-step-release
         uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action/Actions/DockerFile@ProtocolTypeVersionFix
         with:
@@ -199,5 +199,4 @@ jobs:
           # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1. Can also be a pre-release version 1.0.1.1-abc
           version: ${{ inputs.referenceName }}
       - name: (Release) Set artifact Id
-        if: inputs.referenceType == 'tag'
         run: echo "result-artifact-id=${{ steps.upload-step-release.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV
