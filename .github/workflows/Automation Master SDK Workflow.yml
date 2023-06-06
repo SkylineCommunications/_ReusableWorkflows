@@ -7,7 +7,7 @@ on:
     outputs:
       quality_gate: 
         description: "Results from Skyline Quality Gate."
-        value:  ${{ jobs.validate_skyline_quality_gate.outputs.quality}}
+        value:  ${{ jobs.validate_skyline_quality_gate.outputs.quality }}
       #artifact-id-release: 
       artifact-id: 
         description: "Artifact ID of uploaded Package if successful."
