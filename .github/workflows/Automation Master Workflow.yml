@@ -53,7 +53,7 @@ jobs:
         - name: Initialize
           run: |
             echo "workspace" ${{ github.workspace }}
-            echo "github url ${{ github.repositoryUrl }}
+            echo "github url" ${{ github.repositoryUrl }}
             echo "ref name" ${{ inputs.referenceName }}
             echo "run number" ${{ inputs.runNumber }}
             echo "ref type" ${{ inputs.referenceType }}
