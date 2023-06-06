@@ -88,7 +88,7 @@ jobs:
           dotnet tool install dotnet-sonarscanner --tool-path .\.sonar\scanner
       - name: Install TestProjectDetector
         run: |
-          dotnet tool install --tool-path .\.tools\TestProjectDetector Skyline.DataMiner.CICD.Tools.TestProjectDetector --version 1.0.1-Alpha
+          dotnet tool install --tool-path .\.tools\TestProjectDetector Skyline.DataMiner.CICD.Tools.TestProjectDetector
       - name: Install NuGetPackageConfigDetector
         run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
       - name: Prepare SonarCloud Variables
