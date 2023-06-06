@@ -53,6 +53,7 @@ jobs:
         - name: Initialize
           run: |
             echo "workspace" ${{ github.workspace }}
+            echo "github url ${{ github.repositoryUrl }}
             echo "ref name" ${{ inputs.referenceName }}
             echo "run number" ${{ inputs.runNumber }}
             echo "ref type" ${{ inputs.referenceType }}
@@ -61,13 +62,13 @@ jobs:
 
         - name: Install SDKChecker
           run: |
-            dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --version "1.0.1-Beta1" --global
+            dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --version "1.0.1-Beta3" --global
           shell: pwsh
 
         - name: Run SDKChecker
           id: checker
           run: |
-            $output = $(SDKChecker --workspace "${{ github.workspace }}")
+            $output = $(SDKChecker --workspace "${{ github.workspace }}" "${{ github.repositoryUrl }}" "${{ inputs.referenceName }}")
             if ([String]::IsNullOrWhiteSpace($output)) {
               echo "isSdk=true" >> $env:GITHUB_OUTPUT
             } else {
