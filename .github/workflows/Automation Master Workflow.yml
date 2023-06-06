@@ -43,7 +43,7 @@ jobs:
       name: Check Project Types
       runs-on: windows-latest
       outputs:
-        isSdk: ${{ steps.checker.outputs.isSdk}}
+        isSdk: ${{ steps.checker.outputs.isSdk }}
 
       steps:
         # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
