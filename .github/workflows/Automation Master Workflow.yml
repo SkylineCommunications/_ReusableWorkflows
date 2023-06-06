@@ -1,8 +1,6 @@
 name: Automation Master Workflow
 
 # Controls when the workflow will run
-env:
-  result-artifact-id: none
 on:
   # Allows you to run this workflow from another workflow
   workflow_call:
@@ -93,15 +91,6 @@ jobs:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}
       sonarCloudToken: ${{ secrets.sonarCloudToken }}
-
-  # CI_Legacy_Register_Result:
-  #   needs: CI_Legacy
-  #   runs-on: windows-latest
-  #   outputs:
-  #     quality: ${{ steps.register}}
-  #   steps:
-  #     - name: register
-  #       run: echo "result-artifact-id=${{ needs.CI_Legacy.outputs.artifact-id }}" >> $GITHUB_ENV
 
   CI_SDK:
     uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master SDK Workflow.yml@DevNesting
