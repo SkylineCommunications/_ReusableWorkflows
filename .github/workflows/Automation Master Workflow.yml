@@ -68,7 +68,7 @@ jobs:
         - name: Run SDKChecker
           id: checker
           run: |
-            $output = $(SDKChecker --workspace "${{ github.workspace }}" "${{ github.repositoryUrl }}" "${{ inputs.referenceName }}")
+            $output = $(SDKChecker --workspace "${{ github.workspace }}" --repositoryName "${{ github.repositoryUrl }}" --repositoryBranch "${{ inputs.referenceName }}")
             if ([String]::IsNullOrWhiteSpace($output)) {
               echo "isSdk=true" >> $env:GITHUB_OUTPUT
             } else {
