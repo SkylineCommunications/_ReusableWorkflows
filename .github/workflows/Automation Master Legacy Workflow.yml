@@ -47,7 +47,7 @@ jobs:
     env:
       detected-unit-tests: none
     outputs:
-      quality: ${{ steps.quality-step.outputs.results}}
+      quality: ${{ steps.quality-step.outputs.results }}
     steps:
       - uses: actions/checkout@v3
       - name: Initialize
