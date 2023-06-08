@@ -7,13 +7,10 @@ on:
     outputs:
       quality_gate: 
         description: "Results from Skyline Quality Gate."
-        value:  ${{ jobs.validate_skyline_quality_gate.outputs.quality}}
-      #artifact-id-release: 
+        value:   ${{ jobs.CI_SDK.outputs.quality_gate}}${{ jobs.CI_Legacy.outputs.quality_gate}}
       artifact-id: 
         description: "Artifact ID of uploaded Package if successful."
-        value:  ${{ jobs.artifact_creation_registration.outputs.artifact-id }}
-      # artifact-id-development: 
-      #   description: "Artifact ID of dev uploaded Package if successful."
+        value: ${{ jobs.CI_SDK.outputs.artifact-id}}${{ jobs.CI_Legacy.outputs.artifact-id}}
     inputs:
       referenceName:
         required: true
@@ -38,240 +35,76 @@ on:
         required: true
       sonarCloudToken:
         required: true
-
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  validate_skyline_quality_gate:
-    name: Skyline Quality Gate 
-    runs-on: windows-latest
-    env:
-      detected-unit-tests: none
-    outputs:
-      quality: ${{ steps.quality-step.outputs.results}}
-    steps:
-      - uses: actions/checkout@v3
-      - name: Initialize
-        run: |
-          echo "workspace" ${{ github.workspace }}
-          echo "ref name" ${{ inputs.referenceName }}
-          echo "run number" ${{ inputs.runNumber }}
-          echo "ref type" ${{ inputs.referenceType }}
-          echo "repository" ${{ inputs.repository }}
-      - name: Set up JDK 11
-        uses: actions/setup-java@v3
-        with:
-          java-version: 11
-          distribution: 'zulu'
-      - name: Cache SonarCloud packages
-        uses: actions/cache@v3
-        with:
-          path: ~\sonar\cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-      - name: Cache SonarCloud scanner
-        id: cache-sonar-scanner
-        uses: actions/cache@v3
-        with:
-          path: .\.sonar\scanner
-          key: ${{ runner.os }}-sonar-scanner
-          restore-keys: ${{ runner.os }}-sonar-scanner
-      - name: Install SonarCloud scanner
-        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
-        run: |
-          dotnet tool install dotnet-sonarscanner --tool-path .\.sonar\scanner
-      - name: Install TestProjectDetector
-        run: |
-          dotnet tool install --tool-path .\.tools\TestProjectDetector Skyline.DataMiner.CICD.Tools.TestProjectDetector --version 1.0.1-Alpha
-      - name: Install NuGetPackageConfigDetector
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
-      - name: Prepare SonarCloud Variables
-        id: prepSonarCloudVar
-        run: |
-          import os
-          env_file = os.getenv('GITHUB_ENV')
-          with open(env_file, "a") as myfile:
-               myfile.write("cleanOwner=" + str.lower("${{ inputs.owner }}"))
-        shell: python
-      # - name: Detect Solution
-      #   run: echo "todo"
-      # - name: Validate Solution
-      #   run: echo "todo"
-      # - name: Prepare Solution
-      #   run: echo "todo"
+  check_solution_type:
+      name: Check Project Types
+      runs-on: windows-latest
+      outputs:
+        isSdk: ${{ steps.checker.outputs.isSdk }}
 
-      - name: Check NuGet packages.config usage
-        run: |
-          output=$(NuGetPackageConfigDetector --workspace "${{ github.workspace }}")
-          if [[ -n "$output" ]]; then
-            echo "Repository contains projects using packages.config ($output). Please migrate the nugets from packages.config to packagereference."
-            exit 1
-          fi  
-        shell: bash
-      - name: Prepare Building
-        uses: microsoft/setup-msbuild@v1 
-      - name: Restore NuGet
-        run: nuget restore
-      - name: Building
-        run: msbuild.exe AutomationScript.sln /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release  "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" # /verbosity:minimal
-      - name: Run Test Project Detector
-        id: detect-unit-tests
-        run: |
-          echo "testProjectDetectionOutput=$(.\.tools\TestProjectDetector\TestprojectDetector.exe --solutionFilePath AutomationScript.sln)" >> $env:GITHUB_OUTPUT
-      - name: Test Project Detector Output
-        if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  != null
-        run: |
-          print("An error occurred during detection of test projects: ${{ fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error }}")
-          exit(1)
-        shell: python
-        continue-on-error: true
-      - name: Process Unit Test Projects
-        if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  == null
-        run: |
-          echo 'detected-unit-tests=${{ join(fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).UnitTestAssemblies, '"" ""') }}' >> $env:GITHUB_ENV
-      - name: Setup VSTest
-        if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
-        uses: darenm/Setup-VSTest@v1.2
-      - name: Install OpenCover
-        if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
-        run: nuget install OpenCover -OutputDirectory ".\.dotcover"
-      # - name: Test Error
-      #   if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error == null
-      #   run: |
-      #     echo "No errors found"
-      # - name: Output detected unit tests
-      #   run: |
-      #     echo ${{ env.detected-unit-tests }}
-        #if: steps.detected-unit-tests.outputs.testProjectDetectionOutput != ""
-        #  echo "Detected tests Test: " ${{ steps.detect-unit-tests.outputs.testProjectDetectionOutputTest }}
-        #  echo "Detected tests Test json: " ${{ steps.detect-unit-tests.outputs.testProjectDetectionOutputTestJson }}
-        #shell: cmd
-      - name: Unit Tests
-        id: unit-tests
-        if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
-        #run: vstest.console.exe **\bin\**\*.UnitTests.dll **\bin\**\*.Tests.dll **\bin\**\*Tests.dll /logger:trx # https://learn.microsoft.com/en-us/visualstudio/test/vstest-console-options?view=vs-2022
-        run: .\.dotcover\OpenCover.4.7.1221\tools\OpenCover.Console.exe -target:"vstest.console.exe" -targetargs:"""${{ env.detected-unit-tests }}"" /Platform:x86" -returntargetcode -output:coverage.xml -register:administrator -mergeoutput
-        continue-on-error: true
-        shell: cmd
-      - name: Get SonarCloud Status
-        id: get-sonarcloud-status
-        run: |
-          echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
-        continue-on-error: true
-      - name: Trigger Initial Analysis
-        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-        run: |
-            .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.cleanOwner }}" /d:sonar.login="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage.xml
-            msbuild.exe AutomationScript.sln /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls"
-            .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.login="${{ secrets.sonarCloudToken }}"
-        continue-on-error: true
-      - name: Analyze
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-        run: |
-            .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.cleanOwner }}" /d:sonar.login="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage.xml
-            msbuild.exe AutomationScript.sln /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls"
-            .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.login="${{ secrets.sonarCloudToken }}"
-        continue-on-error: true
-      - name: SonarQube Quality Gate check
-        id: sonarqube-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        with:
-          scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
-        continue-on-error: true
-        # Force to fail step after specific time.
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-      - name: Quality Gate
-        id: quality-step
-        run: |
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            print("Quality gate failed due to:")
-          if "${{ steps.unit-tests.outcome }}" == "failure":
-            print("- Test failures")
-          if "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure":
-            print("- Could not retrieve SonarCloud quality gate status")
-          if "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            print("- Code analysis quality gate failed")
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            exit(1)
-        shell: python
-      - name: Post Actions
-        run: echo "todo" 
+      steps:
+        # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+        - uses: actions/checkout@v3
+        
+        - name: readDir
+          run: dir   
 
-  artifact_creation_registration:
-    name: Artifact Registration and Upload 
-    runs-on: ubuntu-latest
-    needs: validate_skyline_quality_gate
-    env:
-      result-artifact-id: none
-    outputs:
-      artifact-id: ${{ env.result-artifact-id }}
-      #artifact-id-development: ${{ steps.upload-step-development.outputs.ARTIFACT_ID }}
+        - name: Initialize
+          run: |
+            echo "workspace" ${{ github.workspace }}
+            echo "github url" ${{ github.repositoryUrl }}
+            echo "ref name" ${{ inputs.referenceName }}
+            echo "run number" ${{ inputs.runNumber }}
+            echo "ref type" ${{ inputs.referenceType }}
+            echo "repository" ${{ inputs.repository }}
+            echo "sonarCloudProjectName" ${{ inputs.sonarCloudProjectName }}
 
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+        - name: Install SDKChecker
+          run: |
+            dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global
+          shell: pwsh
 
-      - name: readDir
-        run: ls   
+        - name: Run SDKChecker
+          id: checker
+          run: |
+            $output = $(SDKChecker --workspace "${{ github.workspace }}" --repositoryName "${{ github.repositoryUrl }}" --repositoryBranch "${{ inputs.referenceName }}")
+            if ([String]::IsNullOrWhiteSpace($output)) {
+              echo "isSdk=true" >> $env:GITHUB_OUTPUT
+            } else {
+              echo "isSdk=false" >> $env:GITHUB_OUTPUT
+            }
+            Write-Host "Output: $output"
+          shell: pwsh       
 
-      - name: Initialize
-        run: |
-          echo "workspace" ${{ github.workspace }}
-          echo "ref name" ${{ inputs.referenceName }}
-          echo "run number" ${{ inputs.runNumber }}
-          echo "ref type" ${{ inputs.referenceType }}
-          echo "repository" ${{ inputs.repository }}
+  CI_Legacy:
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master Legacy Workflow.yml@main
+    needs: check_solution_type
+    if: needs.check_solution_type.outputs.isSdk == 'false'
+    with:
+      referenceName: ${{ github.ref_name }}
+      runNumber: ${{ github.run_number }}
+      referenceType: ${{ github.ref_type }}
+      repository: ${{ github.repository }}
+      owner: ${{ github.repository_owner }}
+      sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
+    secrets:
+      # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
+      api-key: ${{ secrets.api-key }}
+      sonarCloudToken: ${{ secrets.sonarCloudToken }}
 
-      - name: Set up NuGet
-        uses: nuget/setup-nuget@v1.1.1
-      
-      - name: NuGet restore solution
-        run: nuget restore "AutomationScript.sln" -OutputDirectory ${{ github.workspace }}/packages
-
-      - name: (Development) Upload artifact Package
-        if: inputs.referenceType == 'branch'
-        id: upload-step-development
-        env:
-          NUGET_PACKAGES: ${{ github.workspace }}/packages
-        # uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@UseReusableModuleNuGets
-        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
-        with:
-          # Stage upload
-          stage: Upload
-          # The API-key generated in the DCP Admin app as authentication for a certain DataMiner System. E.g. g597e77412e34297b827c2570a8fa2bc
-          api-key: ${{ secrets.api-key }}
-          # The path to the .sln file of the solution. Atm only DataMiner Automation Script solutions are supported. E.g ./Example/Script.sln.
-          solution-path: ./AutomationScript.sln
-          # The chosen name of the artifact. E.g. MyName.
-          artifact-name: ${{ inputs.repository }} ${{ inputs.referenceName }}_B${{ inputs.runNumber }}
-          # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1
-          build-number: ${{ inputs.runNumber }}
-      - name: (Development) Set artifact Id
-        if: inputs.referenceType == 'branch'
-        run: echo "result-artifact-id=${{ steps.upload-step-development.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV
-      - name: (Release) Upload artifact Package
-        if: inputs.referenceType == 'tag'
-        id: upload-step-release
-        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
-        with:
-          # Stage upload
-          stage: Upload
-          # The API-key generated in the DCP Admin app as authentication for a certain DataMiner System. E.g. g597e77412e34297b827c2570a8fa2bc
-          api-key: ${{ secrets.api-key }}
-          # The path to the .sln file of the solution. Atm only DataMiner Automation Script solutions are supported. E.g ./Example/Script.sln.
-          solution-path: ./AutomationScript.sln
-          # The chosen name of the artifact. E.g. MyName.
-          artifact-name: ${{ inputs.repository }} ${{ inputs.referenceName }}
-          # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1
-          version: ${{ inputs.referenceName }}
-      - name: (Release) Set artifact Id
-        if: inputs.referenceType == 'tag'
-        run: echo "result-artifact-id=${{ steps.upload-step-release.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV
-      - name: Post Actions
-        run: echo  ${{ steps.upload-step-development.outputs.ARTIFACT_ID }}
+  CI_SDK:
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master SDK Workflow.yml@main
+    needs: check_solution_type
+    if: needs.check_solution_type.outputs.isSdk == 'true'
+    with:
+      referenceName: ${{ github.ref_name }}
+      runNumber: ${{ github.run_number }}
+      referenceType: ${{ github.ref_type }}
+      repository: ${{ github.repository }}
+      owner: ${{ github.repository_owner }}
+      sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
+    secrets:
+      # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
+      api-key: ${{ secrets.api-key }}
+      sonarCloudToken: ${{ secrets.sonarCloudToken }}
