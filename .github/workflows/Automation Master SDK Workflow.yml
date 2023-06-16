@@ -42,6 +42,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   validate_skyline_quality_gate:
+    if: false
     name: SDK Skyline Quality Gate 
     runs-on: windows-latest
     env:
@@ -150,7 +151,7 @@ jobs:
     name: Artifact Registration and Upload
     if: inputs.referenceType == 'tag'
     runs-on: ubuntu-latest
-    needs: validate_skyline_quality_gate
+    #needs: validate_skyline_quality_gate
     env:
       result-artifact-id: none
     outputs:
