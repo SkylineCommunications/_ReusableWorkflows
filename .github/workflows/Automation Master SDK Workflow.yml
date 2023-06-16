@@ -188,7 +188,7 @@ jobs:
         id: upload-step-release
         env:
           Skyline-deploy-action-namespace: test1
-        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action/Actions/Dockerfile@RegisterOnUpload
+        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action/Actions/Dockerfile@RegisterWithUpload
         with:
           # Stage upload
           stage: Upload
