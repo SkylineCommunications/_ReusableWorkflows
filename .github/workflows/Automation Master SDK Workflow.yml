@@ -173,6 +173,9 @@ jobs:
           echo "ref type" ${{ inputs.referenceType }}
           echo "repository" ${{ inputs.repository }}
 
+      - name: Set Git Options
+        run: git config --global --add safe.directory *
+
       - name: Find .sln file
         id: findSlnFile        
         run: |
