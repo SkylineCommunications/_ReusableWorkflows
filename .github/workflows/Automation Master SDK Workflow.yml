@@ -174,7 +174,7 @@ jobs:
           echo "repository" ${{ inputs.repository }}
 
       - name: Set Git Options
-        run: git config --global --add safe.directory *
+        run: git -c safe.directory='*' rev-parse --show-toplevel
 
       - name: Find .sln file
         id: findSlnFile        
