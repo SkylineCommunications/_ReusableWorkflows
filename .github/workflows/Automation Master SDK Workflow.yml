@@ -173,9 +173,6 @@ jobs:
           echo "ref type" ${{ inputs.referenceType }}
           echo "repository" ${{ inputs.repository }}
 
-      - name: Set Git Options
-        run: git -c safe.directory='*' rev-parse --show-toplevel
-
       - name: Find .sln file
         id: findSlnFile        
         run: |
