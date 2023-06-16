@@ -162,6 +162,9 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
 
+      - name: Set Git Security
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        
       - name: readDir
         run: ls   
 
