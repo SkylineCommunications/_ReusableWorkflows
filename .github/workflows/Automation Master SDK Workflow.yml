@@ -190,8 +190,7 @@ jobs:
 
       - name: TestGetBranch
         run:  |
-          git branch --show-current
-          git branch --contains ${{ inputs.referenceName }}
+          git branch --remotes --contains ${{ inputs.referenceName }}
 
       - name: Upload artifact Package
         id: upload-step-release
