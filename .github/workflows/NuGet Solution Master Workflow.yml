@@ -41,7 +41,7 @@ on:
 jobs:
   validate_skyline_quality_gate:
     name: Skyline Quality Gate 
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     outputs:
       quality: ${{ steps.quality-step.outputs.results}}
     steps:
