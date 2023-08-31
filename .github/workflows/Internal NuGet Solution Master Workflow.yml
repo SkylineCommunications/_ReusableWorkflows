@@ -84,7 +84,7 @@ jobs:
 
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
-        run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --name "github"
+        run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }}
 
       - name: Building
         run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false

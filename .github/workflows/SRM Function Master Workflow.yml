@@ -83,7 +83,12 @@ jobs:
           env_file = os.getenv('GITHUB_ENV')
           with open(env_file, "a") as myfile:
                myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
-        shell: python     
+        shell: python
+        
+      - name: Enable Skyline GitHub NuGet Registry
+        if: inputs.owner == 'SkylineCommunications'
+        run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }}
+        
       - name: Building
         run: dotnet build -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
       - name: Unit Tests
