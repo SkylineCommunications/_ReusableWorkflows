@@ -43,7 +43,7 @@ on:
 jobs:
   validate_skyline_quality_gate:
     name: SDK Skyline Quality Gate 
-    runs-on: windows-latest
+    runs-on: self-hosted
     env:
       detected-unit-tests: none
     outputs:
