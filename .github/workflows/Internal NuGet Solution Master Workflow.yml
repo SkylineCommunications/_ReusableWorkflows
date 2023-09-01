@@ -211,7 +211,8 @@ jobs:
           IFS=$'\n'
           for i in ${{ steps.findcreatednuget.outputs.nugetPackageName }};
           do
-              dotnet nuget push "$i" --api-key ${{ secrets.nugetApiKey }} --source https://nuget.pkg.github.com/SkylineCommunications/index.json
+              # dotnet nuget push "$i" --api-key ${{ secrets.nugetApiKey }} --source https://nuget.pkg.github.com/SkylineCommunications/index.json
+              dotnet nuget push "$i" --api-key ${{ secrets.GITHUB_TOKEN }} --source https://nuget.pkg.github.com/SkylineCommunications/index.json
           done
           unset IFS
         shell: bash
