@@ -115,7 +115,12 @@ jobs:
           fi  
         shell: bash
       - name: Prepare Building
-        uses: microsoft/setup-msbuild@v1 
+        uses: microsoft/setup-msbuild@v1
+        
+      - name: Enable Skyline GitHub NuGet Registry
+        if: inputs.owner == 'SkylineCommunications'
+        run: nuget sources add -Name GitHub -src "https://nuget.pkg.github.com/SkylineCommunications/index.json" -UserName USERNAME -Password ${{ secrets.GITHUB_TOKEN }}
+
       - name: Restore NuGet
         run: nuget restore
       - name: Building
