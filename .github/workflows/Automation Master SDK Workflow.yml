@@ -43,6 +43,8 @@ on:
 jobs:
   validate_skyline_quality_gate:
     name: SDK Skyline Quality Gate 
+    # Remove this after testing (disabling CI part to speed up the testing process)
+    if: inputs.referenceType != 'tag'
     runs-on: windows-latest
     env:
       detected-unit-tests: none
@@ -154,7 +156,8 @@ jobs:
     name: Artifact Registration and Upload
     if: inputs.referenceType == 'tag'
     runs-on: ubuntu-latest
-    needs: validate_skyline_quality_gate
+    # TODO: Uncomment this
+    #needs: validate_skyline_quality_gate
     env:
       result-artifact-id: none
     outputs:
@@ -192,14 +195,10 @@ jobs:
       - name: NuGet restore solution
         run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages
 
-      - name: log everything
-        id: logEverything
-        run: dir /b
-        shell: cmd
-
       - name: Upload artifact Package
         id: upload-step-release
-        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
+        # uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
+        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action/Actions/Dockerfile@ExtraLogging
         with:
           # Stage upload
           stage: Upload
