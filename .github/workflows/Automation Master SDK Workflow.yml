@@ -187,7 +187,7 @@ jobs:
 
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
-        run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
       
       - name: NuGet restore solution
         run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages
