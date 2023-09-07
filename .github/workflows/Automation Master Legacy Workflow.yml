@@ -248,7 +248,11 @@ jobs:
         id: findSlnFile        
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
-        shell: bash  
+        shell: bash
+        
+      - name: Enable Skyline GitHub NuGet Registry
+        if: inputs.owner == 'SkylineCommunications'
+        run: nuget sources add -Name GitHub -src "https://nuget.pkg.github.com/SkylineCommunications/index.json" -UserName USERNAME -Password ${{ secrets.GITHUB_TOKEN }}
 
       - name: NuGet restore solution
         run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages

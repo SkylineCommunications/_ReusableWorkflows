@@ -171,6 +171,10 @@ jobs:
   #         echo "run number" ${{ inputs.runNumber }}
   #         echo "ref type" ${{ inputs.referenceType }}
   #         echo "repository" ${{ inputs.repository }}
+        
+      # - name: Enable Skyline GitHub NuGet Registry
+      #   if: inputs.owner == 'SkylineCommunications'
+      #   run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }}
     
   #     - name: dotnet restore
   #       run: dotnet restore --packages ${{ github.workspace }}/packages
