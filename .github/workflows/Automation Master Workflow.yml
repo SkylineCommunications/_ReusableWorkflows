@@ -39,7 +39,7 @@ on:
 jobs:
   check_solution_type:
       name: Check Project Types
-      runs-on: windows-latest
+      runs-on: self-hosted
       outputs:
         isSdk: ${{ steps.checker.outputs.isSdk }}
 
