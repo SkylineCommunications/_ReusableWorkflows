@@ -188,10 +188,15 @@ jobs:
       # - name: Set up NuGet
       #   uses: nuget/setup-nuget@v1.1.1
 
+      - name: Create NuGet.Config
+        run: dotnet new nugetconfig --output ${{ github.workspace }}
+
+      - name: readDir
+        run: ls   
+
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
         run: |
-          dotnet new nugetconfig --output ${{ github.workspace }} --verbosity diag
           dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile ${{ github.workspace }}/NuGet.config
       
       - name: NuGet restore solution
