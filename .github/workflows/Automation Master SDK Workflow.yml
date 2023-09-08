@@ -188,20 +188,15 @@ jobs:
       # - name: Set up NuGet
       #   uses: nuget/setup-nuget@v1.1.1
 
-      - name: Create NuGet.Config
-        run: dotnet new nugetconfig --output ${{ github.workspace }}
-
-      - name: readDir
-        run: ls   
-
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
         run: |
+          dotnet new nugetconfig --output ${{ github.workspace }}
           dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile ${{ github.workspace }}/nuget.config
       
       - name: NuGet restore solution
         #run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages
-        run: dotnet restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -verbosity detailed -ConfigFile ${{ github.workspace }}/nuget.config
+        run: dotnet restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" --configfile ${{ github.workspace }}/nuget.config
 
       - name: Upload artifact Package
         id: upload-step-release
