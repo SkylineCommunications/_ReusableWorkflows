@@ -193,7 +193,7 @@ jobs:
         run: nuget sources add -src "https://nuget.pkg.github.com/SkylineCommunications/index.json" -UserName USERNAME -Password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
       
       - name: NuGet restore solution
-        run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages
+        run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory /github/home/.nuget/packages
 
       - name: Upload artifact Package
         id: upload-step-release
