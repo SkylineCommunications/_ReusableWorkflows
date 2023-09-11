@@ -43,8 +43,6 @@ on:
 jobs:
   validate_skyline_quality_gate:
     name: SDK Skyline Quality Gate 
-    # Remove this after testing (disabling CI part to speed up the testing process)
-    if: inputs.referenceType != 'tag'
     runs-on: windows-latest
     env:
       detected-unit-tests: none
@@ -156,8 +154,7 @@ jobs:
     name: Artifact Registration and Upload
     if: inputs.referenceType == 'tag'
     runs-on: ubuntu-latest
-    # TODO: Uncomment this
-    #needs: validate_skyline_quality_gate
+    needs: validate_skyline_quality_gate
     env:
       result-artifact-id: none
     outputs:
@@ -185,25 +182,24 @@ jobs:
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
 
-      # - name: Find or create NuGet.config file
-      #   if: inputs.owner == 'SkylineCommunications'
-      #   id: findOrCreateNuGetFile
-      #   run: |
-      #     file=$(basename $(find . -type f -iname 'nuget.config' | head -n 1))
-      #     if [[ -n "$file" ]]; then
-      #       echo "NuGet config file exists: $file"
-      #       echo NuGetFileName=$file >> $GITHUB_OUTPUT
-      #     else
-      #       echo "NuGet config does not exist. Creating..."
-      #       dotnet new nugetconfig --output ${{ github.workspace }}
-      #       echo NuGetFileName=nuget.config >> $GITHUB_OUTPUT
-      #     fi
-      #   shell: bash
+      - name: Find or create NuGet.config file
+        if: inputs.owner == 'SkylineCommunications'
+        id: findOrCreateNuGetFile
+        run: |
+          file=$(basename $(find . -type f -iname 'nuget.config' | head -n 1))
+          if [[ -n "$file" ]]; then
+            echo "NuGet config file exists: $file"
+            echo NuGetFileName=$file >> $GITHUB_OUTPUT
+          else
+            echo "NuGet config does not exist. Creating..."
+            dotnet new nugetconfig --output ${{ github.workspace }}
+            echo NuGetFileName=nuget.config >> $GITHUB_OUTPUT
+          fi
+        shell: bash
 
-      # - name: Enable Skyline GitHub NuGet Registry
-      #   if: inputs.owner == 'SkylineCommunications'
-      #   run: |
-      #     dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile ${{ github.workspace }}/${{ steps.findOrCreateNuGetFile.outputs.NuGetFileName }}
+      - name: Enable Skyline GitHub NuGet Registry
+        if: inputs.owner == 'SkylineCommunications'
+        run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile ${{ github.workspace }}/${{ steps.findOrCreateNuGetFile.outputs.NuGetFileName }}
       
       - name: NuGet restore solution
         run: dotnet restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"

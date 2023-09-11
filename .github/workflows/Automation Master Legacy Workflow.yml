@@ -249,17 +249,33 @@ jobs:
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
+
+      - name: Find or create NuGet.config file
+        if: inputs.owner == 'SkylineCommunications'
+        id: findOrCreateNuGetFile
+        run: |
+          file=$(basename $(find . -type f -iname 'nuget.config' | head -n 1))
+          if [[ -n "$file" ]]; then
+            echo "NuGet config file exists: $file"
+            echo NuGetFileName=$file >> $GITHUB_OUTPUT
+          else
+            echo "NuGet config does not exist. Creating..."
+            dotnet new nugetconfig --output ${{ github.workspace }}
+            echo NuGetFileName=nuget.config >> $GITHUB_OUTPUT
+          fi
+        shell: bash
         
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
-        run: nuget sources add -src "https://nuget.pkg.github.com/SkylineCommunications/index.json" -UserName USERNAME -Password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
+        run: nuget sources add -src "https://nuget.pkg.github.com/SkylineCommunications/index.json" -UserName USERNAME -Password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText  -ConfigFile ${{ github.workspace }}/${{ steps.findOrCreateNuGetFile.outputs.NuGetFileName }}
 
       - name: NuGet restore solution
-        run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages
+        run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: (Release) Upload artifact Package
         id: upload-step-release
-        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
+        # uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
+        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action/Actions/Dockerfile@ExtraLogging
         with:
           # Stage upload
           stage: Upload
