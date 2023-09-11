@@ -189,7 +189,7 @@ jobs:
         if: inputs.owner == 'SkylineCommunications'
         id: findOrCreateNuGetFile
         run: |
-          file=$(basename $(find . -type f -iname nuget.config | head -n 1))
+          file=$(basename $(find . -type f -iname 'nuget.config | head -n 1))
           if [[ -n "$file" ]]; then
             echo NuGetFileName=$file >> $GITHUB_OUTPUT
           else
@@ -204,7 +204,7 @@ jobs:
           dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile ${{ github.workspace }}/${{ steps.findOrCreateNuGetFile.outputs.NuGetFileName }}
       
       - name: NuGet restore solution
-        run: dotnet restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" --configfile ${{ github.workspace }}/nuget.config
+        run: dotnet restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: Upload artifact Package
         id: upload-step-release
