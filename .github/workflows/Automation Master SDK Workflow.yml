@@ -191,8 +191,10 @@ jobs:
         run: |
           file=$(basename $(find . -type f -iname 'nuget.config' | head -n 1))
           if [[ -n "$file" ]]; then
+            echo "NuGet config file exists: $file"
             echo NuGetFileName=$file >> $GITHUB_OUTPUT
           else
+            echo "NuGet config does not exist. Creating..."
             dotnet new nugetconfig --output ${{ github.workspace }}
             echo NuGetFileName=nuget.config >> $GITHUB_OUTPUT
           fi
