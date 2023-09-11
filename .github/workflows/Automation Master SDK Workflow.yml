@@ -183,19 +183,27 @@ jobs:
         id: findSlnFile        
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
-        shell: bash  
+        shell: bash
 
-      # - name: Set up NuGet
-      #   uses: nuget/setup-nuget@v1.1.1
+      - name: Find or create NuGet.config file
+        if: inputs.owner == 'SkylineCommunications'
+        id: findOrCreateNuGetFile
+        run: |
+          file=$(find . -type f -iname nuget.config)
+          if [[ -n "$file" ]]; then
+            echo NuGetFileName=$file >> $GITHUB_OUTPUT
+          else
+            dotnet new nugetconfig --output ${{ github.workspace }}
+            echo NuGetFileName=nuget.config >> $GITHUB_OUTPUT
+          fi
+        shell: bash
 
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
         run: |
-          dotnet new nugetconfig --output ${{ github.workspace }}
-          dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile ${{ github.workspace }}/nuget.config
+          dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile ${{ github.workspace }}/${{ steps.findOrCreateNuGetFile.outputs.NuGetFileName }}
       
       - name: NuGet restore solution
-        #run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" -OutputDirectory ${{ github.workspace }}/packages
         run: dotnet restore "${{ steps.findSlnFile.outputs.solutionFilePath }}" --configfile ${{ github.workspace }}/nuget.config
 
       - name: Upload artifact Package
