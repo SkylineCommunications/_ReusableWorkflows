@@ -189,7 +189,7 @@ jobs:
         if: inputs.owner == 'SkylineCommunications'
         id: findOrCreateNuGetFile
         run: |
-          file=$(basename $(find . -type f -iname 'nuget.config | head -n 1))
+          file=$(basename $(find . -type f -iname 'nuget.config' | head -n 1))
           if [[ -n "$file" ]]; then
             echo NuGetFileName=$file >> $GITHUB_OUTPUT
           else
