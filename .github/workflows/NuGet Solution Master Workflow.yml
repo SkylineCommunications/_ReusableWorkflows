@@ -99,7 +99,7 @@ jobs:
     steps:
       - name: Clean workspace       
         run: |
-          rm -Recurse ${{github.workspace}}\
+          rm -Recurse ${{github.workspace}}\*
         shell: pwsh  
 
       - name: Download Unsigned NuGet
