@@ -93,6 +93,7 @@ jobs:
 
     # Signing cannot be done from linux environment (https://github.com/dotnet/runtime/issues/48794)
   sign:
+    needs: validate_skyline_quality_gate
       # The type of runner that the job will run on
     runs-on: self-hosted
     steps:
