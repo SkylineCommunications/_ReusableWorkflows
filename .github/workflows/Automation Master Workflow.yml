@@ -67,7 +67,7 @@ jobs:
 
         - name: Install SDKChecker
           run: |
-            dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global
+            dotnet tool update Skyline.DataMiner.CICD.Tools.SDKChecker --global
           shell: pwsh
 
         - name: Run SDKChecker

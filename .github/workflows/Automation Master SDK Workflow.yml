@@ -84,7 +84,7 @@ jobs:
 
       - name: Install SonarCloud scanner
         run: |
-          dotnet tool install dotnet-sonarscanner --global
+          dotnet tool update dotnet-sonarscanner --global
   
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar

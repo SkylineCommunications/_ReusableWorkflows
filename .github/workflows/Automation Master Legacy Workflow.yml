@@ -89,12 +89,12 @@ jobs:
       - name: Install SonarCloud scanner
         if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
         run: |
-          dotnet tool install dotnet-sonarscanner --tool-path .\.sonar\scanner
+          dotnet tool update dotnet-sonarscanner --tool-path .\.sonar\scanner
       - name: Install TestProjectDetector
         run: |
-          dotnet tool install --tool-path .\.tools\TestProjectDetector Skyline.DataMiner.CICD.Tools.TestProjectDetector
+          dotnet tool update --tool-path .\.tools\TestProjectDetector Skyline.DataMiner.CICD.Tools.TestProjectDetector
       - name: Install NuGetPackageConfigDetector
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
+        run: dotnet tool update Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
         run: |
