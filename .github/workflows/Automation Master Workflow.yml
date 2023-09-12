@@ -44,6 +44,11 @@ jobs:
         isSdk: ${{ steps.checker.outputs.isSdk }}
 
       steps:
+        - name: Clean workspace       
+          run: |
+           rm -Recurse ${{github.workspace}}\*
+          shell: pwsh  
+
         # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
         - uses: actions/checkout@v3
         

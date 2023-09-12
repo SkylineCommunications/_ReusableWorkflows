@@ -49,6 +49,10 @@ jobs:
     outputs:
       quality: ${{ steps.quality-step.outputs.results}}
     steps:
+      - name: Clean workspace       
+        run: |
+          rm -Recurse ${{github.workspace}}\*
+        shell: pwsh 
       - uses: actions/checkout@v3
       - name: Initialize
         run: |
