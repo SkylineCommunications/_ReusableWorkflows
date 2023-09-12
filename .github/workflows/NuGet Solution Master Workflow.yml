@@ -94,7 +94,7 @@ jobs:
     # Signing cannot be done from linux environment (https://github.com/dotnet/runtime/issues/48794)
   sign:
       # The type of runner that the job will run on
-    runs-on: windows-latest
+    runs-on: self-hosted
     needs: validate_skyline_quality_gate
     steps:
       - name: Download Unsigned NuGet
