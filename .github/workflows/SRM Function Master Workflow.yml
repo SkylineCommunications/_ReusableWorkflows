@@ -83,7 +83,12 @@ jobs:
           env_file = os.getenv('GITHUB_ENV')
           with open(env_file, "a") as myfile:
                myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
-        shell: python     
+        shell: python
+        
+      - name: Enable Skyline GitHub NuGet Registry
+        if: inputs.owner == 'SkylineCommunications'
+        run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }}
+        
       - name: Building
         run: dotnet build -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
       - name: Unit Tests
@@ -166,9 +171,28 @@ jobs:
   #         echo "run number" ${{ inputs.runNumber }}
   #         echo "ref type" ${{ inputs.referenceType }}
   #         echo "repository" ${{ inputs.repository }}
-    
+        
+      # - name: Find or create NuGet.config file
+      #   if: inputs.owner == 'SkylineCommunications'
+      #   id: findOrCreateNuGetFile
+      #   run: |
+      #     file=$(basename $(find . -type f -iname 'nuget.config' | head -n 1))
+      #     if [[ -n "$file" ]]; then
+      #       echo "NuGet config file exists: $file"
+      #       echo NuGetFileName=$file >> $GITHUB_OUTPUT
+      #     else
+      #       echo "NuGet config does not exist. Creating..."
+      #       dotnet new nugetconfig --output ${{ github.workspace }}
+      #       echo NuGetFileName=nuget.config >> $GITHUB_OUTPUT
+      #     fi
+      #   shell: bash
+
+      # - name: Enable Skyline GitHub NuGet Registry
+      #   if: inputs.owner == 'SkylineCommunications'
+      #   run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile ${{ github.workspace }}/${{ steps.findOrCreateNuGetFile.outputs.NuGetFileName }}
+      
   #     - name: dotnet restore
-  #       run: dotnet restore --packages ${{ github.workspace }}/packages
+  #       run: dotnet restore
 
   #     - name: (Development) Upload artifact Package
   #       if: inputs.referenceType == 'branch'
