@@ -86,6 +86,12 @@ jobs:
         run: |
           dotnet tool update dotnet-sonarscanner --global
   
+      - name: logpython
+        id: logpython
+        run: |
+          --version
+        shell: python
+        
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
         run: |
