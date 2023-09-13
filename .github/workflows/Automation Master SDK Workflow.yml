@@ -218,6 +218,5 @@ jobs:
           artifact-name: ${{ inputs.repository }}
           # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1. Can also be a pre-release version 1.0.1.1-abc
           version: ${{ inputs.referenceName }}
-          debug: true
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.upload-step-release.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV
