@@ -274,8 +274,7 @@ jobs:
 
       - name: (Release) Upload artifact Package
         id: upload-step-release
-        # uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
-        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action/Actions/Dockerfile@ExtraLogging
+        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
         with:
           # Stage upload
           stage: Upload
