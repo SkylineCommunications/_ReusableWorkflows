@@ -273,7 +273,7 @@ jobs:
 #ON RELEASE OR PRE-RELEASE
       - name: Create DMAPP - Release
         if: inputs.referenceType == 'tag'
-        run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ inputs.repository  }}_${{ inputs.referenceName }}" --output ${{ github.workspace }} --versionOverride "${{ inputs.referenceName  }}"
+        run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ inputs.repository  }}_${{ inputs.referenceName }}" --output ${{ github.workspace }} --version-override "${{ inputs.referenceName  }}"
       
       - uses: actions/upload-artifact@v4
         if: inputs.referenceType == 'tag'
@@ -301,7 +301,7 @@ jobs:
       - name: Create DMAPP - Build
         if: inputs.referenceType != 'tag'
         run: |
-          dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ inputs.repository  }}_${{ inputs.runNumber }}" --output ${{ github.workspace }} --versionOverride "$PROTOCOL_VERSION_B${{ inputs.runNumber }}"
+          dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ inputs.repository  }}_${{ inputs.runNumber }}" --output ${{ github.workspace }} --version-override "$PROTOCOL_VERSION_B${{ inputs.runNumber }}"
         shell: bash
       - uses: actions/upload-artifact@v4
         if: inputs.referenceType == 'tag'
