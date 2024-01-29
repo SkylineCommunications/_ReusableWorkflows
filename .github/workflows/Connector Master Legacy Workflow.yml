@@ -305,7 +305,7 @@ jobs:
           dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ inputs.runNumber }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}"
         shell: bash
       - uses: actions/upload-artifact@v4
-        if: inputs.referenceType == 'tag'
+        if: inputs.referenceType != 'tag'
         with:
           name: Archive DMAPP
           path: "${{ github.workspace }}/${{ inputs.repository  }}_${{ inputs.runNumber }}.dmprotocol"
