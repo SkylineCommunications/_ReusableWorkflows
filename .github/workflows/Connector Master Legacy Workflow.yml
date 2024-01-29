@@ -278,7 +278,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.referenceType == 'tag'
         with:
-          name: Protocol Package
+          name: Connector Package
           path: "${{ github.workspace }}/${{ inputs.repository  }}_${{ inputs.referenceName }}.dmprotocol"
 
 #ON BUILD
@@ -307,5 +307,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.referenceType != 'tag'
         with:
-          name: Protocol Package
+          name: Connector Package
           path: "${{ github.workspace }}/${{ inputs.repository  }}_${{ inputs.runNumber }}.dmprotocol"
