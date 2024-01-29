@@ -150,10 +150,11 @@ jobs:
       - name: Post Actions
         run: echo "todo" 
 
+    
   artifact_creation_registration:
-    name: Artifact Registration and Upload
+    name: Artifact Creation
     runs-on: ubuntu-latest
-    needs: validate_skyline_quality_gate
+    # needs: validate_skyline_quality_gate
     env:
       result-artifact-id: none
     outputs:
@@ -175,7 +176,7 @@ jobs:
           echo "repository" ${{ inputs.repository }}
 
       - name: Install Package Creation
-        run: dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager
+        run: dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 1.1.3-alpalinux1
 
       - name: Find .sln file
         id: findSlnFile        
@@ -213,7 +214,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.referenceType == 'tag'
         with:
-          name: Archive DMAPP
+          name: Stable Protocol Package
           path: "${{ github.workspace }}/${{ inputs.repository  }}_${{ inputs.referenceName }}.dmprotocol"
 
 #ON BUILD
@@ -224,7 +225,8 @@ jobs:
           xml_file=$(find "${{ github.workspace }}" -name "protocol.xml" -or -name "Protocol.xml" | head -n 1)
 
           # Extract the Protocol Version using awk and store it in a variable
-          protocol_version=$(awk -F '[><]' '/<Protocol.Version>/ {print $3}' "$xml_file")
+          protocol_version=$(awk -F '[><]' '/<Version>/ {print $3}' "$xml_file")
+  
 
           # Print the extracted version for verification
           echo "Extracted Protocol Version: $protocol_version"
@@ -236,10 +238,10 @@ jobs:
       - name: Create DMAPP - Build
         if: inputs.referenceType != 'tag'
         run: |
-          dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ inputs.repository  }}_${{ inputs.runNumber }}" --output ${{ github.workspace }} --version-override "$PROTOCOL_VERSION_B${{ inputs.runNumber }}"
+          dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ inputs.repository  }}_${{ inputs.runNumber }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}"
         shell: bash
       - uses: actions/upload-artifact@v4
-        if: inputs.referenceType == 'tag'
+        if: inputs.referenceType != 'tag'
         with:
-          name: Archive DMAPP
+          name: Debug Protocol Package
           path: "${{ github.workspace }}/${{ inputs.repository  }}_${{ inputs.runNumber }}.dmprotocol"

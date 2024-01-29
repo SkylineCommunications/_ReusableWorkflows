@@ -216,7 +216,7 @@ jobs:
   #       run: echo "todo" 
 
   artifact_creation_registration:
-    name: Artifact Registration and Upload
+    name: Artifact Creation
     runs-on: ubuntu-latest
     # needs: validate_skyline_quality_gate
     env:
@@ -278,7 +278,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.referenceType == 'tag'
         with:
-          name: Archive DMAPP
+          name: Stable Protocol Package
           path: "${{ github.workspace }}/${{ inputs.repository  }}_${{ inputs.referenceName }}.dmprotocol"
 
 #ON BUILD
@@ -307,5 +307,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.referenceType != 'tag'
         with:
-          name: Archive DMAPP
+          name: Debug Protocol Package
           path: "${{ github.workspace }}/${{ inputs.repository  }}_${{ inputs.runNumber }}.dmprotocol"
