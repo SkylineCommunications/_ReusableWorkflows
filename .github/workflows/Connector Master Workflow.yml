@@ -1,0 +1,107 @@
+name: Connector Master Workflow
+
+# Controls when the workflow will run
+on:
+  # Allows you to run this workflow from another workflow
+  workflow_call:
+    outputs:
+      quality_gate: 
+        description: "Results from Skyline Quality Gate."
+        value:   ${{ jobs.CI_SDK.outputs.quality_gate}}${{ jobs.CI_Legacy.outputs.quality_gate}}
+      artifact-id: 
+        description: "Artifact ID of uploaded Package if successful."
+        value: ${{ jobs.CI_SDK.outputs.artifact-id}}${{ jobs.CI_Legacy.outputs.artifact-id}}
+    inputs:
+      referenceName:
+        required: true
+        type: string       
+      runNumber:
+        required: true
+        type: string   
+      referenceType:
+        required: true
+        type: string   
+      repository:
+        required: true
+        type: string 
+      owner:
+        required: true
+        type: string
+      sonarCloudProjectName:
+        required: true
+        type: string
+    secrets:
+      api-key:
+        required: true
+      sonarCloudToken:
+        required: true
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  check_solution_type:
+      name: Check Project Types
+      runs-on: windows-latest
+      outputs:
+        isSdk: ${{ steps.checker.outputs.isSdk }}
+
+      steps:
+        # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+        - uses: actions/checkout@v4
+
+        - name: Initialize
+          run: |
+            echo "workspace" ${{ github.workspace }}
+            echo "github url" ${{ github.repositoryUrl }}
+            echo "ref name" ${{ inputs.referenceName }}
+            echo "run number" ${{ inputs.runNumber }}
+            echo "ref type" ${{ inputs.referenceType }}
+            echo "repository" ${{ inputs.repository }}
+            echo "sonarCloudProjectName" ${{ inputs.sonarCloudProjectName }}
+
+        - name: Install SDKChecker
+          run: |
+            dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global
+          shell: pwsh
+
+        - name: Run SDKChecker
+          id: checker
+          run: |
+            $output = $(SDKChecker --workspace "${{ github.workspace }}" --repositoryName "${{ github.repositoryUrl }}" --repositoryBranch "${{ inputs.referenceName }}")
+            if ([String]::IsNullOrWhiteSpace($output)) {
+              echo "isSdk=true" >> $env:GITHUB_OUTPUT
+            } else {
+              echo "isSdk=false" >> $env:GITHUB_OUTPUT
+            }
+            Write-Host "Output: $output"
+          shell: pwsh       
+
+  CI_Legacy:
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master Legacy Workflow.yml@main
+    needs: check_solution_type
+    if: needs.check_solution_type.outputs.isSdk == 'false'
+    with:
+      referenceName: ${{ github.ref_name }}
+      runNumber: ${{ github.run_number }}
+      referenceType: ${{ github.ref_type }}
+      repository: ${{ github.repository }}
+      owner: ${{ github.repository_owner }}
+      sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
+    secrets:
+      # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
+      api-key: ${{ secrets.api-key }}
+      sonarCloudToken: ${{ secrets.sonarCloudToken }}
+
+  CI_SDK:
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master SDK Workflow.yml@main
+    needs: check_solution_type
+    if: needs.check_solution_type.outputs.isSdk == 'true'
+    with:
+      referenceName: ${{ github.ref_name }}
+      runNumber: ${{ github.run_number }}
+      referenceType: ${{ github.ref_type }}
+      repository: ${{ github.repository }}
+      owner: ${{ github.repository_owner }}
+      sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
+    secrets:
+      # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
+      api-key: ${{ secrets.api-key }}
+      sonarCloudToken: ${{ secrets.sonarCloudToken }}
