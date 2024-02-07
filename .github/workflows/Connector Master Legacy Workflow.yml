@@ -117,7 +117,7 @@ jobs:
         shell: bash
 
       - name: Prepare Building
-        uses: microsoft/setup-msbuild@v1
+        uses: microsoft/setup-msbuild@v2
         
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
