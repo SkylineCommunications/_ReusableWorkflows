@@ -7,11 +7,11 @@ on:
     outputs:
       quality_gate: 
         description: "Results from Skyline Quality Gate."
-        value:  ${{ jobs.validate_skyline_quality_gate.outputs.quality }}
+        value: ${{ jobs.validate_skyline_quality_gate.outputs.quality }}
       #artifact-id-release: 
       artifact-id: 
         description: "Artifact ID of uploaded Package if successful."
-        value:  ${{ jobs.artifact_creation_registration.outputs.artifact-id }}
+        value: ${{ jobs.artifact_creation_registration.outputs.artifact-id }}
       # artifact-id-development: 
       #   description: "Artifact ID of dev uploaded Package if successful."
     inputs:
@@ -47,9 +47,10 @@ jobs:
     env:
       detected-unit-tests: none
     outputs:
-      quality: ${{ steps.quality-step.outputs.results}}
+      quality: ${{ steps.quality-step.outputs.results }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Initialize
         run: |
           echo "workspace" ${{ github.workspace }}
@@ -57,6 +58,7 @@ jobs:
           echo "run number" ${{ inputs.runNumber }}
           echo "ref type" ${{ inputs.referenceType }}
           echo "repository" ${{ inputs.repository }}
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -136,7 +138,7 @@ jobs:
       - name: Quality Gate
         id: quality-step
         run: |
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("Quality gate failed due to:")
           if "${{ steps.unit-tests.outcome }}" == "failure":
             print("- Test failures")
@@ -144,11 +146,9 @@ jobs:
             print("- Could not retrieve SonarCloud quality gate status")
           if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("- Code analysis quality gate failed")
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             exit(1)
         shell: python
-      - name: Post Actions
-        run: echo "todo" 
 
   artifact_creation_registration:
     name: Artifact Registration and Upload
@@ -218,5 +218,6 @@ jobs:
           artifact-name: ${{ inputs.repository }}
           # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1. Can also be a pre-release version 1.0.1.1-abc
           version: ${{ inputs.referenceName }}
+
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.upload-step-release.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV

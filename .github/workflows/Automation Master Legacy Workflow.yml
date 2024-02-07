@@ -7,11 +7,11 @@ on:
     outputs:
       quality_gate: 
         description: "Results from Skyline Quality Gate."
-        value:  ${{ jobs.validate_skyline_quality_gate.outputs.quality}}
+        value: ${{ jobs.validate_skyline_quality_gate.outputs.quality }}
       #artifact-id-release: 
       artifact-id: 
         description: "Artifact ID of uploaded Package if successful."
-        value:  ${{ jobs.artifact_creation_registration.outputs.artifact-id }}
+        value: ${{ jobs.artifact_creation_registration.outputs.artifact-id }}
       # artifact-id-development: 
       #   description: "Artifact ID of dev uploaded Package if successful."
     inputs:
@@ -50,6 +50,7 @@ jobs:
       quality: ${{ steps.quality-step.outputs.results }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Initialize
         run: |
           echo "workspace" ${{ github.workspace }}
@@ -69,12 +70,14 @@ jobs:
         with:
           java-version: 17
           distribution: 'zulu'
+
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
         with:
           path: ~\sonar\cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
+
       - name: Cache SonarCloud scanner
         id: cache-sonar-scanner
         uses: actions/cache@v4
@@ -82,15 +85,19 @@ jobs:
           path: .\.sonar\scanner
           key: ${{ runner.os }}-sonar-scanner
           restore-keys: ${{ runner.os }}-sonar-scanner
+
       - name: Install SonarCloud scanner
         if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
         run: |
           dotnet tool install dotnet-sonarscanner --tool-path .\.sonar\scanner
+
       - name: Install TestProjectDetector
         run: |
           dotnet tool install --tool-path .\.tools\TestProjectDetector Skyline.DataMiner.CICD.Tools.TestProjectDetector
+
       - name: Install NuGetPackageConfigDetector
         run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
+
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
         run: |
@@ -99,12 +106,6 @@ jobs:
           with open(env_file, "a") as myfile:
                myfile.write("cleanOwner=" + str.lower("${{ inputs.owner }}"))
         shell: python
-      # - name: Detect Solution
-      #   run: echo "todo"
-      # - name: Validate Solution
-      #   run: echo "todo"
-      # - name: Prepare Solution
-      #   run: echo "todo"
 
       - name: Check NuGet packages.config usage
         run: |
@@ -114,6 +115,7 @@ jobs:
             exit 1
           fi  
         shell: bash
+
       - name: Prepare Building
         uses: microsoft/setup-msbuild@v1
         
@@ -123,12 +125,15 @@ jobs:
 
       - name: Restore NuGet
         run: nuget restore
+
       - name: Building
         run: msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release  "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m # /verbosity:minimal
+
       - name: Run Test Project Detector
         id: detect-unit-tests
         run: |
           echo "testProjectDetectionOutput=$(.\.tools\TestProjectDetector\TestprojectDetector.exe --solutionFilePath "${{ steps.findSlnFile.outputs.solutionFilePath }}")" >> $env:GITHUB_OUTPUT
+
       - name: Test Project Detector Output
         if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  != null
         run: |
@@ -136,16 +141,20 @@ jobs:
           exit(1)
         shell: python
         continue-on-error: true
+
       - name: Process Unit Test Projects
         if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  == null
         run: |
           echo 'detected-unit-tests=${{ join(fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).UnitTestAssemblies, '"" ""') }}' >> $env:GITHUB_ENV
+
       - name: Setup VSTest
         if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
         uses: darenm/Setup-VSTest@v1.2
+
       - name: Install OpenCover
         if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
         run: nuget install OpenCover -OutputDirectory ".\.dotcover"
+        
       # - name: Test Error
       #   if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error == null
       #   run: |
@@ -157,6 +166,7 @@ jobs:
         #  echo "Detected tests Test: " ${{ steps.detect-unit-tests.outputs.testProjectDetectionOutputTest }}
         #  echo "Detected tests Test json: " ${{ steps.detect-unit-tests.outputs.testProjectDetectionOutputTestJson }}
         #shell: cmd
+
       - name: Unit Tests
         id: unit-tests
         if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
@@ -164,11 +174,13 @@ jobs:
         run: .\.dotcover\OpenCover.4.7.1221\tools\OpenCover.Console.exe -target:"vstest.console.exe" -targetargs:"""${{ env.detected-unit-tests }}"" /Platform:x86" -returntargetcode -output:coverage.xml -register:administrator -mergeoutput
         continue-on-error: true
         shell: cmd
+
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
         run: |
           echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
         continue-on-error: true
+
       - name: Trigger Initial Analysis
         if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
         env:
@@ -179,6 +191,7 @@ jobs:
             msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m
             .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
         continue-on-error: true
+
       - name: Analyze
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
@@ -188,8 +201,9 @@ jobs:
             msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m
             .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
         continue-on-error: true
-      - name: SonarQube Quality Gate check
-        id: sonarqube-quality-gate-check
+
+      - name: SonarCloud Quality Gate check
+        id: sonarcloud-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
@@ -198,22 +212,21 @@ jobs:
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+
       - name: Quality Gate
         id: quality-step
         run: |
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("Quality gate failed due to:")
           if "${{ steps.unit-tests.outcome }}" == "failure":
             print("- Test failures")
-          if "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure":
+          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
             print("- Could not retrieve SonarCloud quality gate status")
-          if "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("- Code analysis quality gate failed")
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             exit(1)
         shell: python
-      - name: Post Actions
-        run: echo "todo" 
 
   artifact_creation_registration:
     name: Artifact Registration and Upload
@@ -286,5 +299,6 @@ jobs:
           artifact-name: ${{ inputs.repository }}
           # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1. Can also be a pre-release version 1.0.1.1-abc
           version: ${{ inputs.referenceName }}
+
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.upload-step-release.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV
