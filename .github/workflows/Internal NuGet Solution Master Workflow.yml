@@ -7,7 +7,7 @@ on:
     outputs:
       quality_gate: 
         description: "Results from Skyline Quality Gate."
-        value:  ${{ jobs.validate_skyline_quality_gate.outputs.quality}}
+        value: ${{ jobs.validate_skyline_quality_gate.outputs.quality }}
     inputs:
       referenceName:
         required: true
@@ -39,9 +39,10 @@ jobs:
     name: Skyline Quality Gate 
     runs-on: windows-latest
     outputs:
-      quality: ${{ steps.quality-step.outputs.results}}
+      quality: ${{ steps.quality-step.outputs.results }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Initialize
         run: |
           echo "workspace" ${{ github.workspace }}
