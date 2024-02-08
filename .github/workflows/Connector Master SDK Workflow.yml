@@ -216,7 +216,7 @@ jobs:
         if: inputs.referenceType != 'tag'
         run: |
           # Find the protocol.xml file
-          xml_file=$(find "${{ github.workspace }}" -name "protocol.xml" -or -name "Protocol.xml" | head -n 1)
+          xml_file=$(find "${{ github.workspace }}" -maxdepth 1 -name "protocol.xml" -or -name "Protocol.xml" | head -n 1)
 
           # Extract the Protocol Version using awk and store it in a variable
           protocol_version=$(awk -F '[><]' '/<Version>/ {print $3}' "$xml_file")
