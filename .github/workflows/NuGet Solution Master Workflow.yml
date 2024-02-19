@@ -193,7 +193,7 @@ jobs:
     # Signing cannot be done from linux environment (https://github.com/dotnet/runtime/issues/48794)
   sign:
     # Don't run the signing when dependabot branch/pull request
-    if: ${{ github.secret_source != 'Dependabot' }}
+    if: ${{ github.actor != 'dependabot[bot]' }}
     # The type of runner that the job will run on
     runs-on: windows-latest
     needs: validate_skyline_quality_gate
