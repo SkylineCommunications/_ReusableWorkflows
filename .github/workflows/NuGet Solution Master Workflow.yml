@@ -77,15 +77,15 @@ jobs:
         shell: bash  
 
       - name: Validate NuGet Metadata
-        run: NuGetValidateSkylineSpecifications --workspace ${{ github.workspace }}
+        run: NuGetValidateSkylineSpecifications --workspace ${{ github.workspace }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: Apply Branch and output path for pre-release NuGet
         if: inputs.referenceType == 'branch'
-        run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag " " --branch "${{ inputs.referenceName }}" --build ${{ inputs.runNumber }} --nugetResultFolder "${{ github.workspace }}/_NuGetResults"
+        run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag " " --branch "${{ inputs.referenceName }}" --build ${{ inputs.runNumber }} --nugetResultFolder "${{ github.workspace }}/_NuGetResults" --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: Apply Tag and output path for Release NuGet
         if: inputs.referenceType == 'tag'
-        run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag "${{ inputs.referenceName }}" --branch " " --build ${{ inputs.runNumber }} --nugetResultFolder "${{ github.workspace }}/_NuGetResults"
+        run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag "${{ inputs.referenceName }}" --branch " " --build ${{ inputs.runNumber }} --nugetResultFolder "${{ github.workspace }}/_NuGetResults" --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
@@ -100,7 +100,7 @@ jobs:
           path: "${{ github.workspace }}/_NuGetResults"
 
       - name: Disable NuGet Creation on Subsequent Builds
-        run: NuGetToggleOnBuild --setToActive false --workspace ${{ github.workspace }} --onlyOnConfiguredNuGet false
+        run: NuGetToggleOnBuild --setToActive false --workspace ${{ github.workspace }} --onlyOnConfiguredNuGet false  --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
