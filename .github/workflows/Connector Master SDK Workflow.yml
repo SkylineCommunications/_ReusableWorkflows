@@ -93,7 +93,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: validateResults
-          path: ${{ github.workspace }}/validateResults.json
+          path: |
+            ${{ github.workspace }}/validateResults.json
+            ${{ github.workspace }}/validateResults.html
         continue-on-error: true
 
       - name: Validator Quality Gate
