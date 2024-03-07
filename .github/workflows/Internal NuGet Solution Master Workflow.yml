@@ -69,7 +69,7 @@ jobs:
       - name: Find .sln file
         id: findSlnFile        
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+          echo solutionFilePath=$(find . -type f -name '*.sln' | sort -r | head -n 1) >> $GITHUB_OUTPUT
         shell: bash  
 
       - name: Validate NuGet Metadata
