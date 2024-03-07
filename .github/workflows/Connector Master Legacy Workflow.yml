@@ -140,7 +140,6 @@ jobs:
           print("An error occurred during detection of test projects: ${{ fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error }}")
           exit(1)
         shell: python
-        continue-on-error: true
 
       - name: Process Unit Test Projects
         if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  == null
