@@ -82,6 +82,35 @@ jobs:
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
         continue-on-error: true
 
+      - name: Install Connector Validator
+        run: dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator
+  
+      - name: Run Connector Validator
+        run: dataminer-validator validate-protocol-solution --solution-path "${{ github.workspace }}" --output-directory "${{ github.workspace }}" --output-file-name "validateResults" 
+        continue-on-error: true
+
+      - name: Archive Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: validateResults
+          path: |
+            ${{ github.workspace }}/validateResults.json
+            ${{ github.workspace }}/validateResults.html
+        continue-on-error: true
+
+      - name: Validator Quality Gate
+        id: validator-quality-gate
+        run: |
+          json=$(cat "${{ github.workspace }}/validateResults.json")
+          critical=$(echo "$json" | jq -r '.CriticalIssueCount')
+          major=$(echo "$json" | jq -r '.MajorIssueCount')
+      
+          if [ "$critical" != 0 ] || [ "$major" != 0 ]; then
+            echo "Error: CriticalIssueCount or MajorIssueCount is not 0"
+            exit 1
+          fi
+        continue-on-error: true
+
       - name: Install SonarCloud scanner
         run: |
           dotnet tool install dotnet-sonarscanner --global
@@ -136,10 +165,12 @@ jobs:
       - name: Quality Gate
         id: quality-step
         run: |
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("Quality gate failed due to:")
           if "${{ steps.unit-tests.outcome }}" == "failure":
             print("- Test failures")
+          if "${{ steps.validator-quality-gate.outcome }}" == "failure":
+            print("- Validator issues")
           if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
             print("- Could not retrieve SonarCloud quality gate status")
           if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
