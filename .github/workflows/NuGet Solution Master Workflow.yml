@@ -46,6 +46,8 @@ jobs:
       quality: ${{ steps.quality-step.outputs.results }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Initialize
         run: |
