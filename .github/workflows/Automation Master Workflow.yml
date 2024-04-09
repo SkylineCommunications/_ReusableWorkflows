@@ -80,7 +80,7 @@ jobs:
           shell: pwsh       
 
   CI_Legacy:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master Legacy Workflow.yml@SupportAzurePackages
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master Legacy Workflow.yml@main
     needs: check_solution_type
     if: needs.check_solution_type.outputs.isSdk == 'false'
     with:
@@ -97,7 +97,7 @@ jobs:
       azureToken: ${{ secrets.azureToken }}
 
   CI_SDK:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master SDK Workflow.yml@SupportAzurePackages
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master SDK Workflow.yml@main
     needs: check_solution_type
     if: needs.check_solution_type.outputs.isSdk == 'true'
     with:
