@@ -94,6 +94,7 @@ jobs:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}
       sonarCloudToken: ${{ secrets.sonarCloudToken }}
+      azureToken: ${{ secrets.azureToken }}
 
   CI_SDK:
     uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master SDK Workflow.yml@SupportAzurePackages
@@ -110,3 +111,4 @@ jobs:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}
       sonarCloudToken: ${{ secrets.sonarCloudToken }}
+      azureToken: ${{ secrets.azureToken }}
