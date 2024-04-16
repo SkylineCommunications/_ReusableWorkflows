@@ -38,6 +38,8 @@ on:
         required: false
       sonarCloudToken:
         required: true
+      azureToken:
+        required: false
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -77,6 +79,40 @@ jobs:
         if: inputs.owner == 'SkylineCommunications'
         run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }}
         
+      - name: Enable Skyline Azure Cloud NuGet Registry
+        env:
+          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
+        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+        run: |
+          $SOURCE_NAME="CloudNuGets"
+          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
+          
+          # Check if the source exists. If it does, update it.
+          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+            Write-Host "Updating existing source $SOURCE_NAME."
+            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+          } else {
+            Write-Host "Adding new source $SOURCE_NAME."
+            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+          }
+
+      - name: Enable Skyline Azure Private NuGet Registry
+        env:
+          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
+        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+        run: |
+          $SOURCE_NAME="PrivateAzureNuGets"
+          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
+          
+          # Check if the source exists. If it does, update it.
+          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+            Write-Host "Updating existing source $SOURCE_NAME."
+            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+          } else {
+            Write-Host "Adding new source $SOURCE_NAME."
+            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+          }
+
       - name: Building
         run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
 

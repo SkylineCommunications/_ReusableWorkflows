@@ -35,6 +35,8 @@ on:
         required: true
       sonarCloudToken:
         required: true
+      azureToken:
+        required: false
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   check_solution_type:
@@ -92,6 +94,7 @@ jobs:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}
       sonarCloudToken: ${{ secrets.sonarCloudToken }}
+      azureToken: ${{ secrets.azureToken }}
 
   CI_SDK:
     uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master SDK Workflow.yml@main
@@ -108,3 +111,4 @@ jobs:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}
       sonarCloudToken: ${{ secrets.sonarCloudToken }}
+      azureToken: ${{ secrets.azureToken }}
