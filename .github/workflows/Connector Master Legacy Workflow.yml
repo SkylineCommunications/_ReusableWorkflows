@@ -185,7 +185,7 @@ jobs:
 
       - name: Setup VSTest
         if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
-        uses: darenm/Setup-VSTest@v1.2
+        uses: darenm/Setup-VSTest@v1.3
 
       - name: Install OpenCover
         if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
