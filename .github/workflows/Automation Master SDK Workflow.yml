@@ -259,7 +259,7 @@ jobs:
   
       - name: Upload to Catalog
         id: uploadToCatalog
-        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --dm-catalog-token ${{ secrets.api-key }} --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --version ${{ inputs.referenceName }})" >> $GITHUB_OUTPUT
-  
+        run: echo id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --dm-catalog-token ${{ secrets.api-key }} --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }}) >> $GITHUB_OUTPUT
+ 
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV
