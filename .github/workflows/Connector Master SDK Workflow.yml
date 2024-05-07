@@ -270,15 +270,24 @@ jobs:
         run: dotnet restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
 #ON RELEASE OR PRE-RELEASE
+
+      - name: Create package name
+        if: inputs.referenceType == 'tag'
+        id: packageNameRelease
+        run: |
+          tempName="${{ inputs.repository }} ${{ inputs.referenceName }}"
+          echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Create DMAPP - Release
         if: inputs.referenceType == 'tag'
-        run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ inputs.repository  }}_${{ inputs.referenceName }}" --output ${{ github.workspace }} --version-override "${{ inputs.referenceName  }}"
+        run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageNameRelease.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ inputs.referenceName  }}"
       
       - uses: actions/upload-artifact@v4
         if: inputs.referenceType == 'tag'
         with:
           name: Connector Package
-          path: "${{ github.workspace }}/${{ inputs.repository  }}_${{ inputs.referenceName }}.dmprotocol"
+          path: "${{ github.workspace }}/${{ steps.packageNameRelease.outputs.name }}.dmprotocol"
 
 #ON BUILD
       - name: Find and extract Protocol Version
@@ -298,14 +307,22 @@ jobs:
           echo "PROTOCOL_VERSION=$protocol_version" >> $GITHUB_ENV
         shell: bash
 
+      - name: Create package name
+        if: inputs.referenceType != 'tag'
+        id: packageNameDevelopment
+        run: |
+          tempName="${{ inputs.repository }} ${{ inputs.runNumber }}"
+          echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Create DMAPP - Build
         if: inputs.referenceType != 'tag'
         run: |
-          dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ inputs.repository  }}_${{ inputs.runNumber }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}"
+          dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageNameDevelopment.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}"
         shell: bash
 
       - uses: actions/upload-artifact@v4
         if: inputs.referenceType != 'tag'
         with:
           name: Connector Package
-          path: "${{ github.workspace }}/${{ inputs.repository  }}_${{ inputs.runNumber }}.dmprotocol"
+          path: "${{ github.workspace }}/${{ steps.packageNameDevelopment.outputs.name }}.dmprotocol"

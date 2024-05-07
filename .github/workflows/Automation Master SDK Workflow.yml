@@ -242,20 +242,24 @@ jobs:
       - name: NuGet restore solution
         run: dotnet restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
-      - name: Upload artifact Package
-        id: upload-step-release
-        uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
-        with:
-          # Stage upload
-          stage: Upload
-          # The API-key generated in the DCP Admin app as authentication for a certain DataMiner System. E.g. g597e77412e34297b827c2570a8fa2bc
-          api-key: ${{ secrets.api-key }}
-          # The path to the .sln file of the solution. Atm only DataMiner Automation Script solutions are supported. E.g ./Example/Script.sln.
-          solution-path: ./${{ steps.findSlnFile.outputs.solutionFilePath }}
-          # The chosen name of the artifact. E.g. MyName.
-          artifact-name: ${{ inputs.repository }}
-          # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1. Can also be a pre-release version 1.0.1.1-abc
-          version: ${{ inputs.referenceName }}
-
+      - name: Install .NET Tools
+        run: |
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload
+  
+      - name: Create package name
+        id: packageName
+        run: |
+         tempName="${{ inputs.repository }} ${{ inputs.referenceName }}"
+         echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
+        shell: bash
+  
+      - name: Create dmapp package
+        run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --version ${{ inputs.referenceName }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}"
+  
+      - name: Upload to Catalog
+        id: uploadToCatalog
+        run: echo id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --dm-catalog-token ${{ secrets.api-key }} --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }}) >> $GITHUB_OUTPUT
+ 
       - name: (Release) Set artifact Id
-        run: echo "result-artifact-id=${{ steps.upload-step-release.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV
+        run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV
