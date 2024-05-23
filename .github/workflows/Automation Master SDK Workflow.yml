@@ -240,7 +240,7 @@ jobs:
           echo "branch="$(git branch --contains tags/${{ github.ref_name }} -r) | grep 'origin/'| grep -vE '.*/.*/' | head -n 1 | sed 's#origin/##'"" >> $GITHUB_OUTPUT
         shell: bash 
 
-      - name: ShowResult
+      - name: Target Branch
         id: showResult
         run: echo "${{ steps.findBranch.outputs.branch }}"
 

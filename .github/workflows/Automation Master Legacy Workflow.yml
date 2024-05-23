@@ -279,10 +279,9 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
-
-      - name: readDir
-        run: ls   
-
+        with:
+          fetch-depth: 0
+          
       - name: Initialize
         run: |
           echo "workspace" ${{ github.workspace }}
@@ -315,6 +314,16 @@ jobs:
           fi
         shell: bash
         
+      - name: Find branch
+        id: findBranch
+        run: |
+          echo "branch="$(git branch --contains tags/${{ github.ref_name }} -r) | grep 'origin/'| grep -vE '.*/.*/' | head -n 1 | sed 's#origin/##'"" >> $GITHUB_OUTPUT
+        shell: bash 
+
+      - name: Target Branch
+        id: showResult
+        run: echo "${{ steps.findBranch.outputs.branch }}"
+
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
         run: nuget sources add -src "https://nuget.pkg.github.com/SkylineCommunications/index.json" -UserName USERNAME -Password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText  -ConfigFile ${{ github.workspace }}/${{ steps.findOrCreateNuGetFile.outputs.NuGetFileName }}
