@@ -281,7 +281,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Initialize
         run: |
           echo "workspace" ${{ github.workspace }}
@@ -348,7 +348,7 @@ jobs:
 
       - name: Upload to Catalog
         id: uploadToCatalog
-        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
+        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
  
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV
