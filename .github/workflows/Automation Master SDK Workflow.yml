@@ -237,7 +237,7 @@ jobs:
       - name: Find branch
         id: findBranch
         run: |
-          echo "branch="$(git branch --contains tags/${{ github.ref_name }} -r) | grep 'origin/'| grep -vE '.*/.*/' | head -n 1 | sed 's#origin/##'"" >> $GITHUB_OUTPUT
+          echo "branch="$(git branch --contains tags/${{ github.ref_name }} -r) | grep 'origin/'| grep -vE '.*/.*/' | head -n 1 | sed 's#origin/##' | paste -sd "\n""" >> $GITHUB_OUTPUT
         shell: bash 
 
       - name: Target Branch
