@@ -97,7 +97,7 @@ jobs:
       azureToken: ${{ secrets.azureToken }}
 
   CI_SDK:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master SDK Workflow.yml@fixMissingBranchOnUpload
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master SDK Workflow.yml@main
     needs: check_solution_type
     if: needs.check_solution_type.outputs.isSdk == 'true'
     with:
