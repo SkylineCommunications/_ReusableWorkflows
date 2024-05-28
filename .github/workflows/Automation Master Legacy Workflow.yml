@@ -314,10 +314,17 @@ jobs:
           fi
         shell: bash
         
-      - name: Find branch
+     - name: Find branch
         id: findBranch
         run: |
-          echo "branch="$(git branch --contains tags/${{ github.ref_name }} -r) | grep 'origin/'| grep -vE '.*/.*/' | head -n 1 | sed 's#origin/##' | paste -sd "\n""" >> $GITHUB_OUTPUT
+          #!/bin/bash
+          set -e  # Exit immediately if a command exits with a non-zero status.
+          
+          # Capture the branches containing the tag and process them
+          branches="$(git branch --contains tags/${{ inputs.referenceName }} -r | grep 'origin/' | grep -vE '.*/.*/' | sed 's#origin/##' | paste -sd ",")"
+          
+          # Append to GitHub Actions output
+          echo "branch=${branches}" >> $GITHUB_OUTPUT
         shell: bash 
 
       - name: Target Branch
