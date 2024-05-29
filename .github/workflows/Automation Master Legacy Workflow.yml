@@ -279,8 +279,9 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+
+      - name: readDir
+        run: ls   
 
       - name: Initialize
         run: |
@@ -298,39 +299,7 @@ jobs:
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
-
-      - name: Find or create NuGet.config file
-        if: inputs.owner == 'SkylineCommunications'
-        id: findOrCreateNuGetFile
-        run: |
-          file=$(find . -type f -iname 'nuget.config' | head -n 1)
-          if [[ -n "$file" ]]; then
-            echo "NuGet config file exists: $file"
-            echo NuGetFileName=$(basename $file) >> $GITHUB_OUTPUT
-          else
-            echo "NuGet config does not exist. Creating..."
-            dotnet new nugetconfig --output ${{ github.workspace }}
-            echo NuGetFileName=nuget.config >> $GITHUB_OUTPUT
-          fi
-        shell: bash
-        
-      - name: Find branch
-        id: findBranch
-        run: |
-          #!/bin/bash
-          set -e  # Exit immediately if a command exits with a non-zero status.
-          
-          # Capture the branches containing the tag and process them
-          branches="$(git branch --contains tags/${{ inputs.referenceName }} -r | grep 'origin/' | grep -vE '.*/.*/' | sed 's#origin/##' | paste -sd ",")"
-          
-          # Append to GitHub Actions output
-          echo "branch=${branches}" >> $GITHUB_OUTPUT
-        shell: bash 
-
-      - name: Target Branch
-        id: showResult
-        run: echo "${{ steps.findBranch.outputs.branch }}"
-
+  
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
         run: nuget sources add -src "https://nuget.pkg.github.com/SkylineCommunications/index.json" -UserName USERNAME -Password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText  -ConfigFile ${{ github.workspace }}/${{ steps.findOrCreateNuGetFile.outputs.NuGetFileName }}
@@ -372,7 +341,7 @@ jobs:
         shell: pwsh
 
       - name: NuGet restore solution
-        run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
+        run: nuget restore
 
       - name: Install .NET Tools
         run: |
@@ -391,7 +360,7 @@ jobs:
 
       - name: Upload to Catalog
         id: uploadToCatalog
-        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
+        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
  
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV
