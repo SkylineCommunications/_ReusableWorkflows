@@ -314,7 +314,7 @@ jobs:
           fi
         shell: bash
         
-     - name: Find branch
+      - name: Find branch
         id: findBranch
         run: |
           #!/bin/bash
