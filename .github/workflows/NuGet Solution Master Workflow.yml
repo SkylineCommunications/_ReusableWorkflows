@@ -244,7 +244,7 @@ jobs:
           path: _NuGetResults
 
       - name: Install dotnet sign
-        run: dotnet tool install sign --version 0.9.1-beta.24170.3 --global
+        run: dotnet tool install sign --prerelease --global
       
       - name: Sign NuGet Package
         run: |       
