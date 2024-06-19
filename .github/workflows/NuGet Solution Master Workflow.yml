@@ -242,33 +242,16 @@ jobs:
         with:
           name: NugetPackages
           path: _NuGetResults
-          
-      - name: Find Nuget
-        id: findcreatednuget        
-        run: |
-          IFS=$'\n'
-          echo nugetPackageName=$(find _NuGetResults -type f -name '*.nupkg') >> $GITHUB_OUTPUT
-          unset IFS
-        shell: bash  
-        
-      - name: Download Encrypted Signature File
-        id: downloadSignatureFile
-        env:
-          CERTIFICATE_BASE64: ${{ secrets.pfx }}
-        run: 'echo "$CERTIFICATE_BASE64" > encodedSignatureFile'
-        shell: bash
 
-      - name: Decrypt Signature File
-        id: decryptSignatureFile
-        run: certutil -decode encodedSignatureFile Skyline.pfx
-        shell: bash
-    
+      - name: Install dotnet sign
+        run: dotnet tool install sign --version 0.9.1-beta.24170.3 --global"
+      
       - name: Sign NuGet Package
-        run: |
+        run: |       
           IFS=$'\n'
           for i in ${{ steps.findcreatednuget.outputs.nugetPackageName }}; 
           do
-              dotnet nuget sign "$i" --certificate-path "Skyline.pfx" --timestamper "http://timestamp.comodoca.com/rfc3161" --certificate-password ${{ secrets.pfxPassword }}
+          sign code azure-key-vault "_NuGetResults/**/*.nupkg" --publisher-name "Skyline Communications" --description "Skyline Signing" --description-url "https://www.skyline.be/" --azure-key-vault-tenant-id "5f175691-8d1c-4932-b7c8-ce990839ac40" --azure-key-vault-client-id "a7ff072c-5bc8-4fa0-9e0c-bb9e40d59b0b" --azure-key-vault-client-secret ${{ secrets.pfxPassword }} --azure-key-vault-certificate "Skyline-CodeSigning" --azure-key-vault-url "https://kv-slc-codesigning.vault.azure.net/" --output "${{ github.workspace }}/_SignedNuGetResults"
           done
           unset IFS    
         shell: bash
@@ -276,7 +259,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: SignedNugetPackages
-          path: "${{ github.workspace }}/_NuGetResults"
+          path: "${{ github.workspace }}/_SignedNuGetResults"
 
   push:
     if: inputs.referenceType == 'tag'
@@ -289,13 +272,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: SignedNugetPackages
-          path: _NuGetResults
+          path: _SignedNuGetResults
           
       - name: Find Nuget
         id: findcreatednuget        
         run: |
           IFS=$'\n'
-          echo nugetPackageName=$(find _NuGetResults -type f -name '*.nupkg') >> $GITHUB_OUTPUT
+          echo nugetPackageName=$(find _SignedNuGetResults -type f -name '*.nupkg') >> $GITHUB_OUTPUT
           unset IFS
         shell: bash  
         
