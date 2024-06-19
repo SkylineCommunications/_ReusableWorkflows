@@ -249,14 +249,14 @@ jobs:
       - name: Sign NuGet Package
         run: |       
           IFS=$'\n'
-          sign code azure-key-vault "${{ github.workspace }}\_NuGetResults/**/*.nupkg" --publisher-name "Skyline Communications" --description "Skyline Signing" --description-url "https://www.skyline.be/" --azure-key-vault-tenant-id "5f175691-8d1c-4932-b7c8-ce990839ac40" --azure-key-vault-client-id "a7ff072c-5bc8-4fa0-9e0c-bb9e40d59b0b" --azure-key-vault-client-secret ${{ secrets.pfxPassword }} --azure-key-vault-certificate "Skyline-CodeSigning" --azure-key-vault-url "https://kv-slc-codesigning.vault.azure.net/" --output "${{ github.workspace }}\_SignedNuGetResults"
+          sign code azure-key-vault "_NuGetResults/**/*.nupkg" --publisher-name "Skyline Communications" --description "Skyline Signing" --description-url "https://www.skyline.be/" --azure-key-vault-tenant-id "5f175691-8d1c-4932-b7c8-ce990839ac40" --azure-key-vault-client-id "a7ff072c-5bc8-4fa0-9e0c-bb9e40d59b0b" --azure-key-vault-client-secret ${{ secrets.pfxPassword }} --azure-key-vault-certificate "Skyline-CodeSigning" --azure-key-vault-url "https://kv-slc-codesigning.vault.azure.net/" --output "_SignedNuGetResults"
           unset IFS    
         shell: bash
         
       - uses: actions/upload-artifact@v4
         with:
           name: SignedNugetPackages
-          path: "${{ github.workspace }}\\_SignedNuGetResults"
+          path: "${{ github.workspace }}/_SignedNuGetResults"
 
   push:
     if: inputs.referenceType == 'tag'
