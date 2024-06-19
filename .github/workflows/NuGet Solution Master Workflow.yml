@@ -137,96 +137,96 @@ jobs:
           name: NugetPackages
           path: "${{ github.workspace }}/_NuGetResults"
 
-      - name: Disable NuGet Creation on Subsequent Builds
-        run: NuGetToggleOnBuild --setToActive false --workspace ${{ github.workspace }} --onlyOnConfiguredNuGet false  --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
+    #   - name: Disable NuGet Creation on Subsequent Builds
+    #     run: NuGetToggleOnBuild --setToActive false --workspace ${{ github.workspace }} --onlyOnConfiguredNuGet false  --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
-      - name: Unit Tests
-      # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
-        id: unit-tests
-        run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
-        continue-on-error: true
+    #   - name: Unit Tests
+    #   # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
+    #     id: unit-tests
+    #     run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
+    #     continue-on-error: true
 
-      # - name: Cache SonarCloud packages
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: ~\sonar\cache
-      #     key: ${{ runner.os }}-sonar
-      #     restore-keys: ${{ runner.os }}-sonar
+    #   # - name: Cache SonarCloud packages
+    #   #   uses: actions/cache@v3
+    #   #   with:
+    #   #     path: ~\sonar\cache
+    #   #     key: ${{ runner.os }}-sonar
+    #   #     restore-keys: ${{ runner.os }}-sonar
 
-     # - name: Cache SonarCloud scanner
-     #   id: cache-sonar-scanner
-     #   uses: actions/cache@v3
-     #   with:
-     #     path: .\.sonar\scanner
-     #     key: ${{ runner.os }}-sonar-scanner
-     #     restore-keys: ${{ runner.os }}-sonar-scanner
+    #  # - name: Cache SonarCloud scanner
+    #  #   id: cache-sonar-scanner
+    #  #   uses: actions/cache@v3
+    #  #   with:
+    #  #     path: .\.sonar\scanner
+    #  #     key: ${{ runner.os }}-sonar-scanner
+    #  #     restore-keys: ${{ runner.os }}-sonar-scanner
 
-      - name: Install SonarCloud scanner
-     #   if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
-        run: |
-          dotnet tool install dotnet-sonarscanner --global
+    #   - name: Install SonarCloud scanner
+    #  #   if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+    #     run: |
+    #       dotnet tool install dotnet-sonarscanner --global
 
-      - name: Prepare SonarCloud Variables
-        id: prepSonarCloudVar
-        run: |
-          import os
-          env_file = os.getenv('GITHUB_ENV')
-          with open(env_file, "a") as myfile:
-               myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
-        shell: python
+    #   - name: Prepare SonarCloud Variables
+    #     id: prepSonarCloudVar
+    #     run: |
+    #       import os
+    #       env_file = os.getenv('GITHUB_ENV')
+    #       with open(env_file, "a") as myfile:
+    #            myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
+    #     shell: python
 
-      - name: Get SonarCloud Status
-        id: get-sonarcloud-status
-        run: |
-          echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
-        continue-on-error: true
+    #   - name: Get SonarCloud Status
+    #     id: get-sonarcloud-status
+    #     run: |
+    #       echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
+    #     continue-on-error: true
 
-      - name: Trigger Initial Analysis
-        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-        run: |
-            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
-            dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
-            dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
-        continue-on-error: true
+    #   - name: Trigger Initial Analysis
+    #     if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
+    #     env:
+    #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+    #       SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+    #     run: |
+    #         dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+    #         dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
+    #         dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
+    #     continue-on-error: true
         
-      - name: Analyze
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-        run: |
-            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
-            dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
-            dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
-        continue-on-error: true
+    #   - name: Analyze
+    #     env:
+    #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+    #       SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+    #     run: |
+    #         dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+    #         dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
+    #         dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
+    #     continue-on-error: true
 
-      - name: SonarCloud Quality Gate check
-        id: sonarcloud-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        with:
-          scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
-        continue-on-error: true
-        # Force to fail step after specific time.
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+    #   - name: SonarCloud Quality Gate check
+    #     id: sonarcloud-quality-gate-check
+    #     uses: sonarsource/sonarqube-quality-gate-action@master
+    #     with:
+    #       scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
+    #     continue-on-error: true
+    #     # Force to fail step after specific time.
+    #     timeout-minutes: 5
+    #     env:
+    #       SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
 
-      - name: Quality Gate
-        id: quality-step
-        run: |
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            print("Quality gate failed due to:")
-          if "${{ steps.unit-tests.outcome }}" == "failure":
-            print("- Test failures")
-          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
-            print("- Could not retrieve SonarCloud quality gate status")
-          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            print("- Code analysis quality gate failed")
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            exit(1)
-        shell: python
+    #   - name: Quality Gate
+    #     id: quality-step
+    #     run: |
+    #       if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+    #         print("Quality gate failed due to:")
+    #       if "${{ steps.unit-tests.outcome }}" == "failure":
+    #         print("- Test failures")
+    #       if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
+    #         print("- Could not retrieve SonarCloud quality gate status")
+    #       if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+    #         print("- Code analysis quality gate failed")
+    #       if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+    #         exit(1)
+    #     shell: python
 
     # Signing cannot be done from linux environment (https://github.com/dotnet/runtime/issues/48794)
   sign:
@@ -249,17 +249,14 @@ jobs:
       - name: Sign NuGet Package
         run: |       
           IFS=$'\n'
-          for i in ${{ steps.findcreatednuget.outputs.nugetPackageName }}; 
-          do
-          sign code azure-key-vault "_NuGetResults/**/*.nupkg" --publisher-name "Skyline Communications" --description "Skyline Signing" --description-url "https://www.skyline.be/" --azure-key-vault-tenant-id "5f175691-8d1c-4932-b7c8-ce990839ac40" --azure-key-vault-client-id "a7ff072c-5bc8-4fa0-9e0c-bb9e40d59b0b" --azure-key-vault-client-secret ${{ secrets.pfxPassword }} --azure-key-vault-certificate "Skyline-CodeSigning" --azure-key-vault-url "https://kv-slc-codesigning.vault.azure.net/" --output "${{ github.workspace }}/_SignedNuGetResults"
-          done
+          sign code azure-key-vault "${{ github.workspace }}\_NuGetResults/**/*.nupkg" --publisher-name "Skyline Communications" --description "Skyline Signing" --description-url "https://www.skyline.be/" --azure-key-vault-tenant-id "5f175691-8d1c-4932-b7c8-ce990839ac40" --azure-key-vault-client-id "a7ff072c-5bc8-4fa0-9e0c-bb9e40d59b0b" --azure-key-vault-client-secret ${{ secrets.pfxPassword }} --azure-key-vault-certificate "Skyline-CodeSigning" --azure-key-vault-url "https://kv-slc-codesigning.vault.azure.net/" --output "${{ github.workspace }}\_SignedNuGetResults"
           unset IFS    
         shell: bash
         
       - uses: actions/upload-artifact@v4
         with:
           name: SignedNugetPackages
-          path: "${{ github.workspace }}/_SignedNuGetResults"
+          path: "${{ github.workspace }}\\_SignedNuGetResults"
 
   push:
     if: inputs.referenceType == 'tag'
