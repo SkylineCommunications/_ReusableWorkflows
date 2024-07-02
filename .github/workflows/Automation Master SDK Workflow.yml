@@ -88,6 +88,7 @@ jobs:
             Write-Host "Adding new source $SOURCE_NAME."
             dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
           }
+        shell: pwsh
         
       - name: Enable Skyline Azure Cloud NuGet Registry
         env:
@@ -212,8 +213,9 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+
+      - name: readDir
+        run: ls   
 
       - name: Initialize
         run: |
@@ -229,21 +231,6 @@ jobs:
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
         
-      - name: Find or create NuGet.config file
-        if: inputs.owner == 'SkylineCommunications'
-        id: findOrCreateNuGetFile
-        run: |
-          file=$(find . -type f -iname 'nuget.config' | head -n 1)
-          if [[ -n "$file" ]]; then
-            echo "NuGet config file exists: $file"
-            echo NuGetFileName=$(basename $file) >> $GITHUB_OUTPUT
-          else
-            echo "NuGet config does not exist. Creating..."
-            dotnet new nugetconfig --output ${{ github.workspace }}
-            echo NuGetFileName=nuget.config >> $GITHUB_OUTPUT
-          fi
-        shell: bash
-     
       - name: Find branch
         id: findBranch
         run: |
@@ -260,8 +247,22 @@ jobs:
       - name: Target Branch
         id: showResult
         run: echo "${{ steps.findBranch.outputs.branch }}"
-
+        
+      - name: Enable Skyline GitHub NuGet Registry
+        run: |
+          $SOURCE_NAME="PrivateGitHubNugets"
+          $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
           
+          # Check if the source exists. If it does, update it.
+          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+            Write-Host "Updating existing source $SOURCE_NAME."
+            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+          } else {
+            Write-Host "Adding new source $SOURCE_NAME."
+            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+          }
+        shell: pwsh
+        
       - name: Enable Skyline Azure Cloud NuGet Registry
         env:
           AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
@@ -318,7 +319,7 @@ jobs:
   
       - name: Upload to Catalog
         id: uploadToCatalog
-        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
+        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
  
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV
