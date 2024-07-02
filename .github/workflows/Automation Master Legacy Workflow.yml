@@ -123,9 +123,19 @@ jobs:
         uses: microsoft/setup-msbuild@v2
         
       - name: Enable Skyline GitHub NuGet Registry
-        if: inputs.owner == 'SkylineCommunications'
-        run: nuget sources add -src "https://nuget.pkg.github.com/SkylineCommunications/index.json" -UserName USERNAME -Password ${{ secrets.GITHUB_TOKEN }}
-
+        run: |
+          $SOURCE_NAME="PrivateGitHubNuGets"
+          $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
+          
+          # Check if the source exists. If it does, update it.
+          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+            Write-Host "Updating existing source $SOURCE_NAME."
+            nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
+          } else {
+            Write-Host "Adding new source $SOURCE_NAME."
+            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
+          }
+        shell: pwsh
 
       - name: Enable Skyline Azure Cloud NuGet Registry
         env:
@@ -138,11 +148,12 @@ jobs:
           # Check if the source exists. If it does, update it.
           if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
-            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           } else {
             Write-Host "Adding new source $SOURCE_NAME."
-            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           }
+        shell: pwsh
 
       - name: Enable Skyline Azure Private NuGet Registry
         env:
@@ -155,11 +166,12 @@ jobs:
           # Check if the source exists. If it does, update it.
           if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
-            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            nuget sources update source -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           } else {
             Write-Host "Adding new source $SOURCE_NAME."
-            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           }
+        shell: pwsh
 
       - name: Restore NuGet
         run: nuget restore
@@ -279,9 +291,8 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
-
-      - name: readDir
-        run: ls   
+        with:
+          fetch-depth: 0
 
       - name: Initialize
         run: |
@@ -299,22 +310,36 @@ jobs:
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
-  
-      - name: Enable Skyline GitHub NuGet Registry
-        env:
-          GITHUB_TOKEN_EXISTS: ${{ secrets.GITHUB_TOKEN }}
-        if: env.GITHUB_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+    
+      - name: Find branch
+        id: findBranch
         run: |
-          $SOURCE_NAME="GitHubNuGets"
+          #!/bin/bash
+          set -e  # Exit immediately if a command exits with a non-zero status.
+          
+          # Capture the branches containing the tag and process them
+          branches="$(git branch --contains tags/${{ inputs.referenceName }} -r | grep 'origin/' | grep -vE '.*/.*/' | sed 's#origin/##' | paste -sd ",")"
+          
+          # Append to GitHub Actions output
+          echo "branch=${branches}" >> $GITHUB_OUTPUT
+        shell: bash 
+
+      - name: Target Branch
+        id: showResult
+        run: echo "${{ steps.findBranch.outputs.branch }}"
+
+      - name: Enable Skyline GitHub NuGet Registry
+        run: |
+          $SOURCE_NAME="PrivateGitHubNuGets"
           $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
           
           # Check if the source exists. If it does, update it.
           if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
-            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+            nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
           } else {
             Write-Host "Adding new source $SOURCE_NAME."
-            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
           }
         shell: pwsh
 
@@ -329,10 +354,10 @@ jobs:
           # Check if the source exists. If it does, update it.
           if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
-            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           } else {
             Write-Host "Adding new source $SOURCE_NAME."
-            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           }
         shell: pwsh
 
@@ -347,15 +372,15 @@ jobs:
           # Check if the source exists. If it does, update it.
           if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
-            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            nuget sources update source -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           } else {
             Write-Host "Adding new source $SOURCE_NAME."
-            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           }
         shell: pwsh
 
       - name: NuGet restore solution
-        run: nuget restore
+        run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: Install .NET Tools
         run: |
@@ -374,7 +399,7 @@ jobs:
 
       - name: Upload to Catalog
         id: uploadToCatalog
-        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
+        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
  
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV
