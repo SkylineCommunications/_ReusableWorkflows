@@ -128,7 +128,7 @@ jobs:
           $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
           
           # Check if the source exists. If it does, update it.
-          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
             nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
           } else {
@@ -146,7 +146,7 @@ jobs:
           $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
           
           # Check if the source exists. If it does, update it.
-          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
             nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           } else {
@@ -164,7 +164,7 @@ jobs:
           $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
           
           # Check if the source exists. If it does, update it.
-          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
             nuget sources update source -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           } else {
@@ -334,7 +334,7 @@ jobs:
           $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
           
           # Check if the source exists. If it does, update it.
-          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
             nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
           } else {
@@ -352,7 +352,7 @@ jobs:
           $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
           
           # Check if the source exists. If it does, update it.
-          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
             nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           } else {
@@ -370,7 +370,7 @@ jobs:
           $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
           
           # Check if the source exists. If it does, update it.
-          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
             Write-Host "Updating existing source $SOURCE_NAME."
             nuget sources update source -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
           } else {
