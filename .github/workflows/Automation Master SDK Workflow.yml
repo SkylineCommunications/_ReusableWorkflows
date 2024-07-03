@@ -75,7 +75,9 @@ jobs:
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
 
+        # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
+        if: inputs.owner == 'SkylineCommunications'
         run: |
           $SOURCE_NAME="PrivateGitHubNugets"
           $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
@@ -248,7 +250,9 @@ jobs:
         id: showResult
         run: echo "${{ steps.findBranch.outputs.branch }}"
         
+        # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
+        if: inputs.owner == 'SkylineCommunications'
         run: |
           $SOURCE_NAME="PrivateGitHubNugets"
           $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"

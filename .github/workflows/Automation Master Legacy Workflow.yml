@@ -122,7 +122,9 @@ jobs:
       - name: Prepare Building
         uses: microsoft/setup-msbuild@v2
         
+        # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
+        if: inputs.owner == 'SkylineCommunications'
         run: |
           $SOURCE_NAME="PrivateGitHubNuGets"
           $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
@@ -328,7 +330,9 @@ jobs:
         id: showResult
         run: echo "${{ steps.findBranch.outputs.branch }}"
 
+         # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
+        if: inputs.owner == 'SkylineCommunications'
         run: |
           $SOURCE_NAME="PrivateGitHubNuGets"
           $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
