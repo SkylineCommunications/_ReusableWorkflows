@@ -87,10 +87,23 @@ jobs:
                myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
         shell: python
         
+        # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
-        run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }}
-
+        run: |
+          $SOURCE_NAME="PrivateGitHubNugets"
+          $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
+          
+          # Check if the source exists. If it does, update it.
+          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+            Write-Host "Updating existing source $SOURCE_NAME."
+            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+          } else {
+            Write-Host "Adding new source $SOURCE_NAME."
+            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+          }
+        shell: pwsh
+        
       - name: Enable Skyline Azure Cloud NuGet Registry
         env:
           AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
@@ -123,7 +136,7 @@ jobs:
           } else {
             Write-Host "Adding new source $SOURCE_NAME."
             dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
-          }        
+          }
 
       - name: Building
         run: dotnet build -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
@@ -182,92 +195,4 @@ jobs:
       - name: Post Actions
         run: echo "todo" 
 
-  # TODO: uncomment below when action supports SRM Functions
-  # artifact_creation_registration:
-  #   name: Artifact Registration and Upload 
-  #   runs-on: ubuntu-latest
-  #   needs: validate_skyline_quality_gate
-  #   env:
-  #     result-artifact-id: none
-  #   outputs:
-  #     artifact-id: ${{ env.result-artifact-id }}
-  #     #artifact-id-development: ${{ steps.upload-step-development.outputs.ARTIFACT_ID }}
-
-  #   steps:
-  #     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-  #     - uses: actions/checkout@v4
-
-  #     - name: readDir
-  #       run: ls   
-
-  #     - name: Initialize
-  #       run: |
-  #         echo "workspace" ${{ github.workspace }}
-  #         echo "ref name" ${{ inputs.referenceName }}
-  #         echo "run number" ${{ inputs.runNumber }}
-  #         echo "ref type" ${{ inputs.referenceType }}
-  #         echo "repository" ${{ inputs.repository }}
-        
-      # - name: Find or create NuGet.config file
-      #   if: inputs.owner == 'SkylineCommunications'
-      #   id: findOrCreateNuGetFile
-      #   run: |
-      #     file=$(find . -type f -iname 'nuget.config' | head -n 1)
-      #     if [[ -n "$file" ]]; then
-      #       echo "NuGet config file exists: $file"
-      #       echo NuGetFileName=$(basename $file) >> $GITHUB_OUTPUT
-      #     else
-      #       echo "NuGet config does not exist. Creating..."
-      #       dotnet new nugetconfig --output ${{ github.workspace }}
-      #       echo NuGetFileName=nuget.config >> $GITHUB_OUTPUT
-      #     fi
-      #   shell: bash
-
-      # - name: Enable Skyline GitHub NuGet Registry
-      #   if: inputs.owner == 'SkylineCommunications'
-      #   run: dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile ${{ github.workspace }}/${{ steps.findOrCreateNuGetFile.outputs.NuGetFileName }}
-      
-  #     - name: dotnet restore
-  #       run: dotnet restore
-
-  #     - name: (Development) Upload artifact Package
-  #       if: inputs.referenceType == 'branch'
-  #       id: upload-step-development
-  #       env:
-  #         NUGET_PACKAGES: ${{ github.workspace }}/packages
-  #       # uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@UseReusableModuleNuGets
-  #       uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
-  #       with:
-  #         # Stage upload
-  #         stage: Upload
-  #         # The API-key generated in the DCP Admin app as authentication for a certain DataMiner System. E.g. g597e77412e34297b827c2570a8fa2bc
-  #         api-key: ${{ secrets.api-key }}
-  #         # The path to the .sln file of the solution. Atm only DataMiner Automation Script solutions are supported. E.g ./Example/Script.sln.
-  #         solution-path: ./SrmFunction.sln
-  #         # The chosen name of the artifact. E.g. MyName.
-  #         artifact-name: ${{ inputs.repository }} ${{ inputs.referenceName }}_B${{ inputs.runNumber }}
-  #         # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1
-  #         build-number: ${{ inputs.runNumber }}
-  #     - name: (Development) Set artifact Id
-  #       if: inputs.referenceType == 'branch'
-  #       run: echo "result-artifact-id=${{ steps.upload-step-development.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV
-  #     - name: (Release) Upload artifact Package
-  #       if: inputs.referenceType == 'tag'
-  #       id: upload-step-release
-  #       uses: SkylineCommunications/Skyline-DataMiner-Deploy-Action@v1
-  #       with:
-  #         # Stage upload
-  #         stage: Upload
-  #         # The API-key generated in the DCP Admin app as authentication for a certain DataMiner System. E.g. g597e77412e34297b827c2570a8fa2bc
-  #         api-key: ${{ secrets.api-key }}
-  #         # The path to the .sln file of the solution. Atm only DataMiner Automation Script solutions are supported. E.g ./Example/Script.sln.
-  #         solution-path: ./SrmFunction.sln
-  #         # The chosen name of the artifact. E.g. MyName.
-  #         artifact-name: ${{ env.GITHUB_REPOSITORY }} ${{ inputs.referenceName }}
-  #         # The version number for the artifact (format A.B.C.D). E.g. 1.0.1.1
-  #         version: ${{ inputs.referenceName }}
-  #     - name: (Release) Set artifact Id
-  #       if: inputs.referenceType == 'tag'
-  #       run: echo "result-artifact-id=${{ steps.upload-step-release.outputs.ARTIFACT_ID }}" >> $GITHUB_ENV
-  #     - name: Post Actions
-  #       run: echo  ${{ steps.upload-step-development.outputs.ARTIFACT_ID }}
+#TODO: add Pack, Upload when this gets supported.
