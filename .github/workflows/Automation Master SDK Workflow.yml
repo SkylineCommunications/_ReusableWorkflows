@@ -202,8 +202,8 @@ jobs:
       - name: Quality Gate
         id: quality-step
         run: |
-          if "${{ steps.detectCsprojFiles.outputs.csproj-file-present }}" == "true":
-            print("Quality gate skipped as no csproj files are present")
+          if "${{ steps.detectCsprojFiles.outputs.csproj-file-present }}" == "false":
+            print("Quality gate skipped as no .csproj files are detected.")
             exit(0)
           if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("Quality gate failed due to:")
