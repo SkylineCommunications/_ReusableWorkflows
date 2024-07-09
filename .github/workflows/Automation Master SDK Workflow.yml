@@ -166,7 +166,7 @@ jobs:
         continue-on-error: true
 
       - name: Trigger Initial Analysis
-        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE' && steps.detectCsprojFiles.outputs.csprojFilePresent == 'true'
+        if: steps.detectCsprojFiles.outputs.csprojFilePresent == 'true' && fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
