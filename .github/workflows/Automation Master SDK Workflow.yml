@@ -74,7 +74,13 @@ jobs:
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
-
+      - name: Detect .csproj files
+        id: detectCsprojFiles
+        run: |
+          $csprojFileCount = Get-ChildItem . -Recurse -File -Filter *.csproj | Measure-Object | Select-Object -ExpandProperty Count
+          if($csprojFileCount -gt 0){ $result = "true" }else{ $result = "false" }
+          echo csprojFilePresent=$result >> $GITHUB_OUTPUT
+        shell: pwsh
         # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
@@ -127,20 +133,24 @@ jobs:
           }
 
       - name: Building
+        if: steps.detectCsprojFiles.outputs.csprojFilePresent == 'true'
         run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
 
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
         id: unit-tests
+        if: steps.detectCsprojFiles.outputs.csprojFilePresent == 'true'
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
         continue-on-error: true
 
       - name: Install SonarCloud scanner
+        if: steps.detectCsprojFiles.outputs.csprojFilePresent == 'true'
         run: |
           dotnet tool install dotnet-sonarscanner --global
   
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
+        if: steps.detectCsprojFiles.outputs.csprojFilePresent == 'true'
         run: |
           import os
           env_file = os.getenv('GITHUB_ENV')
@@ -150,12 +160,13 @@ jobs:
 
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
+        if: steps.detectCsprojFiles.outputs.csprojFilePresent == 'true'
         run: |
           echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
         continue-on-error: true
 
       - name: Trigger Initial Analysis
-        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
+        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE' && steps.detectCsprojFiles.outputs.csprojFilePresent == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
@@ -166,6 +177,7 @@ jobs:
         continue-on-error: true
         
       - name: Analyze
+        if: steps.detectCsprojFiles.outputs.csprojFilePresent == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
@@ -189,6 +201,11 @@ jobs:
       - name: Quality Gate
         id: quality-step
         run: |
+          if("${{ steps.detectCsprojFiles.outputs.csprojFilePresent }}" == 'true')
+          {
+            print("Quality gate skipped as no csproj files are present")
+            exit(0)
+          } 
           if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("Quality gate failed due to:")
           if "${{ steps.unit-tests.outcome }}" == "failure":
