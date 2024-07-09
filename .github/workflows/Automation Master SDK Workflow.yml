@@ -190,6 +190,7 @@ jobs:
 
       - name: SonarCloud Quality Gate check
         id: sonarcloud-quality-gate-check
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
@@ -203,7 +204,7 @@ jobs:
         id: quality-step
         run: |
           if "${{ steps.detectCsprojFiles.outputs.csproj-file-present }}" == "false":
-            print("Quality gate skipped as no .csproj files are detected.")
+            print("Quality gate skipped as no .csproj files were detected.")
             exit(0)
           if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("Quality gate failed due to:")
