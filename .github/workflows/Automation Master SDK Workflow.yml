@@ -80,7 +80,7 @@ jobs:
           $csprojFileCount = Get-ChildItem . -Recurse -File -Filter *.csproj | Measure-Object | Select-Object -ExpandProperty Count
           $result = "false"
           if($csprojFileCount -gt 0){ $result = "true" }
-          echo csproj-file-present=$result >> $GITHUB_OUTPUT
+          Write-Output "csproj-file-present=$($result)" >> $Env:GITHUB_OUTPUT
         shell: pwsh
         # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
