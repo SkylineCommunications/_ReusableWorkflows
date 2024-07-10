@@ -67,7 +67,14 @@ jobs:
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
-
+      - name: Detect .csproj files
+        id: detectCsprojFiles
+        run: |
+          $csprojFileCount = Get-ChildItem . -Recurse -File -Filter *.csproj | Measure-Object | Select-Object -ExpandProperty Count
+          $result = "false"
+          if($csprojFileCount -gt 0){ $result = "true" }
+          Write-Output "csproj-file-present=$($result)" >> $Env:GITHUB_OUTPUT
+        shell: pwsh
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -75,6 +82,7 @@ jobs:
           distribution: 'zulu'
 
       - name: Cache SonarCloud packages
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         uses: actions/cache@v4
         with:
           path: ~\sonar\cache
@@ -83,6 +91,7 @@ jobs:
 
       - name: Cache SonarCloud scanner
         id: cache-sonar-scanner
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         uses: actions/cache@v4
         with:
           path: .\.sonar\scanner
@@ -90,19 +99,22 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar-scanner
 
       - name: Install SonarCloud scanner
-        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true' && steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: |
           dotnet tool install dotnet-sonarscanner --tool-path .\.sonar\scanner
 
       - name: Install TestProjectDetector
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: |
           dotnet tool install --tool-path .\.tools\TestProjectDetector Skyline.DataMiner.CICD.Tools.TestProjectDetector
 
       - name: Install NuGetPackageConfigDetector
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: |
           import os
           env_file = os.getenv('GITHUB_ENV')
@@ -111,6 +123,7 @@ jobs:
         shell: python
 
       - name: Check NuGet packages.config usage
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: |
           output=$(NuGetPackageConfigDetector --workspace "${{ github.workspace }}")
           if [[ -n "$output" ]]; then
@@ -120,11 +133,12 @@ jobs:
         shell: bash
 
       - name: Prepare Building
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         uses: microsoft/setup-msbuild@v2
         
         # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
-        if: inputs.owner == 'SkylineCommunications'
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && inputs.owner == 'SkylineCommunications'
         run: |
           $SOURCE_NAME="PrivateGitHubNuGets"
           $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
@@ -142,7 +156,7 @@ jobs:
       - name: Enable Skyline Azure Cloud NuGet Registry
         env:
           AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
-        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
         run: |
           $SOURCE_NAME="CloudNuGets"
           $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
@@ -160,7 +174,7 @@ jobs:
       - name: Enable Skyline Azure Private NuGet Registry
         env:
           AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
-        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
         run: |
           $SOURCE_NAME="PrivateAzureNuGets"
           $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
@@ -176,34 +190,37 @@ jobs:
         shell: pwsh
 
       - name: Restore NuGet
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: nuget restore
 
       - name: Building
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release  "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m # /verbosity:minimal
 
       - name: Run Test Project Detector
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         id: detect-unit-tests
         run: |
           echo "testProjectDetectionOutput=$(.\.tools\TestProjectDetector\TestprojectDetector.exe --solutionFilePath "${{ steps.findSlnFile.outputs.solutionFilePath }}")" >> $env:GITHUB_OUTPUT
 
       - name: Test Project Detector Output
-        if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  != null
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  != null
         run: |
           print("An error occurred during detection of test projects: ${{ fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error }}")
           exit(1)
         shell: python
 
       - name: Process Unit Test Projects
-        if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  == null
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error  == null
         run: |
           echo 'detected-unit-tests=${{ join(fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).UnitTestAssemblies, '"" ""') }}' >> $env:GITHUB_ENV
 
       - name: Setup VSTest
-        if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
         uses: darenm/Setup-VSTest@v1.3
 
       - name: Install OpenCover
-        if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
         run: nuget install OpenCover -OutputDirectory ".\.dotcover"
         
       # - name: Test Error
@@ -220,7 +237,7 @@ jobs:
 
       - name: Unit Tests
         id: unit-tests
-        if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
         #run: vstest.console.exe **\bin\**\*.UnitTests.dll **\bin\**\*.Tests.dll **\bin\**\*Tests.dll /logger:trx # https://learn.microsoft.com/en-us/visualstudio/test/vstest-console-options?view=vs-2022
         run: .\.dotcover\OpenCover.4.7.1221\tools\OpenCover.Console.exe -target:"vstest.console.exe" -targetargs:"""${{ env.detected-unit-tests }}"" /Platform:x86" -returntargetcode -output:coverage.xml -register:administrator -mergeoutput
         continue-on-error: true
@@ -228,12 +245,13 @@ jobs:
 
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: |
           echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
         continue-on-error: true
 
       - name: Trigger Initial Analysis
-        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
@@ -244,6 +262,7 @@ jobs:
         continue-on-error: true
 
       - name: Analyze
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
@@ -267,6 +286,9 @@ jobs:
       - name: Quality Gate
         id: quality-step
         run: |
+          if "${{ steps.detectCsprojFiles.outputs.csproj-file-present }}" == "false":
+            print("Quality gate skipped as no .csproj files were detected.")
+            exit(0)
           if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("Quality gate failed due to:")
           if "${{ steps.unit-tests.outcome }}" == "failure":
