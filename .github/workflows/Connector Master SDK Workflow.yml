@@ -236,7 +236,7 @@ jobs:
               print("Quality gate failed due to:")
               print("- Validator issues")
               exit(1)
-          else
+          else:
             if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
               print("Quality gate failed due to:")
             if "${{ steps.unit-tests.outcome }}" == "failure":
