@@ -74,7 +74,7 @@ jobs:
       - name: Detect .csproj files
         id: detectCsprojFiles
         run: |
-          $csprojFileCount = Get-ChildItem . -Recurse -File -Filter *.csproj | Measure-Object | Select-Object -ExpandProperty Count
+          $csprojFileCount = Get-ChildItem . -Recurse -File -Filter *.csproj | Where-Object { $_.Name -notlike 'QAction_Helper.csproj' } | Measure-Object | Select-Object -ExpandProperty Count
           $result = "false"
           if($csprojFileCount -gt 0){ $result = "true" }
           Write-Output "csproj-file-present=$($result)" >> $Env:GITHUB_OUTPUT
