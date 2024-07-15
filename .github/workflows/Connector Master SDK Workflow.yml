@@ -131,7 +131,6 @@ jobs:
           }      
 
       - name: Building
-        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
 
       - name: Unit Tests
