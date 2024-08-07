@@ -1,4 +1,4 @@
-name: NuGet Solution
+name: Automation Master Workflow
 
 # Controls when the workflow will run
 on:
@@ -8,6 +8,12 @@ on:
       quality_gate: 
         description: "Results from Skyline Quality Gate."
         value: ${{ jobs.validate_skyline_quality_gate.outputs.quality }}
+      #artifact-id-release: 
+      artifact-id: 
+        description: "Artifact ID of uploaded Package if successful."
+        value: ${{ jobs.artifact_creation_registration.outputs.artifact-id }}
+      # artifact-id-development: 
+      #   description: "Artifact ID of dev uploaded Package if successful."
     inputs:
       referenceName:
         required: true
@@ -28,22 +34,20 @@ on:
         required: true
         type: string
     secrets:
+      api-key:
+        required: false
       sonarCloudToken:
         required: true
-      pfx:
-        required: false
-      pfxPassword:
-        required: true
-      nugetApiKey:
-        required: true   
       azureToken:
-        required: false  
+        required: false
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   validate_skyline_quality_gate:
-    name: Skyline Quality Gate 
+    name: SDK Skyline Quality Gate 
     runs-on: windows-latest
+    env:
+      detected-unit-tests: none
     outputs:
       quality: ${{ steps.quality-step.outputs.results }}
     steps:
@@ -64,36 +68,14 @@ jobs:
         with:
           java-version: 17
           distribution: 'zulu'
-
-      - name: Install NuGetToggleOnBuild
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetToggleOnBuild --global
-
-      - name: Install NuGetPreBuildApplyBranchOrTag
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPreBuildApplyBranchOrTag --global
-
-      - name: Install NuGetValidateSkylineSpecifications
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetValidateSkylineSpecifications --global
-
+ 
       - name: Find .sln file
         id: findSlnFile        
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln' | sort -r | head -n 1) >> $GITHUB_OUTPUT
-        shell: bash  
+          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+        shell: bash
 
-      - name: Validate NuGet Metadata
-        run: NuGetValidateSkylineSpecifications --workspace ${{ github.workspace }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
-
-      - name: Apply Branch and output path for pre-release NuGet
-        if: inputs.referenceType == 'branch'
-        run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag " " --branch "${{ inputs.referenceName }}" --build ${{ inputs.runNumber }} --nugetResultFolder "${{ github.workspace }}/_NuGetResults" --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
-
-      - name: Apply Tag and output path for Release NuGet
-        if: inputs.referenceType == 'tag'
-        run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag "${{ inputs.referenceName }}" --branch " " --build ${{ inputs.runNumber }} --nugetResultFolder "${{ github.workspace }}/_NuGetResults" --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
-
-        # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
-        if: inputs.owner == 'SkylineCommunications'
         run: |
           $SOURCE_NAME="PrivateGitHubNugets"
           $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
@@ -140,18 +122,10 @@ jobs:
           } else {
             Write-Host "Adding new source $SOURCE_NAME."
             dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
-          }    
+          }
 
       - name: Building
         run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: NugetPackages
-          path: "${{ github.workspace }}/_NuGetResults"
-
-      - name: Disable NuGet Creation on Subsequent Builds
-        run: NuGetToggleOnBuild --setToActive false --workspace ${{ github.workspace }} --onlyOnConfiguredNuGet false  --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
@@ -159,33 +133,17 @@ jobs:
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
         continue-on-error: true
 
-      # - name: Cache SonarCloud packages
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: ~\sonar\cache
-      #     key: ${{ runner.os }}-sonar
-      #     restore-keys: ${{ runner.os }}-sonar
-
-     # - name: Cache SonarCloud scanner
-     #   id: cache-sonar-scanner
-     #   uses: actions/cache@v3
-     #   with:
-     #     path: .\.sonar\scanner
-     #     key: ${{ runner.os }}-sonar-scanner
-     #     restore-keys: ${{ runner.os }}-sonar-scanner
-
       - name: Install SonarCloud scanner
-     #   if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
         run: |
           dotnet tool install dotnet-sonarscanner --global
-
+  
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
         run: |
           import os
           env_file = os.getenv('GITHUB_ENV')
           with open(env_file, "a") as myfile:
-               myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
+              myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
         shell: python
 
       - name: Get SonarCloud Status
@@ -225,7 +183,7 @@ jobs:
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-
+   
       - name: Quality Gate
         id: quality-step
         run: |
@@ -241,66 +199,140 @@ jobs:
             exit(1)
         shell: python
 
-    # Signing cannot be done from linux environment (https://github.com/dotnet/runtime/issues/48794)
-  sign:
-    # Don't run the signing when dependabot branch/pull request
-    if: ${{ github.actor != 'dependabot[bot]' }}
-    # The type of runner that the job will run on
-    runs-on: windows-latest
-    needs: validate_skyline_quality_gate
-    env: 
-      AZURE_TENANT_ID: 5f175691-8d1c-4932-b7c8-ce990839ac40 
-      AZURE_CLIENT_ID: a7ff072c-5bc8-4fa0-9e0c-bb9e40d59b0b
-      AZURE_CLIENT_SECRET: ${{ secrets.pfxPassword }}
-    steps:
-      - name: Download Unsigned NuGet
-        id: downloadUnsignedNuget
-        uses: actions/download-artifact@v4
-        with:
-          name: NugetPackages
-          path: _NuGetResults
-
-      - name: Install dotnet sign
-        run: dotnet tool install sign --prerelease --global
-      
-      - name: Sign NuGet Package
-        run: |       
-          IFS=$'\n'
-          sign code azure-key-vault "_NuGetResults/**/*.nupkg" --publisher-name "Skyline Communications" --description "Skyline Signing" --description-url "https://www.skyline.be/" --azure-key-vault-certificate "Skyline-CodeSigning" --azure-key-vault-url "https://kv-slc-codesigning.vault.azure.net/" --output "_SignedNuGetResults"
-          unset IFS    
-        shell: bash
-        
-      - uses: actions/upload-artifact@v4
-        with:
-          name: SignedNugetPackages
-          path: "${{ github.workspace }}/_SignedNuGetResults"
-  push:
+  artifact_creation_registration:
+    name: Artifact Registration and Upload
     if: inputs.referenceType == 'tag'
-    name: push
     runs-on: ubuntu-latest
-    needs: sign
+    needs: validate_skyline_quality_gate
+    env:
+      result-artifact-id: none
+    outputs:
+      artifact-id: ${{ env.result-artifact-id }}
+      #artifact-id-development: ${{ steps.upload-step-development.outputs.ARTIFACT_ID }}
+
     steps:
-      - name: Download Signed NuGet
-        id: downloadSignedNuget
-        uses: actions/download-artifact@v4
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
         with:
-          name: SignedNugetPackages
-          path: _SignedNuGetResults
-          
-      - name: Find Nuget
-        id: findcreatednuget        
+          fetch-depth: 0
+
+      - name: Initialize
         run: |
-          IFS=$'\n'
-          echo nugetPackageName=$(find _SignedNuGetResults -type f -name '*.nupkg') >> $GITHUB_OUTPUT
-          unset IFS
-        shell: bash  
-        
-      - name: Push to NuGet.org
+          echo "workspace" ${{ github.workspace }}
+          echo "ref name" ${{ inputs.referenceName }}
+          echo "run number" ${{ inputs.runNumber }}
+          echo "ref type" ${{ inputs.referenceType }}
+          echo "repository" ${{ inputs.repository }}
+
+      - name: Find .sln file
+        id: findSlnFile        
         run: |
-          IFS=$'\n'
-          for i in ${{ steps.findcreatednuget.outputs.nugetPackageName }}; 
-          do
-              dotnet nuget push "$i" --api-key ${{ secrets.nugetApiKey }} --source https://api.nuget.org/v3/index.json
-          done
-          unset IFS        
+          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
+        
+      - name: Find or create NuGet.config file
+        if: inputs.owner == 'SkylineCommunications'
+        id: findOrCreateNuGetFile
+        run: |
+          file=$(find . -type f -iname 'nuget.config' | head -n 1)
+          if [[ -n "$file" ]]; then
+            echo "NuGet config file exists: $file"
+            echo NuGetFileName=$(basename $file) >> $GITHUB_OUTPUT
+          else
+            echo "NuGet config does not exist. Creating..."
+            dotnet new nugetconfig --output ${{ github.workspace }}
+            echo NuGetFileName=nuget.config >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+     
+      - name: Find branch
+        id: findBranch
+        run: |
+          #!/bin/bash
+          set -e  # Exit immediately if a command exits with a non-zero status.
+          
+<<<<<<< HEAD
+          # Capture the branches containing the tag and process them
+          branches="$(git branch --contains tags/${{ inputs.referenceName }} -r | grep 'origin/' | grep -vE '.*/.*/' | sed 's#origin/##' | paste -sd ",")"
+          
+          # Append to GitHub Actions output
+          echo "branch=${branches}" >> $GITHUB_OUTPUT
+        shell: bash 
+
+      - name: Target Branch
+        id: showResult
+        run: echo "${{ steps.findBranch.outputs.branch }}"
+
+          
+=======
+          # Check if the source exists. If it does, update it.
+          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+            Write-Host "Updating existing source $SOURCE_NAME."
+            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+          } else {
+            Write-Host "Adding new source $SOURCE_NAME."
+            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+          }
+        shell: pwsh
+        
+>>>>>>> d13dfd3... Update Automation Master SDK Workflow.yml
+      - name: Enable Skyline Azure Cloud NuGet Registry
+        env:
+          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
+        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+        run: |
+          $SOURCE_NAME="CloudNuGets"
+          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
+          
+          # Check if the source exists. If it does, update it.
+          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+            Write-Host "Updating existing source $SOURCE_NAME."
+            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+          } else {
+            Write-Host "Adding new source $SOURCE_NAME."
+            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+          }
+        shell: pwsh
+
+      - name: Enable Skyline Azure Private NuGet Registry
+        env:
+          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
+        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+        run: |
+          $SOURCE_NAME="PrivateAzureNuGets"
+          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
+          
+          # Check if the source exists. If it does, update it.
+          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+            Write-Host "Updating existing source $SOURCE_NAME."
+            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+          } else {
+            Write-Host "Adding new source $SOURCE_NAME."
+            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+          }
+        shell: pwsh
+
+      - name: NuGet restore solution
+        run: dotnet restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
+
+      - name: Install .NET Tools
+        run: |
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload
+  
+      - name: Create package name
+        id: packageName
+        run: |
+         tempName="${{ inputs.repository }} ${{ inputs.referenceName }}"
+         echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
+        shell: bash
+  
+      - name: Create dmapp package
+        run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --version ${{ inputs.referenceName }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}"
+  
+      - name: Upload to Catalog
+        id: uploadToCatalog
+        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
+ 
+      - name: (Release) Set artifact Id
+        run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV
