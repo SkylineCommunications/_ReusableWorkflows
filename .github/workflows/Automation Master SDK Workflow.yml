@@ -324,8 +324,8 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager --version 2.0.1-alpha1
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 2.0.1-alpha1
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager --version 2.0.1-alpha2
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 2.0.1-alpha2
   
       - name: Create package name
         id: packageName
