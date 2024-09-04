@@ -342,7 +342,7 @@ jobs:
         if: inputs.referenceType == 'tag'
         id: packageNameRelease
         run: |
-          tempName="${{ inputs.repository }} ${{ inputs.referenceName }}"
+          tempName="${{ inputs.repository }}"
           echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
         shell: bash
 
@@ -378,7 +378,7 @@ jobs:
         if: inputs.referenceType != 'tag'
         id: packageNameDevelopment
         run: |
-          tempName="${{ inputs.repository }} ${{ inputs.runNumber }}"
+          tempName="${{ inputs.repository }}"
           echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
         shell: bash
 

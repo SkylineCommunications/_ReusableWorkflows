@@ -330,7 +330,7 @@ jobs:
       - name: Create package name
         id: packageName
         run: |
-         tempName="${{ inputs.repository }} ${{ inputs.referenceName }}"
+         tempName="${{ inputs.repository }}"
          echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
         shell: bash
   
