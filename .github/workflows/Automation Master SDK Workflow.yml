@@ -309,7 +309,12 @@ jobs:
         shell: bash
   
       - name: Create dmapp package
+        if: inputs.referenceType == 'tag'
         run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --version ${{ inputs.referenceName }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}"
+  
+      - name: Create dmapp package
+        if: inputs.referenceType != 'tag'
+        run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --build-number ${{ inputs.runNumber }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}"
   
       - uses: actions/upload-artifact@v4
         with:
