@@ -175,8 +175,8 @@ jobs:
           }
         shell: pwsh
 
-      - name: Restore NuGet
-        run: nuget restore
+      - name: NuGet restore solution
+        run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: Building
         run: msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release  "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m # /verbosity:minimal
@@ -348,8 +348,8 @@ jobs:
             }
           shell: pwsh
   
-        - name: Restore NuGet
-          run: nuget restore
+        - name: NuGet restore solution
+          run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
   
         - name: Install .NET Tools
           run: |
