@@ -224,16 +224,6 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Initialize
-        run: |
-          echo "workspace" ${{ github.workspace }}
-          echo "ref name" ${{ inputs.referenceName }}
-          echo "run number" ${{ inputs.runNumber }}
-          echo "ref type" ${{ inputs.referenceType }}
-          echo "repository" ${{ inputs.repository }}
 
       - name: Find .sln file
         id: findSlnFile        
