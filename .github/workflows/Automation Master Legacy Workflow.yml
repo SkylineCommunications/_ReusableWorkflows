@@ -175,8 +175,8 @@ jobs:
           }
         shell: pwsh
 
-      - name: Restore NuGet
-        run: nuget restore
+      - name: NuGet restore solution
+        run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: Building
         run: msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release  "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m # /verbosity:minimal
@@ -279,40 +279,118 @@ jobs:
             exit(1)
         shell: python
 
+  artifact_creation:
+      name: Artifact Creation
+      runs-on: ubuntu-latest
+      steps:
+        # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+        - uses: actions/checkout@v4
+
+        - name: Set up NuGet
+          uses: nuget/setup-nuget@v2.0.0
+
+        - name: Find .sln file
+          id: findSlnFile        
+          run: |
+            echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+          shell: bash   
+          
+          # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
+        - name: Enable Skyline GitHub NuGet Registry
+          if: inputs.owner == 'SkylineCommunications'
+          run: |
+            $SOURCE_NAME="PrivateGitHubNuGets"
+            $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
+            
+            # Check if the source exists. If it does, update it.
+            if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
+              Write-Host "Updating existing source $SOURCE_NAME."
+              nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
+            } else {
+              Write-Host "Adding new source $SOURCE_NAME."
+              nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
+            }
+          shell: pwsh
+
+        - name: Enable Skyline Azure Cloud NuGet Registry
+          env:
+            AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
+          if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+          run: |
+            $SOURCE_NAME="CloudNuGets"
+            $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
+            
+            # Check if the source exists. If it does, update it.
+            if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
+              Write-Host "Updating existing source $SOURCE_NAME."
+              nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
+            } else {
+              Write-Host "Adding new source $SOURCE_NAME."
+              nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
+            }
+          shell: pwsh
+
+        - name: Enable Skyline Azure Private NuGet Registry
+          env:
+            AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
+          if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+          run: |
+            $SOURCE_NAME="PrivateAzureNuGets"
+            $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
+            
+            # Check if the source exists. If it does, update it.
+            if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
+              Write-Host "Updating existing source $SOURCE_NAME."
+              nuget sources update source -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
+            } else {
+              Write-Host "Adding new source $SOURCE_NAME."
+              nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
+            }
+          shell: pwsh
+  
+        - name: NuGet restore solution
+          run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
+  
+        - name: Install .NET Tools
+          run: |
+            dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager
+    
+        - name: Create package name
+          id: packageName
+          run: |
+            tempName="${{ inputs.repository }}"
+            echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
+          shell: bash
+    
+        - name: Create dmapp package
+          if: inputs.referenceType == 'tag'
+          run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --version ${{ inputs.referenceName }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}"
+    
+        - name: Create dmapp package
+          if: inputs.referenceType != 'tag'
+          run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --build-number ${{ inputs.runNumber }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}"
+    
+        - uses: actions/upload-artifact@v4
+          with:
+            name: DataMiner Installation Package
+            path: "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp"
+      
+      
   artifact_creation_registration:
     name: Artifact Registration and Upload
     if: inputs.referenceType == 'tag'
     runs-on: ubuntu-latest
-    needs: validate_skyline_quality_gate
+    needs: [validate_skyline_quality_gate,artifact_creation]
     env:
       result-artifact-id: none
     outputs:
       artifact-id: ${{ env.result-artifact-id }}
-      #artifact-id-development: ${{ steps.upload-step-development.outputs.ARTIFACT_ID }}
-
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Initialize
-        run: |
-          echo "workspace" ${{ github.workspace }}
-          echo "ref name" ${{ inputs.referenceName }}
-          echo "run number" ${{ inputs.runNumber }}
-          echo "ref type" ${{ inputs.referenceType }}
-          echo "repository" ${{ inputs.repository }}
-
-      - name: Set up NuGet
-        uses: nuget/setup-nuget@v2.0.0
-      
-      - name: Find .sln file
-        id: findSlnFile        
-        run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
-        shell: bash
-    
       - name: Find branch
         id: findBranch
         run: |
@@ -330,80 +408,27 @@ jobs:
         id: showResult
         run: echo "${{ steps.findBranch.outputs.branch }}"
 
-         # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
-      - name: Enable Skyline GitHub NuGet Registry
-        if: inputs.owner == 'SkylineCommunications'
-        run: |
-          $SOURCE_NAME="PrivateGitHubNuGets"
-          $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
+      - name: Retrieve Installation Package
+        id: retrieveInstallationPackage
+        uses: actions/download-artifact@v4
+        with:
+          name: DataMiner Installation Package
+          path: _DataMinerInstallationPackage
           
-          # Check if the source exists. If it does, update it.
-          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
-          }
-        shell: pwsh
-
-      - name: Enable Skyline Azure Cloud NuGet Registry
-        env:
-          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
-        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+      - name: Find Installation package
+        id: findInstallationPackage        
         run: |
-          $SOURCE_NAME="CloudNuGets"
-          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
-          }
-        shell: pwsh
-
-      - name: Enable Skyline Azure Private NuGet Registry
-        env:
-          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
-        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
-        run: |
-          $SOURCE_NAME="PrivateAzureNuGets"
-          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            nuget sources update source -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
-          }
-        shell: pwsh
-
-      - name: NuGet restore solution
-        run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
-
+          IFS=$'\n'
+          echo dmappPackageName=$(find _DataMinerInstallationPackage -type f -name '*.dmapp') >> $GITHUB_OUTPUT
+          unset IFS
+        shell: bash  
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload
-
-      - name: Create package name
-        id: packageName
-        run: |
-         tempName="${{ inputs.repository }}"
-         echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Create dmapp package
-        run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --version ${{ inputs.referenceName }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}"
-
+  
       - name: Upload to Catalog
         id: uploadToCatalog
-        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
- 
+        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmappPackageName }}" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
+  
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV
