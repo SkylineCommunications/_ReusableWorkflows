@@ -364,8 +364,10 @@ jobs:
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --prerelease
   
       - name: Create or Extend Catalog.yml
+        env:
+          githubtoken: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{github.repository }}"
+          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ env.githubtoken }} --github-repository "${{github.repository }}"
 
       - name: Check if catalog.yml or manifest.yml exists
         id: check_files

@@ -1,0 +1,63 @@
+name: Update Catalog Details
+
+# Controls when the workflow will run
+on:
+  # Allows you to run this workflow from another workflow
+  workflow_call:
+    inputs:
+      referenceName:
+        required: true
+        type: string       
+      runNumber:
+        required: true
+        type: string   
+      referenceType:
+        required: true
+        type: string   
+      repository:
+        required: true
+        type: string 
+      owner:
+        required: true
+        type: string
+    secrets:
+      api-key:
+        required: true
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  update_catalog_details:
+      name: Update Catalog Details
+      runs-on: windows-latest
+
+      steps:
+        # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+        - uses: actions/checkout@v4
+        
+        - name: readDir
+          run: dir   
+
+        - name: Initialize
+          run: |
+            echo "workspace" ${{ github.workspace }}
+            echo "github url" ${{ github.repositoryUrl }}
+            echo "ref name" ${{ inputs.referenceName }}
+            echo "run number" ${{ inputs.runNumber }}
+            echo "ref type" ${{ inputs.referenceType }}
+            echo "repository" ${{ inputs.repository }}
+
+        - name: Install SDKChecker
+          run: |
+            dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global
+          shell: pwsh
+
+        - name: Run SDKChecker
+          id: checker
+          run: |
+            $output = $(SDKChecker --workspace "${{ github.workspace }}" --repositoryName "${{ github.repositoryUrl }}" --repositoryBranch "${{ inputs.referenceName }}")
+            if ([String]::IsNullOrWhiteSpace($output)) {
+              echo "isSdk=true" >> $env:GITHUB_OUTPUT
+            } else {
+              echo "isSdk=false" >> $env:GITHUB_OUTPUT
+            }
+            Write-Host "Output: $output"
+          shell: pwsh       
