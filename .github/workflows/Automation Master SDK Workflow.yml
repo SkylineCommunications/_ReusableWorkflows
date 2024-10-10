@@ -361,7 +361,29 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --prerelease
   
+      - name: Create or Extend Catalog.yml
+        run: |
+          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{github.repository }}"
+
+      - name: Check if catalog.yml or manifest.yml exists
+        id: check_files
+        run: |
+          if [ -f "${{ github.workspace }}/catalog.yml" ]; then
+            echo "catalogDetails=catalog.yml" >> $GITHUB_ENV
+          elif [ -f "${{ github.workspace }}/manifest.yml" ]; then
+            echo "catalogDetails=manifest.yml" >> $GITHUB_ENV
+          else
+            echo "No valid file found!"
+            exit 1
+  
+      - uses: actions/upload-artifact@v4
+        if: env.catalogDetails != ''
+        with:
+          name: Catalog Details
+          path: "${{ github.workspace }}/${{ env.catalogDetails }}"
+
       - name: Upload to Catalog
         id: uploadToCatalog
         run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmappPackageName }}" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
