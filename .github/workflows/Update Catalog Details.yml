@@ -45,19 +45,35 @@ jobs:
             echo "ref type" ${{ inputs.referenceType }}
             echo "repository" ${{ inputs.repository }}
 
-        - name: Install SDKChecker
+        - name: Install .NET Tools
           run: |
-            dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global
-          shell: pwsh
+            dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload
+            dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --prerelease
 
-        - name: Run SDKChecker
-          id: checker
+        - name: Create or Extend Catalog.yml
+          env:
+            githubtoken: ${{ secrets.GITHUB_TOKEN }}
           run: |
-            $output = $(SDKChecker --workspace "${{ github.workspace }}" --repositoryName "${{ github.repositoryUrl }}" --repositoryBranch "${{ inputs.referenceName }}")
-            if ([String]::IsNullOrWhiteSpace($output)) {
-              echo "isSdk=true" >> $env:GITHUB_OUTPUT
-            } else {
-              echo "isSdk=false" >> $env:GITHUB_OUTPUT
-            }
-            Write-Host "Output: $output"
-          shell: pwsh       
+            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ env.githubtoken }} --github-repository "${{github.repository }}"
+             
+        - name: Check if catalog.yml or manifest.yml exists
+          id: check_files
+          run: |
+            if [ -f "${{ github.workspace }}/catalog.yml" ]; then
+              echo "catalogDetails=catalog.yml" >> $GITHUB_ENV
+            elif [ -f "${{ github.workspace }}/manifest.yml" ]; then
+              echo "catalogDetails=manifest.yml" >> $GITHUB_ENV
+            else
+              echo "No valid file found!"
+              exit 1
+    
+        - uses: actions/upload-artifact@v4
+          if: env.catalogDetails != ''
+          with:
+            name: Catalog Details
+            path: "${{ github.workspace }}/${{ env.catalogDetails }}"
+  
+        - name: Upload to Catalog
+          id: uploadToCatalog
+          run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmappPackageName }}" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
+   
