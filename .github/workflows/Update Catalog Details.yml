@@ -53,13 +53,15 @@ jobs:
 
         - name: Set new value
           run: |
-            gh api \
-              --method PATCH \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              /repos/${{github.repository }}/actions/variables/MY_VAR \
-              -f name='MY_VAR' \
+            gh api `
+              --method PATCH `
+              -H "Accept: application/vnd.github+json" `
+              -H "X-GitHub-Api-Version: 2022-11-28" `
+              /repos/ORG/REPO/actions/variables/MY_VAR `
+              -f name='MY_VAR' `
               -f value="1.2.3"
+          shell: pwsh
+          
 
         - name: Create or Extend Catalog.yml
           run: |
