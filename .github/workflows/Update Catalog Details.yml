@@ -23,12 +23,13 @@ on:
     secrets:
       api-key:
         required: true
+
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   update_catalog_details:
       name: Update Catalog Details
       runs-on: windows-latest
-
+      permissions: write-all
       steps:
         # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
         - uses: actions/checkout@v4
@@ -72,8 +73,3 @@ jobs:
           with:
             name: Catalog Details
             path: "${{ github.workspace }}/${{ env.catalogDetails }}"
-  
-        - name: Upload to Catalog
-          id: uploadToCatalog
-          run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmappPackageName }}" --uri-sourcecode "${{ github.server_url }}/${{ github.repository }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
-   
