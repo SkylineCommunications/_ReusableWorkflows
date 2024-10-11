@@ -80,7 +80,7 @@ jobs:
           run: |
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git "${{ github.workspace }}/${{ env.catalogDetails }}"
+            git add "${{ github.workspace }}/${{ env.catalogDetails }}"
             git commit -m "Add or overwrite catalog details"
   
         - name: Push changes
