@@ -83,7 +83,8 @@ jobs:
             git add "${{ github.workspace }}\${{ env.catalogDetails }}"
             
             # Check if there are any changes to be committed
-            if (-not (git diff --staged --quiet)) {
+            git diff --staged --quiet
+            if ($LASTEXITCODE -ne 0) {
               git commit -m "auto-generated"
             }
             else {
