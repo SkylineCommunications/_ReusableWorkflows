@@ -70,8 +70,16 @@ jobs:
               exit 1
             }
         
-        # - uses: actions/upload-artifact@v4
-        #   if: env.catalogDetails != ''
-        #   with:
-        #     name: Catalog Details
-        #     path: "${{ github.workspace }}/${{ env.catalogDetails }}"
+        - uses: actions/upload-artifact@v4
+          if: env.catalogDetails != ''
+          with:
+            name: Catalog Details
+            path: "${{ github.workspace }}/${{ env.catalogDetails }}"
+
+
+        - name: Test Changing the Repository Topics
+          env:
+            GH_TOKEN : ${{ secrets.GITHUB_TOKEN }}
+          shell: pwsh
+          run: gh repo edit ${{ github.repository }} --add-topic "HelloWorld"
+            
