@@ -89,9 +89,9 @@ jobs:
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-        - name: Test Changing the Repository Topics
+        - name: Test getting a variable
           env:
             GH_TOKEN : ${{ secrets.GITHUB_TOKEN }}
           shell: pwsh
-          run: gh repo edit ${{ github.repository }} --add-topic "HelloWorld"
+          run: gh variable get TEST 
             
