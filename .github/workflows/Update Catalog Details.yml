@@ -52,7 +52,7 @@ jobs:
           run: |
             $newCatalogIdentifier = [guid]::NewGuid().ToString()
             Write-Host "catalogIdentifier not found or empty. Generated new GUID: $newCatalogIdentifier"
-            echo newId=${newCatalogIdentifier} >> $GITHUB_OUTPUT
+            echo "newId=$newCatalogIdentifier" >> $GITHUB_OUTPUT
           
         - name: Set catalogIdentifier if it was not found
           if: ${{ steps.check-catalog-identifier.outputs.newId != '' }}
@@ -67,7 +67,7 @@ jobs:
           
         - name: Create or Extend Catalog.yml
           run: |
-            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier ${{ steps.get-catalog-variable.outputs.catalogIdentifier }}"
+            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ steps.get-catalog-variable.outputs.catalogIdentifier }}"
        
         - name: Check if catalog.yml or manifest.yml exists
           id: check_files
