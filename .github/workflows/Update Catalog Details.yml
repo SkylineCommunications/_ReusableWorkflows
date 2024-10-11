@@ -52,7 +52,7 @@ jobs:
           run: |
             $newCatalogIdentifier = [guid]::NewGuid().ToString()
             Write-Host "catalogIdentifier not found or empty. Generated new GUID: $newCatalogIdentifier"
-            echo "newId=$newCatalogIdentifier" >> $GITHUB_OUTPUT
+            Write-Output "newId=$($newCatalogIdentifier)" >> $Env:GITHUB_OUTPUT
           
         - name: Set catalogIdentifier if it was not found
           if: ${{ steps.check-catalog-identifier.outputs.newId != '' }}
