@@ -45,21 +45,7 @@ jobs:
             echo "run number" ${{ inputs.runNumber }}
             echo "ref type" ${{ inputs.referenceType }}
             echo "repository" ${{ inputs.repository }}
-       
-        - name: Check and generate GUID if necessary
-          id: check-catalog-identifier
-          if: ${{ vars.catalogIdentifier == '' }}
-          run: |
-            $newCatalogIdentifier = [guid]::NewGuid().ToString()
-            Write-Host "catalogIdentifier not found or empty. Generated new GUID: $newCatalogIdentifier"
-            Write-Output "newId=$($newCatalogIdentifier)" >> $Env:GITHUB_OUTPUT
-          
-        - name: Set catalogIdentifier if it was not found
-          if: ${{ steps.check-catalog-identifier.outputs.newId != '' }}
-          env:
-            GH_TOKEN: ${{ github.token }}
-          run: gh variable set catalogIdentifier --body ${{ steps.check-catalog-identifier.outputs.newId }}
-                      
+                        
         - name: Install .NET Tools
           run: |
             dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload
@@ -67,7 +53,7 @@ jobs:
           
         - name: Create or Extend Catalog.yml
           run: |
-            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ steps.get-catalog-variable.outputs.catalogIdentifier }}"
+            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "fakefake"
        
         - name: Check if catalog.yml or manifest.yml exists
           id: check_files
