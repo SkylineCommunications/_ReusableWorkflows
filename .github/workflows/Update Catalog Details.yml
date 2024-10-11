@@ -57,17 +57,21 @@ jobs:
        
         - name: Check if catalog.yml or manifest.yml exists
           id: check_files
+          shell: pwsh
           run: |
-            if [ -f "${{ github.workspace }}/catalog.yml" ]; then
-              echo "catalogDetails=catalog.yml" >> $GITHUB_ENV
-            elif [ -f "${{ github.workspace }}/manifest.yml" ]; then
-              echo "catalogDetails=manifest.yml" >> $GITHUB_ENV
-            else
-              echo "No valid file found!"
+            if (Test-Path "${{ github.workspace }}/catalog.yml") {
+              echo "catalogDetails=catalog.yml" >> $env:GITHUB_ENV
+            }
+            elseif (Test-Path "${{ github.workspace }}/manifest.yml") {
+              echo "catalogDetails=manifest.yml" >> $env:GITHUB_ENV
+            }
+            else {
+              Write-Host "No valid file found!"
               exit 1
-    
-        - uses: actions/upload-artifact@v4
-          if: env.catalogDetails != ''
-          with:
-            name: Catalog Details
-            path: "${{ github.workspace }}/${{ env.catalogDetails }}"
+            }
+        
+        # - uses: actions/upload-artifact@v4
+        #   if: env.catalogDetails != ''
+        #   with:
+        #     name: Catalog Details
+        #     path: "${{ github.workspace }}/${{ env.catalogDetails }}"
