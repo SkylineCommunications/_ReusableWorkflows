@@ -51,8 +51,9 @@ jobs:
           env:
             GH_TOKEN: ${{ github.token }}
           run: |
-            $catalogIdentifier = $(gh api --method GET /repos/${{ github.repository }}/actions/variables/catalogIdentifier --jq '.value' 2>$null)
+            $catalogIdentifier = gh api --method GET /repos/${{ github.repository }}/actions/variables/catalogIdentifier --jq '.value' 2>$null
             echo "catalogIdentifier=$catalogIdentifier" >> $env:GITHUB_ENV
+          
           
         - name: Check and generate GUID if necessary
           if: ${{ env.catalogIdentifier == '' }}
@@ -60,7 +61,7 @@ jobs:
             $newCatalogIdentifier = [guid]::NewGuid().ToString()
             Write-Host "catalogIdentifier not found or empty. Generated new GUID: $newCatalogIdentifier"
             echo "newCatalogIdentifier=$newCatalogIdentifier" >> $env:GITHUB_ENV
-
+          
         - name: Set catalogIdentifier if it was not found
           if: ${{ env.newCatalogIdentifier != '' }}
           env:
@@ -68,7 +69,7 @@ jobs:
           run: |
             gh api --method POST /repos/${{ github.repository }}/actions/variables `
               -f name=catalogIdentifier -f value=$env:newCatalogIdentifier
-            echo "catalogIdentifier=$env:newCatalogIdentifier" >> $env:GITHUB_ENV
+            echo "catalogIdentifier=$env:newCatalogIdentifier" >> $env:GITHUB_ENV          
                       
         - name: Install .NET Tools
           run: |
