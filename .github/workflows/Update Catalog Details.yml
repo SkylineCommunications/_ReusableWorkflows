@@ -52,14 +52,24 @@ jobs:
             GH_TOKEN: ${{ github.token }}
           run: |
             $catalogIdentifier = $(gh api --method GET /repos/${{ github.repository }}/actions/variables/catalogIdentifier --jq '.value' 2>$null)
-            if ([string]::IsNullOrEmpty($catalogIdentifier)) {
-              $catalogIdentifier = [guid]::NewGuid().ToString()
-              Write-Host "catalogIdentifier not found or empty. Generated new GUID: $catalogIdentifier"
-              gh api --method POST /repos/${{ github.repository }}/actions/variables `
-                -f name=catalogIdentifier -f value=$catalogIdentifier
-            }
-            echo "::set-output name=catalogIdentifier::$catalogIdentifier"
+            echo "catalogIdentifier=$catalogIdentifier" >> $env:GITHUB_ENV
+          
+        - name: Check and generate GUID if necessary
+          if: ${{ env.catalogIdentifier == '' }}
+          run: |
+            $newCatalogIdentifier = [guid]::NewGuid().ToString()
+            Write-Host "catalogIdentifier not found or empty. Generated new GUID: $newCatalogIdentifier"
+            echo "newCatalogIdentifier=$newCatalogIdentifier" >> $env:GITHUB_ENV
 
+        - name: Set catalogIdentifier if it was not found
+          if: ${{ env.newCatalogIdentifier != '' }}
+          env:
+            GH_TOKEN: ${{ github.token }}
+          run: |
+            gh api --method POST /repos/${{ github.repository }}/actions/variables `
+              -f name=catalogIdentifier -f value=$env:newCatalogIdentifier
+            echo "catalogIdentifier=$env:newCatalogIdentifier" >> $env:GITHUB_ENV
+                      
         - name: Install .NET Tools
           run: |
             dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload
