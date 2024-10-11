@@ -51,13 +51,13 @@ jobs:
           env:
             GH_TOKEN: ${{ github.token }}
           run: |
-            catalogIdentifier=$(gh api --method GET /repos/${{ github.repository }}/actions/variables/catalogIdentifier --jq '.value' || echo "")
-            if [ -z "$catalogIdentifier" ]; then
-              catalogIdentifier=$(powershell -Command "[guid]::NewGuid().ToString()")
-              echo "catalogIdentifier not found or empty. Generated new GUID: $catalogIdentifier"
-              gh api --method POST /repos/${{ github.repository }}/actions/variables \
+            $catalogIdentifier = $(gh api --method GET /repos/${{ github.repository }}/actions/variables/catalogIdentifier --jq '.value' 2>$null)
+            if ([string]::IsNullOrEmpty($catalogIdentifier)) {
+              $catalogIdentifier = [guid]::NewGuid().ToString()
+              Write-Host "catalogIdentifier not found or empty. Generated new GUID: $catalogIdentifier"
+              gh api --method POST /repos/${{ github.repository }}/actions/variables `
                 -f name=catalogIdentifier -f value=$catalogIdentifier
-            fi
+            }
             echo "::set-output name=catalogIdentifier::$catalogIdentifier"
 
         - name: Install .NET Tools
