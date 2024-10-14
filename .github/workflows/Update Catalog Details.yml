@@ -27,7 +27,7 @@ on:
 jobs:
   update_catalog_details:
       name: Update Catalog Details
-      runs-on: windows-latest
+      runs-on: ubuntu-latest
       permissions:
         contents: write
       steps:
