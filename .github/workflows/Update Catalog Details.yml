@@ -128,6 +128,6 @@ jobs:
             dataminer-catalog-upload update-catalog-details `
               --path-to-catalog-yml "${{ github.workspace }}\${{ env.catalogDetails }}" `
               --path-to-readme "${{ steps.find_readme.outputs.readmePath }}" `
-              --path-to-images "${{ steps.find_images.outputs.imagesPath }}"
+              --path-to-images "${{ steps.find_images.outputs.imagesPath }}" `
               --dm-catalog-token "${{ secrets.api-key }}"
   
