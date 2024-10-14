@@ -53,7 +53,7 @@ jobs:
         - name: TEST Delete Catalog.yml
           shell: pwsh
           run: |
-            $filePath = "$($env:GITHUB_WORKSPACE)\catalog.yml"
+            $filePath = "${{ github.workspace }}\catalog.yml"
             if (Test-Path $filePath) {
                 Add-Content -Path $filePath -Value "test"
                 Write-Host "Appended 'test' to catalog.yml"
