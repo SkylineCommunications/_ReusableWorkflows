@@ -29,14 +29,10 @@ jobs:
   update_catalog_details:
       name: Update Catalog Details
       runs-on: windows-latest
-      permissions: write-all
       steps:
         # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
         - uses: actions/checkout@v4
         
-        - name: readDir
-          run: echo ${{ vars.TEST }}
-
         - name: Initialize
           run: |
             echo "workspace" ${{ github.workspace }}
@@ -53,7 +49,7 @@ jobs:
           
         - name: Create or Extend Catalog.yml
           run: |
-            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "fakefake"
+            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}"
        
         - name: Check if catalog.yml or manifest.yml exists
           id: check_files
@@ -80,7 +76,7 @@ jobs:
           run: |
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git add "${{ github.workspace }}\${{ env.catalogDetails }}"
+            git add "${{ github.workspace }}\.GitHubToCatalogYaml\auto-generated-catalog.yml"
             
             # Check if there are any changes to be committed
             git diff --staged --quiet
@@ -96,10 +92,3 @@ jobs:
             git push
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-        - name: Test getting a variable
-          env:
-            GH_TOKEN : ${{ secrets.GITHUB_TOKEN }}
-          shell: pwsh
-          run: gh variable get TEST 
-            
