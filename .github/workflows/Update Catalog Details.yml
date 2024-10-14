@@ -63,11 +63,11 @@ jobs:
             name: Catalog Details
             path: "${{ github.workspace }}/${{ env.catalogDetails }}"
 
-        - name: Commit .githubtocatalog\auto-generated-catalog
+        - name: Commit .githubtocatalog/auto-generated-catalog
           run: |
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git add "${{ github.workspace }}\.githubtocatalog\auto-generated-catalog.yml"
+            git add "${{ github.workspace }}/.githubtocatalog/auto-generated-catalog.yml"
             
             # Check if there are any changes to be committed
             git diff --staged --quiet
@@ -78,7 +78,7 @@ jobs:
               Write-Host "No changes to commit."
             }
           
-        - name: Push .githubtocatalog\auto-generated-catalog
+        - name: Push .githubtocatalog/auto-generated-catalog
           run: |
             git push
           env:
@@ -126,7 +126,7 @@ jobs:
           shell: pwsh
           run: |
             dataminer-catalog-upload update-catalog-details `
-              --path-to-catalog-yml "${{ github.workspace }}\${{ env.catalogDetails }}" `
+              --path-to-catalog-yml "${{ github.workspace }}/${{ env.catalogDetails }}" `
               --path-to-readme "${{ steps.find_readme.outputs.readmePath }}" `
               --path-to-images "${{ steps.find_images.outputs.imagesPath }}" `
               --dm-catalog-token "${{ secrets.api-key }}"
