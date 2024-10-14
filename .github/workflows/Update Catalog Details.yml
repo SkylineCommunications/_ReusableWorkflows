@@ -54,7 +54,7 @@ jobs:
           shell: pwsh
           run: |
             $filePath = "${{ github.workspace }}\catalog.yml"
-            Add-Content -Path $filePath -Value "test"
+            Add-Content -Path $filePath -Value ""
             Write-Host "Appended 'test' to catalog.yml"
   
         - name: Create or Extend Catalog.yml
