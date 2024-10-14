@@ -64,6 +64,7 @@ jobs:
             path: "${{ github.workspace }}/${{ env.catalogDetails }}"
 
         - name: Commit .githubtocatalog/auto-generated-catalog
+          shell: pwsh
           run: |
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
