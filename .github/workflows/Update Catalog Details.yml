@@ -54,12 +54,8 @@ jobs:
           shell: pwsh
           run: |
             $filePath = "${{ github.workspace }}\catalog.yml"
-            if (Test-Path $filePath) {
-                Add-Content -Path $filePath -Value "test"
-                Write-Host "Appended 'test' to catalog.yml"
-            } else {
-                Write-Host "catalog.yml file not found."
-            }
+            Add-Content -Path $filePath -Value "test"
+            Write-Host "Appended 'test' to catalog.yml"
   
         - name: Create or Extend Catalog.yml
           run: |
