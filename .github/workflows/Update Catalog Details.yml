@@ -29,6 +29,8 @@ jobs:
   update_catalog_details:
       name: Update Catalog Details
       runs-on: windows-latest
+      permissions:
+        contents: write
       steps:
         # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
         - uses: actions/checkout@v4
