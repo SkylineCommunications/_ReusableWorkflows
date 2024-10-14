@@ -86,7 +86,7 @@ jobs:
           run: |
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git add "${{ github.workspace }}\.GitHubToCatalogYaml\auto-generated-catalog.yml"
+            git add "${{ github.workspace }}\.githubtocatalog\auto-generated-catalog.yml"
             
             # Check if there are any changes to be committed
             git diff --staged --quiet
