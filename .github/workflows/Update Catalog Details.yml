@@ -24,7 +24,6 @@ on:
       api-key:
         required: true
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   update_catalog_details:
       name: Update Catalog Details
@@ -32,31 +31,13 @@ jobs:
       permissions:
         contents: write
       steps:
-        # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
         - uses: actions/checkout@v4
-        
-        - name: Initialize
-          run: |
-            echo "workspace" ${{ github.workspace }}
-            echo "github url" ${{ github.repositoryUrl }}
-            echo "ref name" ${{ inputs.referenceName }}
-            echo "run number" ${{ inputs.runNumber }}
-            echo "ref type" ${{ inputs.referenceType }}
-            echo "repository" ${{ inputs.repository }}
-                        
+                       
         - name: Install .NET Tools
           run: |
-            dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload
+            dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --prerelease
             dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --prerelease
         
-                      
-        - name: TEST Delete Catalog.yml
-          shell: pwsh
-          run: |
-            $filePath = "${{ github.workspace }}\catalog.yml"
-            Add-Content -Path $filePath -Value ""
-            Write-Host "Appended 'test' to catalog.yml"
-  
         - name: Create or Extend Catalog.yml
           run: |
             github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}"
@@ -82,7 +63,7 @@ jobs:
             name: Catalog Details
             path: "${{ github.workspace }}/${{ env.catalogDetails }}"
 
-        - name: Commit changes
+        - name: Commit .githubtocatalog\auto-generated-catalog
           run: |
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -97,8 +78,55 @@ jobs:
               Write-Host "No changes to commit."
             }
           
-        - name: Push changes
+        - name: Push .githubtocatalog\auto-generated-catalog
           run: |
             git push
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Retrieve README.md
+          id: find_readme
+          shell: pwsh
+          run: |
+            $readmePath = Get-ChildItem -Recurse -Filter "README.md" | Select-Object -First 1
+            if (-not $readmePath) {
+            echo "::set-output name=readmePath::" # No readme found  
+            }
+            echo "::set-output name=readmePath::$readmePath"
+  
+        - name: Retrieve Images folder
+          id: find_images
+          shell: pwsh
+          run: |
+            $readmeDir = Split-Path "${{ steps.find_readme.outputs.readmePath }}"
+            
+            # Get all directories in the same path as README.md, case-insensitive match for "Images"
+            $imagesDir = Get-ChildItem -Path $readmeDir -Directory | Where-Object { $_.Name -imatch '^Images$' }
+            
+            # If Images folder is not found in the same directory, check the parent directory
+            if (-not $imagesDir) {
+              $parentDir = Split-Path $readmeDir -Parent
+              
+              # Skip if the current directory is already the workspace directory
+              if ($readmeDir -ne "${{ github.workspace }}") {
+                # Check for Images folder in the parent directory (unless it's the workspace)
+                $imagesDir = Get-ChildItem -Path $parentDir -Directory | Where-Object { $_.Name -imatch '^Images$' }
+              }
+            }
+    
+            if ($imagesDir) {
+              echo "::set-output name=imagesPath::$($imagesDir.FullName)"
+            } else {
+              echo "::set-output name=imagesPath::"  # No Images folder found
+            }
+      
+    
+        - name: Upload to Catalog
+          id: uploadToCatalog
+          run: |
+            dataminer-catalog-upload update-catalog-details \
+              --path-to-catalog-yml "${{ github.workspace }}/${{ env.catalogDetails }}" \
+              --path-to-readme "${{ steps.find_readme.outputs.readmePath }}" \
+              --path-to-images "${{ steps.find_images.outputs.imagesPath }}"
+      
+    
