@@ -281,7 +281,8 @@ jobs:
 
   artifact_creation:
       name: Artifact Creation
-      runs-on: ubuntu-latest
+      # ubuntu-latest (24.04) does not yet support mono / MSBuild / NuGet (https://github.com/actions/runner-images/issues/10636)
+      runs-on: ubuntu-22.04
       steps:
         # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
         - uses: actions/checkout@v4
