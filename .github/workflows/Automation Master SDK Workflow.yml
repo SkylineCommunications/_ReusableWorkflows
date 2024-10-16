@@ -290,55 +290,7 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --prerelease
   
-      - name: Create or Extend Catalog.yml
-        run: |
-          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}"
-        
-      - name: Check if catalog.yml or manifest.yml exists
-        id: check_files
-        shell: pwsh
-        run: |
-          if (Test-Path "${{ github.workspace }}/catalog.yml") {
-            echo "catalogDetails=catalog.yml" >> $env:GITHUB_ENV
-          }
-          elseif (Test-Path "${{ github.workspace }}/manifest.yml") {
-            echo "catalogDetails=manifest.yml" >> $env:GITHUB_ENV
-          }
-          else {
-            Write-Host "No valid file found!"
-            exit 1
-          }
-      
-      - uses: actions/upload-artifact@v4
-        if: env.catalogDetails != ''
-        with:
-          name: Catalog Details
-          path: "${{ github.workspace }}/${{ env.catalogDetails }}"
-
-      - name: Commit .githubtocatalog/auto-generated-catalog
-        shell: pwsh
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add "${{ github.workspace }}/.githubtocatalog/auto-generated-catalog.yml"
-          
-          # Check if there are any changes to be committed
-          git diff --staged --quiet
-          if ($LASTEXITCODE -ne 0) {
-            git commit -m "auto-generated"
-          }
-          else {
-            Write-Host "No changes to commit."
-          }
-        
-      - name: Push .githubtocatalog/auto-generated-catalog
-        run: |
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Create package name
         id: packageName
         run: |
@@ -359,6 +311,117 @@ jobs:
           name: DataMiner Installation Package
           path: "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp"
 
+  auto_generate_catalog_yaml:
+      name: Auto-Generating Catalog from GitHub
+      if: inputs.referenceType == 'branch'
+      runs-on: ubuntu-latest
+      steps:
+        # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+        - uses: actions/checkout@v4
+       
+          # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
+        - name: Enable Skyline GitHub NuGet Registry
+          if: inputs.owner == 'SkylineCommunications'
+          run: |
+            $SOURCE_NAME="PrivateGitHubNugets"
+            $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
+            
+            # Check if the source exists. If it does, update it.
+            if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+              Write-Host "Updating existing source $SOURCE_NAME."
+              dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+            } else {
+              Write-Host "Adding new source $SOURCE_NAME."
+              dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+            }
+          shell: pwsh
+          
+        - name: Enable Skyline Azure Cloud NuGet Registry
+          env:
+            AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
+          if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+          run: |
+            $SOURCE_NAME="CloudNuGets"
+            $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
+            
+            # Check if the source exists. If it does, update it.
+            if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+              Write-Host "Updating existing source $SOURCE_NAME."
+              dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            } else {
+              Write-Host "Adding new source $SOURCE_NAME."
+              dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            }
+          shell: pwsh
+
+        - name: Enable Skyline Azure Private NuGet Registry
+          env:
+            AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
+          if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+          run: |
+            $SOURCE_NAME="PrivateAzureNuGets"
+            $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
+            
+            # Check if the source exists. If it does, update it.
+            if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
+              Write-Host "Updating existing source $SOURCE_NAME."
+              dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            } else {
+              Write-Host "Adding new source $SOURCE_NAME."
+              dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+            }
+          shell: pwsh
+
+        - name: Install .NET Tools
+          run: |
+            dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --prerelease
+
+        - name: Create or Extend Catalog.yml
+          run: |
+            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}"
+          
+        - name: Check if catalog.yml or manifest.yml exists
+          id: check_files
+          shell: pwsh
+          run: |
+            if (Test-Path "${{ github.workspace }}/catalog.yml") {
+              echo "catalogDetails=catalog.yml" >> $env:GITHUB_ENV
+            }
+            elseif (Test-Path "${{ github.workspace }}/manifest.yml") {
+              echo "catalogDetails=manifest.yml" >> $env:GITHUB_ENV
+            }
+            else {
+              Write-Host "No valid file found!"
+              exit 1
+            }
+        
+        - uses: actions/upload-artifact@v4
+          if: env.catalogDetails != ''
+          with:
+            name: Catalog Details
+            path: "${{ github.workspace }}/${{ env.catalogDetails }}"
+
+        - name: Commit .githubtocatalog/auto-generated-catalog
+          shell: pwsh
+          run: |
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add "${{ github.workspace }}/.githubtocatalog/auto-generated-catalog.yml"
+            
+            # Check if there are any changes to be committed
+            git diff --staged --quiet
+            if ($LASTEXITCODE -ne 0) {
+              git commit -m "auto-generated"
+            }
+            else {
+              Write-Host "No changes to commit."
+            }
+          
+        - name: Push .githubtocatalog/auto-generated-catalog
+          run: |
+            git push
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   artifact_creation_registration:
     name: Artifact Registration and Upload
