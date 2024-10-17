@@ -84,7 +84,7 @@ jobs:
           id: find_images
           shell: pwsh
           run: |
-            if (${{ steps.find_readme.outputs.readmePath }}) 
+            if (${{ steps.find_readme.outputs.readmePath }} -ne '') 
             {
             $readmeDir = Split-Path "${{ steps.find_readme.outputs.readmePath }}"
             
