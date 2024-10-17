@@ -90,16 +90,18 @@ jobs:
           shell: pwsh
           run: |
             $readmePath = Get-ChildItem -Recurse -Filter "README.md" | Select-Object -First 1
-             if (-not $readmePath) {
-            echo "readmePath=" >> $GITHUB_OUTPUT  # No README found
+            if (-not $readmePath) {
+            echo "readmePath=" >> $env:GITHUB_OUTPUT  # No README found
             } else {
-              echo "readmePath=$($readmePath.FullName)" >> $GITHUB_OUTPUT
+              echo "readmePath=$($readmePath.FullName)" >> $env:GITHUB_OUTPUT
             }
   
         - name: Retrieve Images folder
           id: find_images
           shell: pwsh
           run: |
+            if (${{ steps.find_readme.outputs.readmePath }}) 
+            {
             $readmeDir = Split-Path "${{ steps.find_readme.outputs.readmePath }}"
             
             # Get all directories in the same path as README.md, case-insensitive match for "Images"
@@ -115,14 +117,15 @@ jobs:
                 $imagesDir = Get-ChildItem -Path $parentDir -Directory | Where-Object { $_.Name -imatch '^Images$' }
               }
             }
+          
     
             $imagesDir = Get-ChildItem -Directory -Recurse | Where-Object { $_.Name -eq 'Images' } | Select-Object -First 1
             if ($imagesDir) { 
-              echo "imagesPath=$($imagesDir.FullName)" >> $GITHUB_OUTPUT
+              echo "imagesPath=$($imagesDir.FullName)" >> $env:GITHUB_OUTPUT
             } else {
-              echo "imagesPath=" >> $GITHUB_OUTPUT  # No Images folder found
+              echo "imagesPath=" >> $env:GITHUB_OUTPUT  # No Images folder found
             }
-      
+            }
     
         - name: Upload to Catalog
           id: uploadToCatalog
