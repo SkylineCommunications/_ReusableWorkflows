@@ -90,10 +90,11 @@ jobs:
           shell: pwsh
           run: |
             $readmePath = Get-ChildItem -Recurse -Filter "README.md" | Select-Object -First 1
-            if (-not $readmePath) {
-            echo "::set-output name=readmePath::" # No readme found  
+             if (-not $readmePath) {
+            echo "readmePath=" >> $GITHUB_OUTPUT  # No README found
+            } else {
+              echo "readmePath=$($readmePath.FullName)" >> $GITHUB_OUTPUT
             }
-            echo "::set-output name=readmePath::$readmePath"
   
         - name: Retrieve Images folder
           id: find_images
@@ -115,10 +116,11 @@ jobs:
               }
             }
     
-            if ($imagesDir) {
-              echo "::set-output name=imagesPath::$($imagesDir.FullName)"
+            $imagesDir = Get-ChildItem -Directory -Recurse | Where-Object { $_.Name -eq 'Images' } | Select-Object -First 1
+            if ($imagesDir) { 
+              echo "imagesPath=$($imagesDir.FullName)" >> $GITHUB_OUTPUT
             } else {
-              echo "::set-output name=imagesPath::"  # No Images folder found
+              echo "imagesPath=" >> $GITHUB_OUTPUT  # No Images folder found
             }
       
     
