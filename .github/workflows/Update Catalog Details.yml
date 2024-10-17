@@ -4,22 +4,6 @@ name: Update Catalog Details
 on:
   # Allows you to run this workflow from another workflow
   workflow_call:
-    inputs:
-      referenceName:
-        required: true
-        type: string       
-      runNumber:
-        required: true
-        type: string   
-      referenceType:
-        required: true
-        type: string   
-      repository:
-        required: true
-        type: string 
-      owner:
-        required: true
-        type: string
     secrets:
       api-key:
         required: true
