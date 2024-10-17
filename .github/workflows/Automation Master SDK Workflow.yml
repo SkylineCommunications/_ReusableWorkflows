@@ -433,10 +433,8 @@ jobs:
     outputs:
       artifact-id: ${{ env.result-artifact-id }}
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      # Need the complete checkout to find the catalog.yml, README and Images
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Find branch
         id: findBranch
