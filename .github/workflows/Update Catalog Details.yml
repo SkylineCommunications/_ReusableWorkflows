@@ -85,7 +85,7 @@ jobs:
           shell: pwsh
           run: |
             $readmePath = "${{ steps.find_readme.outputs.readmePath }}"
-            if ($readmePath -ne '') {
+            if ($readmePath -ne '')
             {
             $readmeDir = Split-Path "${{ steps.find_readme.outputs.readmePath }}"
             
