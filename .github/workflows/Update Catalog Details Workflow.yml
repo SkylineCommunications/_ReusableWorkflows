@@ -68,49 +68,6 @@ jobs:
             git push
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-        - name: Retrieve README.md
-          id: find_readme
-          shell: pwsh
-          run: |
-            $readmePath = Get-ChildItem -Recurse -Filter "README.md" | Select-Object -First 1
-            if (-not $readmePath) {
-            echo "readmePath=" >> $env:GITHUB_OUTPUT  # No README found
-            } else {
-              echo "readmePath=$($readmePath.FullName)" >> $env:GITHUB_OUTPUT
-            }
-  
-        - name: Retrieve Images folder
-          id: find_images
-          shell: pwsh
-          run: |
-            $readmePath = "${{ steps.find_readme.outputs.readmePath }}"
-            if ($readmePath -ne '')
-            {
-            $readmeDir = Split-Path "${{ steps.find_readme.outputs.readmePath }}"
-            
-            # Get all directories in the same path as README.md, case-insensitive match for "Images"
-            $imagesDir = Get-ChildItem -Path $readmeDir -Directory | Where-Object { $_.Name -imatch '^Images$' }
-            
-            # If Images folder is not found in the same directory, check the parent directory
-            if (-not $imagesDir) {
-              $parentDir = Split-Path $readmeDir -Parent
-              
-              # Skip if the current directory is already the workspace directory
-              if ($readmeDir -ne "${{ github.workspace }}") {
-                # Check for Images folder in the parent directory (unless it's the workspace)
-                $imagesDir = Get-ChildItem -Path $parentDir -Directory | Where-Object { $_.Name -imatch '^Images$' }
-              }
-            }
-          
-    
-            $imagesDir = Get-ChildItem -Directory -Recurse | Where-Object { $_.Name -eq 'Images' } | Select-Object -First 1
-            if ($imagesDir) { 
-              echo "imagesPath=$($imagesDir.FullName)" >> $env:GITHUB_OUTPUT
-            } else {
-              echo "imagesPath=" >> $env:GITHUB_OUTPUT  # No Images folder found
-            }
-            }
     
         - name: Upload to Catalog
           id: uploadToCatalog
@@ -118,7 +75,5 @@ jobs:
           run: |
             dataminer-catalog-upload update-catalog-details `
               --path-to-catalog-yml "${{ github.workspace }}/${{ env.catalogDetails }}" `
-              --path-to-readme "${{ steps.find_readme.outputs.readmePath }}" `
-              --path-to-images "${{ steps.find_images.outputs.imagesPath }}" `
               --dm-catalog-token "${{ secrets.api-key }}"
   
