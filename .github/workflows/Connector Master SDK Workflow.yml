@@ -457,7 +457,7 @@ jobs:
           echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Create DMAPP - Release
+      - name: Create DMProtocol - Release
         if: inputs.referenceType == 'tag'
         run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageNameRelease.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ inputs.referenceName  }}"
       
@@ -493,7 +493,7 @@ jobs:
           echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Create DMAPP - Build
+      - name: Create DMProtocol - Build
         if: inputs.referenceType != 'tag'
         run: |
           dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageNameDevelopment.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}"
