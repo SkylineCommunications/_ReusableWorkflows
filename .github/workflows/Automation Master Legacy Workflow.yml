@@ -438,7 +438,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --prerelease
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml
 
       - name: Create or Extend Catalog.yml
         run: |
@@ -501,6 +501,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          
+      - name: Validate auto-generated catalog YAML file existence
+        shell: pwsh
+        run: |
+          if (!(Test-Path "${{ github.workspace }}/.githubtocatalog/auto-generated-catalog.yml")) {
+            Write-Host "Error: The auto-generated catalog YAML file was not found."
+            Write-Host "Run the workflow on a branch before releasing, and ensure the tag points to the latest commit containing the auto-generated-catalog.yml file."
+            exit 1
+          }
 
       - name: Find branch
         id: findBranch
@@ -537,7 +546,7 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --prerelease
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --prerelease
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml
   
       - name: Create or Extend Catalog.yml
         run: |
