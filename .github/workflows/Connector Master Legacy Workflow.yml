@@ -393,7 +393,9 @@ jobs:
 
   artifact_creation:
     name: Artifact Creation
-    runs-on: ubuntu-latest
+    # ubuntu-latest (24.04) does not yet support mono / MSBuild / NuGet (https://github.com/actions/runner-images/issues/10636)
+    runs-on: ubuntu-22.04
+    needs: validate_skyline_quality_gate
     env:
       result-artifact-id: none
     outputs:
