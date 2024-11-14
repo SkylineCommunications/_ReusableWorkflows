@@ -414,7 +414,7 @@ jobs:
           echo "repository" ${{ inputs.repository }}
 
       - name: Install Package Creation
-        run: dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager
+        run: dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 2.0.3
 
       - name: Find .sln file
         id: findSlnFile        
