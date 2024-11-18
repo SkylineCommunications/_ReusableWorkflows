@@ -378,7 +378,7 @@ jobs:
  
   auto_generate_catalog_yaml:
     name: Auto-Generating Catalog from GitHub
-    if: inputs.referenceType == 'branch'
+    if: ${{ inputs.referenceType == 'branch' &&  github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
