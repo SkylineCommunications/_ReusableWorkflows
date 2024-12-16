@@ -33,6 +33,9 @@ on:
       sonarCloudProjectName:
         required: true
         type: string
+      debug:
+        required: false
+        type: boolean
     secrets:
       api-key:
         required: false
@@ -317,7 +320,7 @@ jobs:
 
       - name: Create or Extend Catalog.yml
         run: |
-          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}"
+          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
         
       - name: Check if catalog.yml or manifest.yml exists
         id: check_files
@@ -459,7 +462,7 @@ jobs:
 
       - name: Create DMProtocol - Release
         if: inputs.referenceType == 'tag'
-        run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageNameRelease.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ inputs.referenceName  }}"
+        run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageNameRelease.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ inputs.referenceName  }}" --debug "${{ inputs.debug }}"
       
       - uses: actions/upload-artifact@v4
         if: inputs.referenceType == 'tag'
@@ -496,7 +499,7 @@ jobs:
       - name: Create DMProtocol - Build
         if: inputs.referenceType != 'tag'
         run: |
-          dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageNameDevelopment.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}"
+          dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageNameDevelopment.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}" --debug "${{ inputs.debug }}"
         shell: bash
 
       - uses: actions/upload-artifact@v4
@@ -566,7 +569,7 @@ jobs:
 
       - name: Create or Extend Catalog.yml
         run: |
-          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}"
+          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
         
       - name: Check if catalog.yml or manifest.yml exists
         id: check_files
@@ -591,7 +594,7 @@ jobs:
 
       - name: Upload to Catalog
         id: uploadToCatalog
-        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
+        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }} --debug "${{ inputs.debug }}")" >> $GITHUB_OUTPUT
 
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV

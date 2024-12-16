@@ -30,6 +30,9 @@ on:
       sonarCloudProjectName:
         required: true
         type: string
+      debug:
+        required: false
+        type: boolean
     secrets:
       api-key:
         required: true
@@ -77,7 +80,7 @@ jobs:
           shell: pwsh       
 
   CI_Legacy:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master Legacy Workflow.yml@main
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master Legacy Workflow.yml@Debug
     needs: check_solution_type
     if: needs.check_solution_type.outputs.isSdk == 'false'
     with:
@@ -87,6 +90,7 @@ jobs:
       repository: ${{ github.repository }}
       owner: ${{ github.repository_owner }}
       sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
+      debug: ${{ inputs.debug }}
     secrets:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}
@@ -94,7 +98,7 @@ jobs:
       azureToken: ${{ secrets.azureToken }}
 
   CI_SDK:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master SDK Workflow.yml@main
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master SDK Workflow.yml@Debug
     needs: check_solution_type
     if: needs.check_solution_type.outputs.isSdk == 'true'
     with:
@@ -104,6 +108,7 @@ jobs:
       repository: ${{ github.repository }}
       owner: ${{ github.repository_owner }}
       sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
+      debug: ${{ inputs.debug }}
     secrets:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}

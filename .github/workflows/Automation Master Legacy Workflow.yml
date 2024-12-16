@@ -33,6 +33,9 @@ on:
       sonarCloudProjectName:
         required: true
         type: string
+      debug:
+        required: false
+        type: boolean
     secrets:
       api-key:
         required: false
@@ -365,11 +368,11 @@ jobs:
     
         - name: Create dmapp package
           if: inputs.referenceType == 'tag'
-          run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --version ${{ inputs.referenceName }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}"
+          run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --version ${{ inputs.referenceName }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}" --debug "${{ inputs.debug }}"
     
         - name: Create dmapp package
           if: inputs.referenceType != 'tag'
-          run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --build-number ${{ inputs.runNumber }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}"
+          run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --build-number ${{ inputs.runNumber }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}" --debug "${{ inputs.debug }}"
     
         - uses: actions/upload-artifact@v4
           with:
@@ -443,7 +446,7 @@ jobs:
 
       - name: Create or Extend Catalog.yml
         run: |
-          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}"
+          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
         
       - name: Check if catalog.yml or manifest.yml exists
         id: check_files
@@ -551,7 +554,7 @@ jobs:
   
       - name: Create or Extend Catalog.yml
         run: |
-          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}"
+          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
        
       - name: Check if catalog.yml or manifest.yml exists
         id: check_files
@@ -576,7 +579,7 @@ jobs:
 
       - name: Upload to Catalog
         id: uploadToCatalog
-        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmappPackageName }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }})" >> $GITHUB_OUTPUT
+        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmappPackageName }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }} --debug "${{ inputs.debug }}")" >> $GITHUB_OUTPUT
  
       - name: (Release) Set artifact Id
         run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV

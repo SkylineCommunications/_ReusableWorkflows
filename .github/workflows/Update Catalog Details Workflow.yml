@@ -4,6 +4,10 @@ name: Update Catalog Details
 on:
   # Allows you to run this workflow from another workflow
   workflow_call:
+    inputs:
+      debug:
+        required: false
+        type: boolean
     secrets:
       api-key:
         required: true
@@ -24,7 +28,7 @@ jobs:
         
         - name: Create or Extend Catalog.yml
           run: |
-            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}"
+            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
        
         - name: Check if catalog.yml or manifest.yml exists
           id: check_files
@@ -75,5 +79,6 @@ jobs:
           run: |
             dataminer-catalog-upload update-catalog-details `
               --path-to-catalog-yml "${{ github.workspace }}/${{ env.catalogDetails }}" `
-              --dm-catalog-token "${{ secrets.api-key }}"
+              --dm-catalog-token "${{ secrets.api-key }}" `
+              --debug "${{ inputs.debug }}"
   
