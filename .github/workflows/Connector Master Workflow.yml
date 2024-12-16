@@ -30,6 +30,9 @@ on:
       sonarCloudProjectName:
         required: true
         type: string
+      debug:
+        required: false
+        type: boolean
     secrets:
       api-key:
         required: true
@@ -87,6 +90,7 @@ jobs:
       repository: ${{ github.repository }}
       owner: ${{ github.repository_owner }}
       sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
+      debug: ${{ inputs.debug }}
     secrets:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}
@@ -104,6 +108,7 @@ jobs:
       repository: ${{ github.repository }}
       owner: ${{ github.repository_owner }}
       sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
+      debug: ${{ inputs.debug }}
     secrets:
       # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
       api-key: ${{ secrets.api-key }}
