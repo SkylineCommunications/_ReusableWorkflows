@@ -1,0 +1,228 @@
+name: DataMiner App Packages
+
+# Controls when the workflow will run
+on:
+  # Allows you to run this workflow from another workflow
+  workflow_call:
+    outputs:
+      quality_gate: 
+        description: "Results from Skyline Quality Gate."
+        value: ${{ jobs.validate_skyline_quality_gate.outputs.quality }}
+    inputs:
+      referenceName:
+        required: true
+        type: string       
+      runNumber:
+        required: true
+        type: string   
+      referenceType:
+        required: true
+        type: string   
+      repository:
+        required: true
+        type: string 
+      owner:
+        required: true
+        type: string
+      sonarCloudProjectName:
+        required: true
+        type: string
+      debug:
+        required: false
+        type: boolean
+    secrets:
+      api-key:
+        required: false
+      sonarCloudToken:
+        required: true
+      azureToken:
+        required: false
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  validate_skyline_quality_gate:
+    name: SDK Skyline Quality Gate 
+    runs-on: windows-latest
+    outputs:
+      quality: ${{ steps.quality-step.outputs.results }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: 'zulu'
+ 
+      - name: Find .sln file
+        id: findSlnFile        
+        run: |
+          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Detect .csproj files
+        id: detectCsprojFiles
+        run: |
+          $csprojFileCount = Get-ChildItem . -Recurse -File -Filter *.csproj | Measure-Object | Select-Object -ExpandProperty Count
+          $result = "false"
+          if($csprojFileCount -gt 0){ $result = "true" }
+          Write-Output "csproj-file-present=$($result)" >> $Env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Enable Skyline NuGet Registries
+        if: inputs.owner == 'SkylineCommunications'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AZURE_TOKEN: ${{ secrets.azureToken }}  
+        run: |
+          $sources = @(
+            @{ Name = "PrivateGitHubNugets"; URL = "https://nuget.pkg.github.com/SkylineCommunications/index.json"; Username = "USERNAME"; Password = "${{ secrets.GITHUB_TOKEN }}" },
+            @{ Name = "CloudNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"; Username = "az"; Password = "${{ secrets.azureToken }}" },
+            @{ Name = "PrivateAzureNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"; Username = "az"; Password = "${{ secrets.azureToken }}" }
+          )
+      
+          foreach ($source in $sources) {
+            if ($source.Password -ne "") {
+              Write-Host "Checking source $($source.Name)..."
+              
+              if (dotnet nuget list source | Select-String -Pattern $source.Name) {
+                Write-Host "Updating existing source $($source.Name)."
+                dotnet nuget update source $source.Name --source $source.URL --username $source.Username --password $source.Password --store-password-in-clear-text
+              } else {
+                Write-Host "Adding new source $($source.Name)."
+                dotnet nuget add source $source.URL --name $source.Name --username $source.Username --password $source.Password --store-password-in-clear-text
+              }
+            } else {
+              Write-Host "Skipping $($source.Name) because the password is not set."
+            }
+          }
+        shell: pwsh
+
+      - name: Install SonarCloud scanner
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
+        run: |
+          dotnet tool install dotnet-sonarscanner --global
+  
+      - name: Prepare SonarCloud Variables
+        id: prepSonarCloudVar
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
+        run: |
+          import os
+          env_file = os.getenv('GITHUB_ENV')
+          with open(env_file, "a") as myfile:
+              myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
+        shell: python
+
+      - name: Get SonarCloud Status
+        id: get-sonarcloud-status
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
+        run: |
+          echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Trigger Initial Analysis
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+        run: |
+            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+            dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
+            dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
+        continue-on-error: true
+          
+      - name: Start Analysis
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+        run: |
+            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+        continue-on-error: true
+
+
+      - name: Find Version Comment
+        run: |
+          @echo off
+          for /f "delims=" %%A in ('git describe --tags --exact-match 2^>nul') do set VERSION_COMMENT=%%A
+          if not defined VERSION_COMMENT for /f "delims=" %%B in ('git log -1 --pretty=format:%%B') do set VERSION_COMMENT=%%B
+          echo VERSION_COMMENT=%VERSION_COMMENT% >> "%GITHUB_ENV%"
+        shell: cmd
+      
+  
+      - name: Apply Branch and output path for pre-release NuGet
+        if: inputs.referenceType == 'branch'
+        run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag " " --branch "${{ inputs.referenceName }}" --build ${{ inputs.runNumber }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
+
+      - name: Apply Tag and output path for Release NuGet
+        if: inputs.referenceType == 'tag'
+        run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag "${{ inputs.referenceName }}" --branch " " --build ${{ inputs.runNumber }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
+
+
+      - name: Building
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
+        run: |
+          dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" \
+          -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" \
+          -p:VersionComment="$VERSION_COMMENT" \
+          -p:CatalogPublishKeyName="api-key" \
+          --configuration Release \
+          -nodeReuse:false
+
+      - name: Unit Tests
+      # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
+        id: unit-tests
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
+        run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
+        continue-on-error: true
+  
+      - name: Stop Analysis
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+        run: |
+            dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
+        continue-on-error: true
+
+      - name: SonarCloud Quality Gate check
+        id: sonarcloud-quality-gate-check
+        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        with:
+          scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
+        continue-on-error: true
+        # Force to fail step after specific time.
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+   
+      - name: Quality Gate
+        id: quality-step
+        run: |
+          if "${{ steps.detectCsprojFiles.outputs.csproj-file-present }}" == "false":
+            print("Quality gate skipped as no .csproj files were detected.")
+            exit(0)
+          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+            print("Quality gate failed due to:")
+          if "${{ steps.unit-tests.outcome }}" == "failure":
+            print("- Test failures")
+          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
+            print("- Could not retrieve SonarCloud quality gate status")
+          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+            print("- Code analysis quality gate failed")
+          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+            exit(1)
+        shell: python
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DataMiner Installation Packages
+          path: "**/bin/*.dmapp"
+
+      - name: Publish To Catalog
+        if: inputs.referenceType == 'tag'
+        shell: pwsh
+        run: dotnet publish "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build
