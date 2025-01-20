@@ -40,8 +40,8 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  validate_skyline_quality_gate:
-    name: SDK Skyline Quality Gate 
+  skyline_cicd:
+    name: Skyline CICD
     runs-on: windows-latest
     outputs:
       quality: ${{ steps.quality-step.outputs.results }}
