@@ -120,9 +120,13 @@ jobs:
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
         run: |
-          echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
+          $projectKey = "${{ inputs.sonarCloudProjectName }}"
+          $token = "${{ secrets.sonarCloudToken }}"
+          $response = Invoke-RestMethod -Uri "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$projectKey" -Headers @{Authorization = "Basic $([System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes("$token:")))"}
+          echo "sonarCloudProjectStatus=$($response | ConvertTo-Json -Depth 10)" >> $env:GITHUB_OUTPUT
         continue-on-error: true
-
+        shell: pwsh
+      
       - name: Trigger Initial Analysis
         if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
         env:
