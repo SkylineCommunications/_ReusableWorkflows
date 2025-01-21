@@ -221,4 +221,4 @@ jobs:
       - name: Publish To Catalog
         if: inputs.referenceType == 'tag'
         shell: pwsh
-        run: dotnet publish "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build
+        run: dotnet publish "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build -p:VersionComment="$VERSION_COMMENT"
