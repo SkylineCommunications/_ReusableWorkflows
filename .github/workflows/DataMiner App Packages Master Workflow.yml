@@ -42,7 +42,7 @@ on:
 jobs:
   skyline_cicd:
     name: Skyline CICD
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     outputs:
       quality: ${{ steps.quality-step.outputs.results }}
     steps:
@@ -147,11 +147,11 @@ jobs:
           echo VERSION_COMMENT=%VERSION_COMMENT% >> "%GITHUB_ENV%"
         shell: cmd
        
-      - name: Apply Branch and output path for pre-release NuGet
+      - name: Apply Branch for pre-release NuGet
         if: inputs.referenceType == 'branch'
         run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag " " --branch "${{ inputs.referenceName }}" --build ${{ inputs.runNumber }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
-      - name: Apply Tag and output path for Release NuGet
+      - name: Apply Tag for Release NuGet
         if: inputs.referenceType == 'tag'
         run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag "${{ inputs.referenceName }}" --branch " " --build ${{ inputs.runNumber }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
