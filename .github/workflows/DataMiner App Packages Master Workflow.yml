@@ -140,14 +140,12 @@ jobs:
             dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
         continue-on-error: true
         shell: pwsh
-          
+        
       - name: Find Version Comment
         run: |
-          @echo off
-          for /f "delims=" %%A in ('git describe --tags --exact-match 2^>nul') do set VERSION_COMMENT=%%A
-          if not defined VERSION_COMMENT for /f "delims=" %%B in ('git log -1 --pretty=format:%%B') do set VERSION_COMMENT=%%B
-          echo VERSION_COMMENT=%VERSION_COMMENT% >> "%GITHUB_ENV%"
-        shell: cmd
+          VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
+          echo "VERSION_COMMENT=$VERSION_COMMENT" >> $GITHUB_ENV
+        shell: bash     
        
       - name: Apply Branch for pre-release NuGet
         if: inputs.referenceType == 'branch'
