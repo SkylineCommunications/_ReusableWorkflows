@@ -160,12 +160,13 @@ jobs:
 
       - name: Building
         run: |
-          dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" \
-          -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" \
-          -p:VersionComment="$VERSION_COMMENT" \
-          -p:CatalogPublishKeyName="api-key" \
-          --configuration Release \
+          dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+          -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" `
+          -p:VersionComment="$VERSION_COMMENT" `
+          -p:CatalogPublishKeyName="api-key" `
+          --configuration Release `
           -nodeReuse:false
+        shell: pwsh     
 
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
