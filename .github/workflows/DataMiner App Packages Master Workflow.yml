@@ -110,43 +110,41 @@ jobs:
         run: |
           dotnet tool install dotnet-sonarscanner --global
   
-      - name: Prepare SonarCloud Variables
-        id: prepSonarCloudVar
-        run: |
-          import os
-          env_file = os.getenv('GITHUB_ENV')
-          with open(env_file, "a") as myfile:
-              myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
-        shell: python
-
-      - name: Get SonarCloud Status
-        id: get-sonarcloud-status
-        run: |
-          sonarCloudProjectStatus=$(curl -s -u "${{ secrets.sonarCloudToken }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }}")
-          echo "sonarCloudProjectStatus=$sonarCloudProjectStatus" >> $GITHUB_OUTPUT
-        continue-on-error: true
-        shell: bash
-       
-      - name: Trigger Initial Analysis
-        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-        run: |
-            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
-            dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
-            -p:GenerateDataMinerPackage=false `
-            --configuration ${{ inputs.configuration }} `
-            -nodeReuse:false
-            dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
-        continue-on-error: true
-        shell: pwsh
-
-      # - name: Find Version Comment
+      # - name: Prepare SonarCloud Variables
+      #   id: prepSonarCloudVar
       #   run: |
-      #     VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
-      #     echo "VERSION_COMMENT=$VERSION_COMMENT" >> $GITHUB_ENV
+      #     import os
+      #     env_file = os.getenv('GITHUB_ENV')
+      #     with open(env_file, "a") as myfile:
+      #         myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
+      #   shell: python
+
+      # - name: Get SonarCloud Status
+      #   id: get-sonarcloud-status
+      #   run: |
+      #     sonarCloudProjectStatus=$(curl -s -u "${{ secrets.sonarCloudToken }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }}")
+      #     echo "sonarCloudProjectStatus=$sonarCloudProjectStatus" >> $GITHUB_OUTPUT
+      #   continue-on-error: true
       #   shell: bash
+       
+      # - name: Trigger Initial Analysis
+      #   if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+      #     SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+      #   run: |
+      #       dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+      #       dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+      #       -p:GenerateDataMinerPackage=false `
+      #       --configuration ${{ inputs.configuration }} `
+      #       -nodeReuse:false
+      #       dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
+      #   continue-on-error: true
+      #   shell: pwsh
+
+      - name: Authenticate with GitHub CLI
+        run: gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Find Version Comment
         id: findVersionComment
         run: |
@@ -169,7 +167,7 @@ jobs:
             echo "versionComment=$VERSION_COMMENT" >> $GITHUB_OUTPUT
           fi
         shell: bash
-    
+
       
       # - name: Start Analysis
       #   env:
