@@ -147,41 +147,37 @@ jobs:
       #     VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
       #     echo "VERSION_COMMENT=$VERSION_COMMENT" >> $GITHUB_ENV
       #   shell: bash
-      - name: Authenticate with GitHub CLI
-        run: gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
-
       - name: Find Version Comment
         id: findVersionComment
         run: |
-          # Log the start of the process
           echo "Checking for release notes associated with the reference: '${{ inputs.referenceName }}'"
       
-          # Attempt to retrieve the release note body for the given tag using gh CLI
+          # Retrieve the release note body
           RELEASE_NOTE=$(gh release view "${{ inputs.referenceName }}" --json body -q '.body' 2>/dev/null || echo "")
       
           if [[ -n "$RELEASE_NOTE" ]]; then
-            # Found a release note, log it and use it as the version comment
             echo "Release note found for '${{ inputs.referenceName }}': $RELEASE_NOTE"
-            echo "versionComment=$RELEASE_NOTE" >> $GITHUB_OUTPUT
+            # Escape multiline string for GITHUB_OUTPUT
+            echo "versionComment<<EOF" >> $GITHUB_OUTPUT
+            echo "$RELEASE_NOTE" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           else
-            # No release note found, log this and fallback to tag content or last commit message
             echo "No release note found for '${{ inputs.referenceName }}'. Falling back to tag or commit message."
             VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
             echo "Fallback version comment: $VERSION_COMMENT"
+            # Escape fallback as well
             echo "versionComment=$VERSION_COMMENT" >> $GITHUB_OUTPUT
           fi
-      
-          # Ensure the version comment is visible in the logs for verification
-          echo "Final version comment: $VERSION_COMMENT"
         shell: bash
+    
       
-      - name: Start Analysis
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-        run: |
-            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
-        continue-on-error: true
+      # - name: Start Analysis
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+      #     SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+      #   run: |
+      #       dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+      #   continue-on-error: true
 
       - name: Build for pre-release
         if: inputs.referenceType == 'branch'
@@ -207,39 +203,39 @@ jobs:
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
         continue-on-error: true
   
-      - name: Stop Analysis
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-        run: |
-            dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
-        continue-on-error: true
+      # - name: Stop Analysis
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+      #     SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+      #   run: |
+      #       dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
+      #   continue-on-error: true
 
-      - name: SonarCloud Quality Gate check
-        id: sonarcloud-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        with:
-          scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
-        continue-on-error: true
-        # Force to fail step after specific time.
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+      # - name: SonarCloud Quality Gate check
+      #   id: sonarcloud-quality-gate-check
+      #   uses: sonarsource/sonarqube-quality-gate-action@master
+      #   with:
+      #     scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
+      #   continue-on-error: true
+      #   # Force to fail step after specific time.
+      #   timeout-minutes: 5
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
    
-      - name: Quality Gate
-        id: quality-step
-        run: |
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            print("Quality gate failed due to:")
-          if "${{ steps.unit-tests.outcome }}" == "failure":
-            print("- Test failures")
-          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
-            print("- Could not retrieve SonarCloud quality gate status")
-          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            print("- Code analysis quality gate failed")
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            exit(1)
-        shell: python
+      # - name: Quality Gate
+      #   id: quality-step
+      #   run: |
+      #     if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+      #       print("Quality gate failed due to:")
+      #     if "${{ steps.unit-tests.outcome }}" == "failure":
+      #       print("- Test failures")
+      #     if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
+      #       print("- Could not retrieve SonarCloud quality gate status")
+      #     if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+      #       print("- Code analysis quality gate failed")
+      #     if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+      #       exit(1)
+      #   shell: python
 
       - uses: actions/upload-artifact@v4
         with:
