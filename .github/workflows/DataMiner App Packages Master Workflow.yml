@@ -250,5 +250,5 @@ jobs:
             -p:Version="${{ inputs.referenceName }}" `
             -p:VersionComment="$VERSION_COMMENT" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
-            --configuration ${{ inputs.configuration }}
-            -v detailed
+            --configuration ${{ inputs.configuration }} `
+            -v diag
