@@ -36,7 +36,7 @@ on:
     secrets:
       sonarCloudToken:
         required: true
-      api-key:
+      dataminerToken:
         required: false
       azureToken:
         required: false
@@ -239,6 +239,6 @@ jobs:
       - name: Publish To Catalog
         if: inputs.referenceType == 'tag'
         env:
-          api-key: ${{ secrets.DATAMINER_KEY }}
+          api-key: ${{ secrets.dataminerToken }}
         shell: pwsh
         run: dotnet publish "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build -p:Version="${{ inputs.referenceName }}" -p:VersionComment="$VERSION_COMMENT" -p:CatalogPublishKeyName="api-key"
