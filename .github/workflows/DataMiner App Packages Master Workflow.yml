@@ -160,7 +160,7 @@ jobs:
         if: inputs.referenceType == 'branch'
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
-          -p:Version="0.0.0-B_${{ inputs.runNumber }}" `
+          -p:Version="0.0.0-beta${{ inputs.runNumber }}" `
           -p:VersionComment="$VERSION_COMMENT" `
           -p:CatalogPublishKeyName="api-key" `
           --configuration ${{ inputs.configuration }} `
