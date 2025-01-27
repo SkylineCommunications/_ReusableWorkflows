@@ -239,6 +239,6 @@ jobs:
       - name: Publish To Catalog
         if: inputs.referenceType == 'tag'
         env:
-          api-key: ${{ secrets.dataminerToken }}
+          DATAMINER_TOKEN: ${{ secrets.dataminerToken }}
         shell: pwsh
-        run: dotnet publish "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build -p:Version="${{ inputs.referenceName }}" -p:VersionComment="$VERSION_COMMENT" -p:CatalogPublishKeyName="api-key"
+        run: dotnet publish "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build -p:Version="${{ inputs.referenceName }}" -p:VersionComment="$VERSION_COMMENT" -p:CatalogPublishKeyName="DATAMINER_TOKEN"
