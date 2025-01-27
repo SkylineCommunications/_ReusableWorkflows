@@ -142,12 +142,29 @@ jobs:
         continue-on-error: true
         shell: pwsh
 
+      # - name: Find Version Comment
+      #   run: |
+      #     VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
+      #     echo "VERSION_COMMENT=$VERSION_COMMENT" >> $GITHUB_ENV
+      #   shell: bash
+             
       - name: Find Version Comment
         run: |
-          VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
+          # Check if there is a release associated with the given reference name (tag)
+          RELEASE_NOTE=$(gh release view "${{ inputs.referenceName }}" --json body -q '.body' 2>/dev/null || echo "")
+
+          if [[ -n "$RELEASE_NOTE" ]]; then
+            # Use the release note as the version comment
+            VERSION_COMMENT="$RELEASE_NOTE"
+          else
+            # Fallback to annotated tag content or last commit message
+            VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
+          fi
+
+          # Export VERSION_COMMENT to GitHub environment
           echo "VERSION_COMMENT=$VERSION_COMMENT" >> $GITHUB_ENV
-        shell: bash     
-       
+        shell: bash
+      
       - name: Start Analysis
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
