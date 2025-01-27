@@ -147,8 +147,11 @@ jobs:
       #     VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
       #     echo "VERSION_COMMENT=$VERSION_COMMENT" >> $GITHUB_ENV
       #   shell: bash
-             
+      - name: Authenticate with GitHub CLI
+        run: gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Find Version Comment
+        id: findVersionComment
         run: |
           # Log the start of the process
           echo "Checking for release notes associated with the reference: '${{ inputs.referenceName }}'"
@@ -159,19 +162,17 @@ jobs:
           if [[ -n "$RELEASE_NOTE" ]]; then
             # Found a release note, log it and use it as the version comment
             echo "Release note found for '${{ inputs.referenceName }}': $RELEASE_NOTE"
-            VERSION_COMMENT="$RELEASE_NOTE"
+            echo "versionComment=$RELEASE_NOTE" >> $GITHUB_OUTPUT
           else
             # No release note found, log this and fallback to tag content or last commit message
             echo "No release note found for '${{ inputs.referenceName }}'. Falling back to tag or commit message."
             VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
             echo "Fallback version comment: $VERSION_COMMENT"
+            echo "versionComment=$VERSION_COMMENT" >> $GITHUB_OUTPUT
           fi
       
           # Ensure the version comment is visible in the logs for verification
           echo "Final version comment: $VERSION_COMMENT"
-      
-          # Export VERSION_COMMENT to GitHub environment
-          echo "VERSION_COMMENT=$VERSION_COMMENT" >> $GITHUB_ENV
         shell: bash
       
       - name: Start Analysis
@@ -257,7 +258,7 @@ jobs:
             "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
             --no-build `
             -p:Version="${{ inputs.referenceName }}" `
-            -p:VersionComment="$VERSION_COMMENT" `
+            -p:VersionComment="${{ steps.findVersionComment.outputs.versionComment }}" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
             --configuration ${{ inputs.configuration }} `
             -v detailed
