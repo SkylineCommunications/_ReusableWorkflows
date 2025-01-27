@@ -178,8 +178,6 @@ jobs:
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="0.0.${{ inputs.runNumber }}" `
-          -p:VersionComment="$VERSION_COMMENT" `
-          -p:CatalogPublishKeyName="api-key" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
         shell: pwsh     
@@ -189,8 +187,6 @@ jobs:
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="${{ inputs.referenceName }}" `
-          -p:VersionComment="$VERSION_COMMENT" `
-          -p:CatalogPublishKeyName="api-key" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
         shell: pwsh
@@ -242,5 +238,7 @@ jobs:
 
       - name: Publish To Catalog
         if: inputs.referenceType == 'tag'
+        env:
+          api-key: ${{ secrets.DATAMINER_KEY }}
         shell: pwsh
-        run: dotnet publish "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build -p:Version="${{ inputs.referenceName }}" -p:VersionComment="$VERSION_COMMENT"
+        run: dotnet publish "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build -p:Version="${{ inputs.referenceName }}" -p:VersionComment="$VERSION_COMMENT" -p:CatalogPublishKeyName="api-key"
