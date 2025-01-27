@@ -251,3 +251,4 @@ jobs:
             -p:VersionComment="$VERSION_COMMENT" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
             --configuration ${{ inputs.configuration }}
+            -v diag
