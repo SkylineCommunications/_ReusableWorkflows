@@ -109,7 +109,6 @@ jobs:
       - name: Install Tools
         run: |
           dotnet tool install dotnet-sonarscanner --global
-          dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPreBuildApplyBranchOrTag --global
   
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
@@ -149,14 +148,6 @@ jobs:
           echo "VERSION_COMMENT=$VERSION_COMMENT" >> $GITHUB_ENV
         shell: bash     
        
-      - name: Apply Branch for pre-release NuGet
-        if: inputs.referenceType == 'branch'
-        run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag " " --branch "${{ inputs.referenceName }}" --build ${{ inputs.runNumber }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
-
-      - name: Apply Tag for Release NuGet
-        if: inputs.referenceType == 'tag'
-        run: NuGetPreBuildApplyBranchOrTag --workspace ${{ github.workspace }} --tag "${{ inputs.referenceName }}" --branch " " --build ${{ inputs.runNumber }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
-
       - name: Start Analysis
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
@@ -165,14 +156,27 @@ jobs:
             dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
         continue-on-error: true
 
-      - name: Building
+      - name: Build for pre-release
+        if: inputs.referenceType == 'branch'
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+          -p:Version="0.0.0-B_${{ inputs.runNumber }}" `
           -p:VersionComment="$VERSION_COMMENT" `
           -p:CatalogPublishKeyName="api-key" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
         shell: pwsh     
+
+      - name: Build for release
+        if: inputs.referenceType == 'tag'
+        run: |
+          dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `        
+          -p:Version="${{ inputs.referenceName }}" `
+          -p:VersionComment="$VERSION_COMMENT" `
+          -p:CatalogPublishKeyName="api-key" `
+          --configuration ${{ inputs.configuration }} `
+          -nodeReuse:false
+        shell: pwsh
 
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
@@ -222,4 +226,4 @@ jobs:
       - name: Publish To Catalog
         if: inputs.referenceType == 'tag'
         shell: pwsh
-        run: dotnet publish "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build -p:VersionComment="$VERSION_COMMENT"
+        run: dotnet publish "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build -p:Version="${{ inputs.referenceName }}" -p:VersionComment="$VERSION_COMMENT"
