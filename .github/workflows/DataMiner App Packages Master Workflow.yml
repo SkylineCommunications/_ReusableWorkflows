@@ -53,17 +53,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check SonarCloud Conditions
-        id: check_sonarcloud_conditions
-        run: |
-          if [[ "${{ inputs.owner }}" != "SkylineCommunications" && "${{ inputs.referenceType }}" == "tag" ]]; then
-            echo "CanRunSonarCloud=false" >> $GITHUB_OUTPUT
-          else
-            echo "CanRunSonarCloud=true" >> $GITHUB_OUTPUT
-          fi
-        
       - name: Validate SonarCloud Project Name
-        if: needs.check-conditions.outputs.CanRunSonarCloud == 'true'
         id: validate-sonar-name
         run: |
           if [[ -z "${{ inputs.sonarCloudProjectName }}" ]]; then
@@ -80,7 +70,6 @@ jobs:
           fi
 
       - name: Validate SonarCloud Secret Token
-        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         id: validate-sonar-token
         run: |
           if [[ -z "${{ secrets.sonarCloudToken }}" ]]; then
@@ -164,12 +153,10 @@ jobs:
         shell: pwsh
 
       - name: Install Tools
-        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         run: |
           dotnet tool install dotnet-sonarscanner --global
   
       - name: Prepare SonarCloud Variables
-        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         id: prepSonarCloudVar
         run: |
           import os
@@ -179,7 +166,6 @@ jobs:
         shell: python
 
       - name: Get SonarCloud Status
-        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         id: get-sonarcloud-status
         run: |
           sonarCloudProjectStatus=$(curl -s -u "${{ secrets.sonarCloudToken }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }}")
@@ -198,7 +184,7 @@ jobs:
         shell: bash
        
       - name: Trigger Initial Analysis
-        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' && fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status == 'NONE' }}
+        if: ${{ fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status == 'NONE' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
@@ -213,7 +199,6 @@ jobs:
         shell: pwsh
 
       - name: Start Analysis
-        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
@@ -245,7 +230,6 @@ jobs:
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
   
       - name: Stop Analysis
-        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
@@ -254,7 +238,6 @@ jobs:
         continue-on-error: true
 
       - name: SonarCloud Quality Gate check
-        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         id: sonarcloud-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
