@@ -170,9 +170,9 @@ jobs:
         run: |
           sonarCloudProjectStatus=$(curl -s -u "${{ secrets.sonarCloudToken }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }}")
 
-          # Check if the response is valid JSON
-          if ! echo "$sonarCloudProjectStatus" | jq . > /dev/null 2>&1; then
-            echo "Error: The SONAR_TOKEN is invalid or expired. Please check and update your token." >&2
+          # Check if the response is empty or not valid JSON
+          if [ -z "$sonarCloudProjectStatus" ] || ! echo "$sonarCloudProjectStatus" | jq . > /dev/null 2>&1; then
+            echo "Error: The SONAR_TOKEN is invalid, expired, or the response is empty. Please check and update your token." >&2
             echo "Returned response: $sonarCloudProjectStatus" >&2
             exit 1
           fi
@@ -182,7 +182,6 @@ jobs:
           echo "sonarCloudProjectStatus=$sonarCloudProjectStatus" >> $GITHUB_OUTPUT
         continue-on-error: false
         shell: bash
-
        
       - name: Trigger Initial Analysis
         if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
