@@ -252,11 +252,21 @@ jobs:
       - name: Check for SonarCloud 403 Error
         id: check_sonarcloud_forbidden
         run: |
-          if grep -q "The requested URL returned error: 403" .sonarqube/out/.sonar/report-task.txt; then
-            echo "isSonarCloudValid=false" >> $GITHUB_OUTPUT
+          echo "Reading content of .sonarqube/out/.sonar/report-task.txt for logging:"
+          if [ -f .sonarqube/out/.sonar/report-task.txt ]; then
+            cat .sonarqube/out/.sonar/report-task.txt
+            if grep -q "The requested URL returned error: 403" .sonarqube/out/.sonar/report-task.txt; then
+              echo "403 error detected in report-task.txt"
+              echo "isSonarCloudValid=false" >> $GITHUB_OUTPUT
+            else
+              echo "403 error not detected in report-task.txt"
+              echo "isSonarCloudValid=true" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "isSonarCloudValid=true" >> $GITHUB_OUTPUT
+            echo "File .sonarqube/out/.sonar/report-task.txt does not exist!"
+            echo "isSonarCloudValid=false" >> $GITHUB_OUTPUT
           fi
+        
 
       - name: Add Annotation if SonarCloud 403 Error Detected
         if: ${{ !steps.check_sonarcloud_forbidden.outputs.isSonarCloudValid }}
