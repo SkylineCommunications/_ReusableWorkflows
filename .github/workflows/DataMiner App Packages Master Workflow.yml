@@ -164,7 +164,7 @@ jobs:
           with open(env_file, "a") as myfile:
               myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
         shell: python
-        
+
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
         run: |
@@ -173,10 +173,12 @@ jobs:
           # Check if the response is valid JSON
           if ! echo "$sonarCloudProjectStatus" | jq . > /dev/null 2>&1; then
             echo "Error: The SONAR_TOKEN is invalid or expired. Please check and update your token." >&2
+            echo "Returned response: $sonarCloudProjectStatus" >&2
             exit 1
           fi
 
           # Output the JSON response if valid
+          echo "Returned response: $sonarCloudProjectStatus"
           echo "sonarCloudProjectStatus=$sonarCloudProjectStatus" >> $GITHUB_OUTPUT
         continue-on-error: false
         shell: bash
