@@ -252,19 +252,29 @@ jobs:
       - name: Capture SonarCloud 403 Error
         id: capture_sonarcloud_error
         run: |
+          echo "Inspecting the outcome of the SonarCloud Quality Gate step..."
+          echo "Outcome: ${{ steps.sonarcloud-quality-gate-check.outcome }}"
+          
+          # Check if the previous step failed
           if [ "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" ]; then
-            echo "The previous step failed. Checking for 403 error..."
+            echo "The SonarCloud Quality Gate step failed. Checking the result..."
+            
+            # Debug the .result output
+            echo "Result Output: '${{ steps.sonarcloud-quality-gate-check.outputs.result }}'"
+      
+            # Check for 403 in the output
             if [[ "${{ steps.sonarcloud-quality-gate-check.outputs.result }}" == *"403"* ]]; then
               echo "SonarCloud Quality Gate failed with a 403 error."
               echo "isSonarCloudValid=false" >> $GITHUB_OUTPUT
             else
-              echo "SonarCloud Quality Gate failed, but not due to a 403 error."
+              echo "SonarCloud Quality Gate failed, but no 403 error detected."
               echo "isSonarCloudValid=true" >> $GITHUB_OUTPUT
             fi
           else
-            echo "SonarCloud Quality Gate succeeded."
+            echo "SonarCloud Quality Gate step succeeded."
             echo "isSonarCloudValid=true" >> $GITHUB_OUTPUT
           fi
+        
       
       - name: Add Annotation for 403 Error
         if: ${{ steps.capture_sonarcloud_error.outputs.isSonarCloudValid == 'false' }}
