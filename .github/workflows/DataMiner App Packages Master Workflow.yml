@@ -56,12 +56,28 @@ jobs:
       - name: Validate SonarCloud Project Name
         id: validate-sonar-name
         run: |
-          if [[ -z "${{ secrets.sonarCloudProjectName }}" ]]; then
+          if [[ -z "${{ inputs.sonarCloudProjectName }}" ]]; then
             echo "Error: sonarCloudProjectName is not set."
             echo "Please create a SonarCloud project by visiting: https://sonarcloud.io/projects/create and copy the id of the project as mentioned in the sonarcloud project url."
             repo_url="https://github.com/${{ github.repository }}/settings/variables/actions"
             echo "Then set a SONAR_NAME variable in your repository settings: $repo_url"
-            echo "Alternatively, if you do not wish to use the Skyline Quality Gate but intend to publish your results to the catalog, you may create your workflow to include the equivalent of a dotnet publish step as shown below:"
+            echo "Alternatively, if you do not wish to use the Skyline Quality Gate but intend to publish your results to the catalog, you may create your workflow to include the equivalent of a dotnet publish step as shown below (remove the \\):"
+            echo "    - name: Publish"
+            echo "      env:"
+            echo "        api-key: $\{{ secrets.DATAMINER_TOKEN }}"
+            echo "      run: dotnet publish -p:Version=\"0.0.$\{{ github.run_number }}\" -p:VersionComment=\"Iterative Development\" -p:CatalogPublishKeyName=api-key"
+            exit 1
+          fi
+
+      - name: Validate SonarCloud Secret Token
+        id: validate-sonar-token
+        run: |
+          if [[ -z "${{ secrets.sonarCloudToken }}" ]]; then
+            echo "Error: sonarCloudProjectName is not set."
+            echo "Please create a SonarCloud Token by visiting: https://sonarcloud.io/account/security and copy the value of the created token."
+            repo_url="https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "Then set a SONAR_TOKEN secret in your repository settings: $repo_url"
+            echo "Alternatively, if you do not wish to use the Skyline Quality Gate but intend to publish your results to the catalog, you may create your workflow to include the equivalent of a dotnet publish step as shown below (remove the \\):"
             echo "    - name: Publish"
             echo "      env:"
             echo "        api-key: $\{{ secrets.DATAMINER_TOKEN }}"
