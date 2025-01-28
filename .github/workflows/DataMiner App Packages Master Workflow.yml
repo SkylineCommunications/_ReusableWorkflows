@@ -249,30 +249,38 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
 
-      - name: Check for SonarCloud 403 Error
-        id: check_sonarcloud_forbidden
+          - name: SonarCloud Quality Gate check
+          id: sonarcloud-quality-gate-check
+          uses: sonarsource/sonarqube-quality-gate-action@master
+          with:
+            scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
+          continue-on-error: true
+          timeout-minutes: 5
+          env:
+            SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+      
+      - name: Capture SonarCloud 403 Error
+        id: capture_sonarcloud_error
         run: |
-          echo "Reading content of .sonarqube/out/.sonar/report-task.txt for logging:"
-          if [ -f .sonarqube/out/.sonar/report-task.txt ]; then
-            cat .sonarqube/out/.sonar/report-task.txt
-            if grep -q "The requested URL returned error: 403" .sonarqube/out/.sonar/report-task.txt; then
-              echo "403 error detected in report-task.txt"
+          if [ "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" ]; then
+            echo "The previous step failed. Checking for 403 error..."
+            if [[ "${{ steps.sonarcloud-quality-gate-check.outputs.result }}" == *"403"* ]]; then
+              echo "SonarCloud Quality Gate failed with a 403 error."
               echo "isSonarCloudValid=false" >> $GITHUB_OUTPUT
             else
-              echo "403 error not detected in report-task.txt"
+              echo "SonarCloud Quality Gate failed, but not due to a 403 error."
               echo "isSonarCloudValid=true" >> $GITHUB_OUTPUT
             fi
           else
-            echo "File .sonarqube/out/.sonar/report-task.txt does not exist!"
-            echo "isSonarCloudValid=false" >> $GITHUB_OUTPUT
+            echo "SonarCloud Quality Gate succeeded."
+            echo "isSonarCloudValid=true" >> $GITHUB_OUTPUT
           fi
-        
-
-      - name: Add Annotation if SonarCloud 403 Error Detected
-        if: ${{ !steps.check_sonarcloud_forbidden.outputs.isSonarCloudValid }}
+      
+      - name: Add Annotation for 403 Error
+        if: ${{ steps.capture_sonarcloud_error.outputs.isSonarCloudValid == 'false' }}
         run: |
           echo "::warning file=.sonarqube/out/.sonar/report-task.txt::WARNING: SonarCloud Quality Gate skipped, could not be retrieved. This is likely due to SonarCloud license limitations."
-
+      
       - name: Quality Gate
         id: quality-step
         run: |
