@@ -91,10 +91,12 @@ jobs:
         run: |
           if [[ -z "${{ secrets.dataminerToken }}" ]]; then
             echo "Error: dataminerToken is not set. Release not possible!"
-            echo "Please create or re-use an admin.dataminer.services Token by visiting: https://admin.dataminer.services/, navigate to Keys and create/find a key with permissions to Register Catalog Items."
+            echo "Please create or re-use an admin.dataminer.services Token by visiting: https://admin.dataminer.services/."
+            echo "Navigate to the right Organization then go to Keys and create/find a key with permissions to Register Catalog Items."
             echo "Copy the value of the token."
             repo_url="https://github.com/${{ github.repository }}/settings/secrets/actions"
             echo "Then set a DATAMINER_TOKEN secret in your repository settings: $repo_url"
+            exit 1
           fi
 
       - name: Set up JDK 17
