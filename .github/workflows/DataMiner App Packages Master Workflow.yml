@@ -85,6 +85,18 @@ jobs:
             exit 1
           fi
 
+      - name: Validate DataMiner Secret Token
+        id: validate-dataminer-token
+        if: inputs.referenceType == 'tag'
+        run: |
+          if [[ -z "${{ secrets.dataminerToken }}" ]]; then
+            echo "Error: dataminerToken is not set. Release not possible!"
+            echo "Please create or re-use an admin.dataminer.services Token by visiting: https://admin.dataminer.services/, navigate to Keys and create/find a key with permissions to Register Catalog Items."
+            echo "Copy the value of the token."
+            repo_url="https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "Then set a DATAMINER_TOKEN secret in your repository settings: $repo_url"
+          fi
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
