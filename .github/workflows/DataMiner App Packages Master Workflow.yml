@@ -238,6 +238,7 @@ jobs:
         continue-on-error: true
 
       - name: SonarCloud Quality Gate check
+        if: inputs.referenceType == 'branch'
         id: sonarcloud-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
