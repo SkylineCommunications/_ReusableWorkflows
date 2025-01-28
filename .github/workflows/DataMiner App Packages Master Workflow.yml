@@ -65,7 +65,7 @@ jobs:
             echo "    - name: Publish"
             echo "      env:"
             echo "        api-key: \$\{\{ secrets.DATAMINER_TOKEN \}\}"
-            echo "      run: dotnet publish -p:Version= -p:VersionComment= -p:CatalogPublishKeyName=api-key
+            echo "      run: dotnet publish -p:Version=\"0.0.\$\{\{ github.run_number \}\}\" -p:VersionComment=\"Iterative Development\" -p:CatalogPublishKeyName=api-key"
             exit 1
           fi
 
