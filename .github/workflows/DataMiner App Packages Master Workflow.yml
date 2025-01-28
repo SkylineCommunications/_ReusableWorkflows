@@ -248,17 +248,31 @@ jobs:
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-   
+
+      - name: Check for SonarCloud 403 Error
+        id: check_sonarcloud_forbidden
+        run: |
+          if grep -q "The requested URL returned error: 403" .sonarqube/out/.sonar/report-task.txt; then
+            echo "isSonarCloudValid=false" >> $GITHUB_OUTPUT
+          else
+            echo "isSonarCloudValid=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Add Annotation if SonarCloud 403 Error Detected
+        if: ${{ steps.check_sonarcloud_forbidden.outputs.isSonarCloudValid == 'false' }}
+        run: |
+          echo "::warning file=.sonarqube/out/.sonar/report-task.txt::WARNING: SonarCloud Quality Gate skipped, could not be retrieved. This is likely due to SonarCloud license limitations."
+
       - name: Quality Gate
         id: quality-step
         run: |
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.unit-tests.outcome }}" == "failure" or ( "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED" and ${{ steps.check_sonarcloud_forbidden.outputs.isSonarCloudValid }} == "true"):
             print("Quality gate failed due to:")
           if "${{ steps.unit-tests.outcome }}" == "failure":
             print("- Test failures")
-          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
+          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" and ${{ steps.check_sonarcloud_forbidden.outputs.isSonarCloudValid }} == "true":
             print("- Could not retrieve SonarCloud quality gate status")
-          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED" and ${{ steps.check_sonarcloud_forbidden.outputs.isSonarCloudValid }} == "true":
             print("- Code analysis quality gate failed")
           if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             exit(1)
