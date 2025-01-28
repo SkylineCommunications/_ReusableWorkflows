@@ -63,7 +63,7 @@ jobs:
           fi
         
       - name: Validate SonarCloud Project Name
-        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud }}
+        if: needs.check-conditions.outputs.CanRunSonarCloud == 'true'
         id: validate-sonar-name
         run: |
           if [[ -z "${{ inputs.sonarCloudProjectName }}" ]]; then
