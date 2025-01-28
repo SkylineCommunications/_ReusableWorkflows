@@ -61,7 +61,7 @@ jobs:
             echo "Please create a SonarCloud project by visiting: https://sonarcloud.io/projects/create"
             repo_url="https://github.com/${{ github.repository }}/settings/variables/actions"
             echo "Then set a SONAR_NAME variable in your repository settings: $repo_url"
-            echo "Alternatively, if you do not wish to use the Skyline Quality Gate but intend to publish your results to the catalog, you may create your workflow to include the equivalen of a dotnet publish step as shown below:"
+            echo "Alternatively, if you do not wish to use the Skyline Quality Gate but intend to publish your results to the catalog, you may create your workflow to include the equivalent of a dotnet publish step as shown below:"
             echo "    - name: Publish"
             echo "      env:"
             echo "        api-key: `\$\{\{ secrets.DATAMINER_TOKEN \}\}`'"
