@@ -73,7 +73,7 @@ jobs:
         id: validate-sonar-token
         run: |
           if [[ -z "${{ secrets.sonarCloudToken }}" ]]; then
-            echo "Error: sonarCloudProjectName is not set."
+            echo "Error: sonarCloudToken is not set."
             echo "Please create a SonarCloud Token by visiting: https://sonarcloud.io/account/security and copy the value of the created token."
             repo_url="https://github.com/${{ github.repository }}/settings/secrets/actions"
             echo "Then set a SONAR_TOKEN secret in your repository settings: $repo_url"
