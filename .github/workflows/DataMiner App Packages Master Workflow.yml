@@ -64,7 +64,7 @@ jobs:
             echo "Alternatively, if you do not wish to use the Skyline Quality Gate but intend to publish your results to the catalog, you may create your workflow to include the equivalent of a dotnet publish step as shown below:"
             echo "    - name: Publish"
             echo "      env:"
-            echo "        api-key: `\$\{\{ secrets.DATAMINER_TOKEN \}\}`'"
+            echo "        api-key: `\$\{\{ secrets.DATAMINER_TOKEN \}\}`"
             echo "      run: dotnet publish -p:Version= -p:VersionComment= -p:CatalogPublishKeyName=api-key
             exit 1
           fi
