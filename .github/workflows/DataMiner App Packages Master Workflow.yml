@@ -172,7 +172,7 @@ jobs:
 
           # Check if the response is empty or not valid JSON
           if [ -z "$sonarCloudProjectStatus" ] || ! echo "$sonarCloudProjectStatus" | jq . > /dev/null 2>&1; then
-            echo "Error: The SONAR_TOKEN is invalid, expired, or the response is empty. Please check and update your token." >&2
+            echo "Error: The SONAR_TOKEN is invalid, expired, or the response is empty. Please check: https://sonarcloud.io/account/security and update your token: https://github.com/${{ github.repository }}/settings/secrets/actions" >&2
             echo "Returned response: $sonarCloudProjectStatus" >&2
             exit 1
           fi
