@@ -248,16 +248,6 @@ jobs:
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-
-          - name: SonarCloud Quality Gate check
-          id: sonarcloud-quality-gate-check
-          uses: sonarsource/sonarqube-quality-gate-action@master
-          with:
-            scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
-          continue-on-error: true
-          timeout-minutes: 5
-          env:
-            SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
       
       - name: Capture SonarCloud 403 Error
         id: capture_sonarcloud_error
