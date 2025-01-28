@@ -53,7 +53,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check SonarCloud Conditions
+        id: check_sonarcloud_conditions
+        run: |
+          if [[ "${{ inputs.owner }}" != "SkylineCommunications" && "${{ inputs.referenceType }}" == "tag" ]]; then
+            echo "CanRunSonarCloud=false" >> $GITHUB_OUTPUT
+          else
+            echo "CanRunSonarCloud=true" >> $GITHUB_OUTPUT
+          fi
+        
       - name: Validate SonarCloud Project Name
+        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         id: validate-sonar-name
         run: |
           if [[ -z "${{ inputs.sonarCloudProjectName }}" ]]; then
@@ -70,6 +80,7 @@ jobs:
           fi
 
       - name: Validate SonarCloud Secret Token
+        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         id: validate-sonar-token
         run: |
           if [[ -z "${{ secrets.sonarCloudToken }}" ]]; then
@@ -153,10 +164,12 @@ jobs:
         shell: pwsh
 
       - name: Install Tools
+        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         run: |
           dotnet tool install dotnet-sonarscanner --global
   
       - name: Prepare SonarCloud Variables
+        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         id: prepSonarCloudVar
         run: |
           import os
@@ -166,6 +179,7 @@ jobs:
         shell: python
 
       - name: Get SonarCloud Status
+        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         id: get-sonarcloud-status
         run: |
           sonarCloudProjectStatus=$(curl -s -u "${{ secrets.sonarCloudToken }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }}")
@@ -199,6 +213,7 @@ jobs:
         shell: pwsh
 
       - name: Start Analysis
+        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
@@ -228,9 +243,9 @@ jobs:
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
         id: unit-tests
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
-        continue-on-error: true
   
       - name: Stop Analysis
+        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
@@ -239,55 +254,14 @@ jobs:
         continue-on-error: true
 
       - name: SonarCloud Quality Gate check
+        if: ${{ needs.check-conditions.outputs.CanRunSonarCloud == 'true' }}
         id: sonarcloud-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
-        continue-on-error: true
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
-      
-      - name: Capture SonarCloud 403 Error
-        id: capture_sonarcloud_error
-        run: |
-          echo "Inspecting the outcome of the SonarCloud Quality Gate step..."
-          echo "Outcome: ${{ steps.sonarcloud-quality-gate-check.outcome }}"
-          
-          # Read the logs of the previous step from the default log file
-          echo "Capturing logs from the SonarCloud Quality Gate step..."
-          SONAR_LOG=$(cat $GITHUB_WORKSPACE/_temp/_runner_file_commands/continue-on-error.*.log || echo "Log file not found")
-          echo "SonarCloud Logs:"
-          echo "$SONAR_LOG"
-      
-          # Check if the logs contain the 403 error
-          if echo "$SONAR_LOG" | grep -q "The requested URL returned error: 403"; then
-            echo "403 error detected in the SonarCloud Quality Gate step."
-            echo "isSonarCloudValid=false" >> $GITHUB_OUTPUT
-          else
-            echo "No 403 error detected in the SonarCloud Quality Gate step."
-            echo "isSonarCloudValid=true" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Add Annotation for 403 Error
-        if: ${{ steps.capture_sonarcloud_error.outputs.isSonarCloudValid == 'false' }}
-        run: |
-          echo "::warning file=.sonarqube/out/.sonar/report-task.txt::WARNING: SonarCloud Quality Gate skipped, could not be retrieved. This is likely due to SonarCloud license limitations."
-      
-      - name: Quality Gate
-        id: quality-step
-        run: |
-          if "${{ steps.unit-tests.outcome }}" == "failure" or ( "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED" and ${{ steps.check_sonarcloud_forbidden.outputs.isSonarCloudValid }} ):
-            print("Quality gate failed due to:")
-          if "${{ steps.unit-tests.outcome }}" == "failure":
-            print("- Test failures")
-          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" and ${{ steps.check_sonarcloud_forbidden.outputs.isSonarCloudValid }}:
-            print("- Could not retrieve SonarCloud quality gate status")
-          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED" and ${{ steps.check_sonarcloud_forbidden.outputs.isSonarCloudValid }}:
-            print("- Code analysis quality gate failed")
-          if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            exit(1)
-        shell: python
 
       - uses: actions/upload-artifact@v4
         with:
