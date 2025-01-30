@@ -4,10 +4,6 @@ name: DataMiner App Packages
 on:
   # Allows you to run this workflow from another workflow
   workflow_call:
-    outputs:
-      quality_gate: 
-        description: "Results from Skyline Quality Gate."
-        value: ${{ jobs.validate_skyline_quality_gate.outputs.quality }}
     inputs:
       referenceName:
         required: true
