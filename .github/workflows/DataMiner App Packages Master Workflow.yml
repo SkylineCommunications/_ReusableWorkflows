@@ -7,16 +7,16 @@ on:
     inputs:
       referenceName:
         required: true
-        type: string       
+        type: string
       runNumber:
         required: true
-        type: string   
+        type: string
       referenceType:
         required: true
-        type: string   
+        type: string
       repository:
         required: true
-        type: string 
+        type: string
       owner:
         required: true
         type: string
@@ -42,8 +42,6 @@ jobs:
   skyline_cicd:
     name: Skyline CICD
     runs-on: ubuntu-latest
-    outputs:
-      quality: ${{ steps.quality-step.outputs.results }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,7 +68,7 @@ jobs:
         run: |
           if [[ -z "${{ secrets.sonarCloudToken }}" ]]; then
             echo "Error: sonarCloudToken is not set."
-            echo "Please create a SonarCloud Token by visiting: https://sonarcloud.io/account/security and copy the value of the created token."
+            echo "Please create a SonarCloud token by visiting: https://sonarcloud.io/account/security and copy the value of the created token."
             repo_url="https://github.com/${{ github.repository }}/settings/secrets/actions"
             echo "Then set a SONAR_TOKEN secret in your repository settings: $repo_url"
             echo "Alternatively, if you do not wish to use the Skyline Quality Gate but intend to publish your results to the catalog, you may create your workflow to include the equivalent of a dotnet publish step as shown below (remove the \\):"
@@ -87,7 +85,7 @@ jobs:
         run: |
           if [[ -z "${{ secrets.dataminerToken }}" ]]; then
             echo "Error: dataminerToken is not set. Release not possible!"
-            echo "Please create or re-use an admin.dataminer.services Token by visiting: https://admin.dataminer.services/."
+            echo "Please create or re-use an admin.dataminer.services token by visiting: https://admin.dataminer.services/."
             echo "Navigate to the right Organization then go to Keys and create/find a key with permissions to Register Catalog Items."
             echo "Copy the value of the token."
             repo_url="https://github.com/${{ github.repository }}/settings/secrets/actions"
@@ -100,24 +98,12 @@ jobs:
         with:
           java-version: 17
           distribution: 'zulu'
- 
+
       - name: Find .sln file
-        id: findSlnFile        
+        id: findSlnFile
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
-
-      - name: Detect .csproj files
-        id: detectCsprojFiles
-        run: |
-          $csprojFileCount = Get-ChildItem . -Recurse -File -Filter *.csproj | Measure-Object | Select-Object -ExpandProperty Count
-          if ($csprojFileCount -eq 0) {
-              Write-Error "No .csproj files found. Stopping the workflow."
-              exit 1
-          }
-          Write-Output "csproj-file-present=true" >> $Env:GITHUB_OUTPUT
-        shell: pwsh
-      
 
       - name: Enable Skyline NuGet Registries
         if: inputs.owner == 'SkylineCommunications'
@@ -151,7 +137,7 @@ jobs:
       - name: Install Tools
         run: |
           dotnet tool install dotnet-sonarscanner --global
-  
+
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
         run: |
@@ -178,7 +164,7 @@ jobs:
           echo "sonarCloudProjectStatus=$sonarCloudProjectStatus" >> $GITHUB_OUTPUT
         continue-on-error: false
         shell: bash
-       
+
       - name: Trigger Initial Analysis
         if: ${{ fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status == 'NONE' }}
         env:
@@ -207,15 +193,17 @@ jobs:
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="0.0.${{ inputs.runNumber }}" `
+          -p:BaseOutputPath="bin" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
-        shell: pwsh     
+        shell: pwsh
 
       - name: Build for release
         if: inputs.referenceType == 'tag'
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="${{ inputs.referenceName }}" `
+          -p:BaseOutputPath="bin" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
         shell: pwsh
@@ -249,7 +237,6 @@ jobs:
           path: |
             **/bin/${{ inputs.configuration }}/*.dmapp
             **/bin/${{ inputs.configuration }}/*.zip
-      
 
       - name: Authenticate with GitHub CLI
         if: inputs.referenceType == 'tag'
@@ -291,4 +278,5 @@ jobs:
             -p:Version="${{ inputs.referenceName }}" `
             -p:VersionComment="${{ steps.findVersionComment.outputs.versionComment }}" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
+            -p:BaseOutputPath="bin" `
             --configuration ${{ inputs.configuration }} `
