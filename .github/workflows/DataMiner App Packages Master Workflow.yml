@@ -26,6 +26,9 @@ on:
       configuration:
         required: true
         type: string
+      solutionFilterName:
+        required: false
+        type: string
       debug:
         required: false
         type: boolean
@@ -96,7 +99,11 @@ jobs:
       - name: Find .sln file
         id: findSlnFile
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+          if [[ -z ${{ inputs.solutionFilterName }} ]]; then
+            echo ${{ inputs.solutionFilterName }} >> $GITHUB_OUTPUT
+          elif
+            echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+          fi
         shell: bash
 
       - name: Enable Skyline NuGet Registries
