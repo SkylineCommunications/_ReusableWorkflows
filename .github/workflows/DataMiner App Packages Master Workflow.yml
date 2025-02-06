@@ -99,7 +99,7 @@ jobs:
       - name: Find .sln file
         id: findSlnFile
         run: |
-          if [[ -z ${{ inputs.solutionFilterName }} ]]; then
+          if [[ -z "${{ inputs.solutionFilterName }}" ]]; then
             echo solutionFilePath=$(find . -type f -name '${{ inputs.solutionFilterName }}') >> $GITHUB_OUTPUT
           else
             echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
