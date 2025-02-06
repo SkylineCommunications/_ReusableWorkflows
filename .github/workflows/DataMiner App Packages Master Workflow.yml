@@ -234,10 +234,11 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DataMiner Installation Packages (${{ inputs.configuration }}) (${{ steps.findSlnFile.outputs.solutionFilePath }})
+          name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }})
           path: |
             **/bin/${{ inputs.configuration }}/*.dmapp
             **/bin/${{ inputs.configuration }}/*.zip
+        continue-on-error: true
 
       - name: Authenticate with GitHub CLI
         if: inputs.referenceType == 'tag'
