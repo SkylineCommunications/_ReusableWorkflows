@@ -227,7 +227,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DataMiner Installation Packages
+          name: DataMiner Installation Packages (${{ inputs.configuration }})
           path: |
             **/bin/${{ inputs.configuration }}/*.dmapp
             **/bin/${{ inputs.configuration }}/*.zip
