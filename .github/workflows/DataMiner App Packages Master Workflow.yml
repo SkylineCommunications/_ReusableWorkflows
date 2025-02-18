@@ -194,7 +194,7 @@ jobs:
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="0.0.${{ inputs.runNumber }}" `
-          -p:BaseOutputPath="buildoutput" `
+          --output "buildoutput" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
         shell: pwsh
@@ -204,7 +204,7 @@ jobs:
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="${{ inputs.referenceName }}" `
-          -p:BaseOutputPath="buildoutput" `
+          --output "buildoutput" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
         shell: pwsh
@@ -280,5 +280,5 @@ jobs:
             -p:Version="${{ inputs.referenceName }}" `
             -p:VersionComment="${{ steps.findVersionComment.outputs.versionComment }}" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
-            -p:BaseOutputPath="buildoutput" `
+            --output "buildoutput" `
             --configuration ${{ inputs.configuration }} `
