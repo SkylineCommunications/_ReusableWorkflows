@@ -44,12 +44,12 @@ on:
 jobs:
   skyline_cicd:
     name: Skyline CICD
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+          
       - name: Validate SonarCloud Project Name
         id: validate-sonar-name
         run: |
@@ -194,7 +194,6 @@ jobs:
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="0.0.${{ inputs.runNumber }}" `
-          -p:BaseOutputPath="bin" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
         shell: pwsh
@@ -204,7 +203,6 @@ jobs:
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="${{ inputs.referenceName }}" `
-          -p:BaseOutputPath="bin" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
         shell: pwsh
@@ -212,7 +210,7 @@ jobs:
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
         id: unit-tests
-        run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
+        run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build --configuration ${{ inputs.configuration }} --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
   
       - name: Stop Analysis
         env:
@@ -280,5 +278,4 @@ jobs:
             -p:Version="${{ inputs.referenceName }}" `
             -p:VersionComment="${{ steps.findVersionComment.outputs.versionComment }}" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
-            -p:BaseOutputPath="bin" `
             --configuration ${{ inputs.configuration }} `
