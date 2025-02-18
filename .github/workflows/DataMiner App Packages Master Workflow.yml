@@ -194,7 +194,7 @@ jobs:
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="0.0.${{ inputs.runNumber }}" `
-          -p:BaseOutputPath="bin" `
+          -p:BaseOutputPath="buildoutput" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
         shell: pwsh
@@ -204,7 +204,7 @@ jobs:
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="${{ inputs.referenceName }}" `
-          -p:BaseOutputPath="bin" `
+          -p:BaseOutputPath="buildoutput" `
           --configuration ${{ inputs.configuration }} `
           -nodeReuse:false
         shell: pwsh
@@ -212,7 +212,7 @@ jobs:
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
         id: unit-tests
-        run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build --configuration ${{ inputs.configuration }} --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
+        run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build --output "buildoutput" --configuration ${{ inputs.configuration }} --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
   
       - name: Stop Analysis
         env:
@@ -236,8 +236,8 @@ jobs:
         with:
           name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }})
           path: |
-            **/bin/${{ inputs.configuration }}/*.dmapp
-            **/bin/${{ inputs.configuration }}/*.zip
+            **/buildoutput/${{ inputs.configuration }}/*.dmapp
+            **/buildoutput/${{ inputs.configuration }}/*.zip
         continue-on-error: true
 
       - name: Authenticate with GitHub CLI
@@ -280,5 +280,5 @@ jobs:
             -p:Version="${{ inputs.referenceName }}" `
             -p:VersionComment="${{ steps.findVersionComment.outputs.versionComment }}" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
-            -p:BaseOutputPath="bin" `
+            -p:BaseOutputPath="buildoutput" `
             --configuration ${{ inputs.configuration }} `
