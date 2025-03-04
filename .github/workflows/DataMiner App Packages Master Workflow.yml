@@ -236,6 +236,8 @@ jobs:
           path: |
             **/bin/${{ inputs.configuration }}/*.dmapp
             **/bin/${{ inputs.configuration }}/*.zip
+            **/bin/${{ inputs.configuration }}/**/*.dmapp
+            **/bin/${{ inputs.configuration }}/**/*.zip
         continue-on-error: true
 
       - name: Authenticate with GitHub CLI
