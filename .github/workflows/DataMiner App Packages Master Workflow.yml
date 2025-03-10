@@ -39,6 +39,8 @@ on:
         required: false
       azureToken:
         required: false
+      overrideCatalogDownloadToken:
+        required: false
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -89,7 +91,7 @@ jobs:
           if [[ -z "${{ secrets.dataminerToken }}" ]]; then
             echo "Error: dataminerToken is not set. Release not possible!"
             echo "Please create or re-use an admin.dataminer.services token by visiting: https://admin.dataminer.services/."
-            echo "Navigate to the right Organization then go to Keys and create/find a key with permissions to Register Catalog Items."
+            echo "Navigate to the right Organization then go to Keys and create/find a key with permissions to Register catalog items, Download catalog versions and Read catalog items."
             echo "Copy the value of the token."
             repo_url="https://github.com/${{ github.repository }}/settings/secrets/actions"
             echo "Then set a DATAMINER_TOKEN secret in your repository settings: $repo_url"
@@ -191,19 +193,29 @@ jobs:
 
       - name: Build for pre-release
         if: inputs.referenceType == 'branch'
+        env:
+          DATAMINER_TOKEN: ${{ secrets.dataminerToken }}
+          OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.overrideCatalogDownloadToken }}
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="0.0.${{ inputs.runNumber }}" `
           --configuration ${{ inputs.configuration }} `
+          -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
+          -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" `
           -nodeReuse:false
         shell: pwsh
 
       - name: Build for release
         if: inputs.referenceType == 'tag'
+        env:
+          DATAMINER_TOKEN: ${{ secrets.dataminerToken }}
+          OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.overrideCatalogDownloadToken }}
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
           -p:Version="${{ inputs.referenceName }}" `
           --configuration ${{ inputs.configuration }} `
+          -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
+          -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" `
           -nodeReuse:false
         shell: pwsh
 
