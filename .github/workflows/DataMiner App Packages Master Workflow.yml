@@ -266,17 +266,21 @@ jobs:
           RELEASE_NOTE=$(gh release view "${{ inputs.referenceName }}" --json body -q '.body' 2>/dev/null || echo "")
       
           if [[ -n "$RELEASE_NOTE" ]]; then
-            echo "Release note found for '${{ inputs.referenceName }}': $RELEASE_NOTE"
+            # Replace commas with %2c for dotnet publish
+            ESCAPED_RELEASE_NOTE=$(echo "$RELEASE_NOTE" | sed 's/,/%2c/g')
+            echo "Release note found for '${{ inputs.referenceName }}': $ESCAPED_RELEASE_NOTE"
             # Escape multiline string for GITHUB_OUTPUT
             echo "versionComment<<EOF" >> $GITHUB_OUTPUT
-            echo "$RELEASE_NOTE" >> $GITHUB_OUTPUT
+            echo "$ESCAPED_RELEASE_NOTE" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           else
             echo "No release note found for '${{ inputs.referenceName }}'. Falling back to tag or commit message."
             VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
-            echo "Fallback version comment: $VERSION_COMMENT"
+            # Replace commas with %2c for dotnet publish
+            ESCAPED_VERSION_COMMENT=$(echo "$VERSION_COMMENT" | sed 's/,/%2c/g')
+            echo "Fallback version comment: $ESCAPED_VERSION_COMMENT"
             # Escape fallback as well
-            echo "versionComment=$VERSION_COMMENT" >> $GITHUB_OUTPUT
+            echo "versionComment=$ESCAPED_VERSION_COMMENT" >> $GITHUB_OUTPUT
           fi
         shell: bash
 
