@@ -266,7 +266,7 @@ jobs:
           RELEASE_NOTE=$(gh release view "${{ inputs.referenceName }}" --json body -q '.body' 2>/dev/null || echo "")
           
           escape_special_chars() {
-            echo "$1" | sed -e 's/,/%2c/g' -e 's/"/%22/g'
+            echo "$1" | sed -e 's/,/%2c/g' -e 's/"/%22/g' -e 's/;/%3b/g'
           }
           
           if [[ -n "$RELEASE_NOTE" ]]; then
