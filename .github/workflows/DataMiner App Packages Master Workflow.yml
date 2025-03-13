@@ -202,6 +202,7 @@ jobs:
           --configuration ${{ inputs.configuration }} `
           -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
           -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" `
+          -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}" `
           -nodeReuse:false
         shell: pwsh
 
@@ -216,6 +217,7 @@ jobs:
           --configuration ${{ inputs.configuration }} `
           -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
           -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" `
+          -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}" `
           -nodeReuse:false
         shell: pwsh
 
@@ -299,3 +301,4 @@ jobs:
             -p:VersionComment="${{ steps.findVersionComment.outputs.versionComment }}" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
             --configuration ${{ inputs.configuration }} `
+            -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}"
