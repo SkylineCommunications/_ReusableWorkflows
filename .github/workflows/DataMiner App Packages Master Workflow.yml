@@ -46,11 +46,21 @@ on:
 jobs:
   skyline_cicd:
     name: Skyline CICD
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+          
+      - name: Install Mono
+        run: |
+          sudo apt update
+          sudo apt install -y mono-complete
           
       - name: Validate SonarCloud Project Name
         id: validate-sonar-name
