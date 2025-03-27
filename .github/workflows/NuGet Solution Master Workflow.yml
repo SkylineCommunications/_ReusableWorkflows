@@ -27,6 +27,9 @@ on:
       sonarCloudProjectName:
         required: true
         type: string
+      solutionName:
+        required: false
+        type: string
     secrets:
       sonarCloudToken:
         required: true
@@ -77,7 +80,11 @@ jobs:
       - name: Find .sln file
         id: findSlnFile        
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln' | sort -r | head -n 1) >> $GITHUB_OUTPUT
+          if [[ -z "${{ inputs.solutionName }}" ]]; then
+            echo solutionFilePath=$(find . -type f -name '*.sln' | sort -r | head -n 1) >> $GITHUB_OUTPUT
+          else
+            echo solutionFilePath=$(find . -type f -name '${{ inputs.solutionName }}') >> $GITHUB_OUTPUT
+          fi          
         shell: bash  
 
       - name: Validate NuGet Metadata
