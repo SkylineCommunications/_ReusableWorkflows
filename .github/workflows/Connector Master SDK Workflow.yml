@@ -418,7 +418,6 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom --prerelease
 
       - name: Find .sln file
         id: findSlnFile        
@@ -493,7 +492,7 @@ jobs:
       - name: Create DMProtocol - Release
         if: inputs.referenceType == 'tag'
         run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageName.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ inputs.referenceName  }}" --debug "${{ inputs.debug }}"
-      
+
 #ON BUILD
       - name: Find and extract Protocol Version
         if: inputs.referenceType != 'tag'
@@ -503,7 +502,6 @@ jobs:
 
           # Extract the Protocol Version using awk and store it in a variable
           protocol_version=$(awk -F '[><]' '/<Version>/ {print $3}' "$xml_file")
-  
 
           # Print the extracted version for verification
           echo "Extracted Protocol Version: $protocol_version"
@@ -517,30 +515,6 @@ jobs:
         run: |
           dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageName.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}" --debug "${{ inputs.debug }}"
         shell: bash
-
-      - name: Retrieve SBOM file
-        if: inputs.referenceType == 'tag'
-        id: retrieveSbomFile
-        uses: actions/download-artifact@v4
-        with:
-          name: SBOM
-          path: _SBOM
-
-      - name: Find SBOM file
-        if: inputs.referenceType == 'tag'
-        id: findSbomFile
-        run: |
-          IFS=$'\n'
-          echo sbomFile=$(find _SBOM -type f -name '*.json') >> $GITHUB_OUTPUT
-          unset IFS
-        shell: bash
-
-      - name: Add SBOM to package
-        if: inputs.referenceType == 'tag'
-        run: |
-          dataminer-sbom add `
-          --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" `
-          --package-file "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmprotocol"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -593,23 +567,46 @@ jobs:
         with:
           name: Connector Package
           path: _DataMinerInstallationPackage
-          
+
       - name: Find Installation package
-        id: findInstallationPackage        
+        id: findInstallationPackage
         run: |
           IFS=$'\n'
           echo dmprotocolPackageName=$(find _DataMinerInstallationPackage -type f -name '*.dmprotocol') >> $GITHUB_OUTPUT
           unset IFS
-        shell: bash  
+        shell: bash
+
       - name: Install .NET Tools
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 3.0.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom --prerelease
 
+      - name: Retrieve SBOM file
+        id: retrieveSbomFile
+        uses: actions/download-artifact@v4
+        with:
+          name: SBOM
+          path: _SBOM
+  
+      - name: Find SBOM file
+        id: findSbomFile
+        run: |
+          IFS=$'\n'
+          echo sbomFile=$(find _SBOM -type f -name '*.json') >> $GITHUB_OUTPUT
+          unset IFS
+        shell: bash
+  
+      - name: Add SBOM to package
+        run: |
+          dataminer-sbom add \
+          --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" \
+          --package-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}"
+  
       - name: Create or Extend Catalog.yml
         run: |
           github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
-        
+
       - name: Check if catalog.yml or manifest.yml exists
         id: check_files
         shell: pwsh

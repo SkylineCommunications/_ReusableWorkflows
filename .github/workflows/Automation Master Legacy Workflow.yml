@@ -367,53 +367,28 @@ jobs:
               nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
             }
           shell: pwsh
-  
+
         - name: NuGet restore solution
           run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
-  
+
         - name: Install .NET Tools
           run: |
             dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
-            dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --prerelease
-    
+
         - name: Create package name
           id: packageName
           run: |
             tempName="${{ inputs.repository }}"
             echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
           shell: bash
-    
+
         - name: Create dmapp package
           if: inputs.referenceType == 'tag'
           run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --version ${{ inputs.referenceName }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}" --debug "${{ inputs.debug }}"
-    
+
         - name: Create dmapp package
           if: inputs.referenceType != 'tag'
           run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --build-number ${{ inputs.runNumber }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}" --debug "${{ inputs.debug }}"
-
-        - name: Retrieve SBOM file
-          if: inputs.referenceType == 'tag'
-          id: retrieveSbomFile
-          uses: actions/download-artifact@v4
-          with:
-            name: SBOM
-            path: _SBOM
-
-        - name: Find SBOM file
-          if: inputs.referenceType == 'tag'
-          id: findSbomFile
-          run: |
-            IFS=$'\n'
-            echo sbomFile=$(find _SBOM -type f -name '*.json') >> $GITHUB_OUTPUT
-            unset IFS
-          shell: bash
-
-        - name: Add SBOM to package
-          if: inputs.referenceType == 'tag'
-          run: |
-            dataminer-sbom add `
-            --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" `
-            --package-file "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp"
 
         - uses: actions/upload-artifact@v4
           with:
@@ -588,12 +563,34 @@ jobs:
           echo dmappPackageName=$(find _DataMinerInstallationPackage -type f -name '*.dmapp') >> $GITHUB_OUTPUT
           unset IFS
         shell: bash
-        
+
       - name: Install .NET Tools
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 3.0.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
-  
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --prerelease
+
+      - name: Retrieve SBOM file
+        id: retrieveSbomFile
+        uses: actions/download-artifact@v4
+        with:
+            name: SBOM
+            path: _SBOM
+
+      - name: Find SBOM file
+        id: findSbomFile
+        run: |
+          IFS=$'\n'
+          echo sbomFile=$(find _SBOM -type f -name '*.json') >> $GITHUB_OUTPUT
+          unset IFS
+        shell: bash
+
+      - name: Add SBOM to package
+        run: |
+          dataminer-sbom add \
+          --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" \
+          --package-file "${{ steps.findInstallationPackage.outputs.dmappPackageName }}"
+
       - name: Create or Extend Catalog.yml
         run: |
           github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
