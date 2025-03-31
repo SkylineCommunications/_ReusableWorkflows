@@ -104,7 +104,7 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
-          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global
+          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --prerelease
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
@@ -436,7 +436,7 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom --prerelease
 
       - name: Find .sln file
         id: findSlnFile        
