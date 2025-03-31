@@ -275,7 +275,8 @@ jobs:
             --package-name "${{ steps.packageName.outputs.name }}" \
             --package-version "${{ inputs.referenceName }}" \
             --package-supplier "Skyline Communications" \
-            --output "${{ github.workspace }}/SBOM"
+            --output "${{ github.workspace }}/SBOM" \
+            --debug "${{ inputs.debug }}"
           done
 
       - uses: actions/upload-artifact@v4

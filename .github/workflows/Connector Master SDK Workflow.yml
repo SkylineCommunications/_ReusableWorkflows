@@ -160,7 +160,8 @@ jobs:
           --package-name "${{ steps.packageName.outputs.name }}" `
           --package-version "${{ inputs.referenceName }}" `
           --package-supplier "Skyline Communications" `
-          --output "${{ github.workspace }}/SBOM"
+          --output "${{ github.workspace }}/SBOM" `
+          --debug "${{ inputs.debug }}"
 
       - name: Upload SBOM file
         if: inputs.referenceType == 'tag'
@@ -601,7 +602,8 @@ jobs:
         run: |
           dataminer-sbom add \
           --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" \
-          --package-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}"
+          --package-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" \
+          --debug "${{ inputs.debug }}"
   
       - name: Create or Extend Catalog.yml
         run: |
