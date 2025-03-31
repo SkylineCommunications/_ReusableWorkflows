@@ -70,10 +70,11 @@ jobs:
           distribution: 'zulu'
  
       - name: Find .sln file
-        id: findSlnFile        
+        id: findSlnFile
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
+
       - name: Detect .csproj files
         id: detectCsprojFiles
         run: |
@@ -82,6 +83,12 @@ jobs:
           if($csprojFileCount -gt 0){ $result = "true" }
           Write-Output "csproj-file-present=$($result)" >> $Env:GITHUB_OUTPUT
         shell: pwsh
+        
+      - name: Install .NET Tools
+        run: |
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom
+
        # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
@@ -98,7 +105,7 @@ jobs:
             dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
           }
         shell: pwsh
-        
+
       - name: Enable Skyline Azure Cloud NuGet Registry
         env:
           AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
@@ -131,10 +138,36 @@ jobs:
           } else {
             Write-Host "Adding new source $SOURCE_NAME."
             dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
-          }      
+          }
 
       - name: Building
         run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
+
+      - name: Create package name
+        if: inputs.referenceType == 'tag'
+        id: packageName
+        run: |
+          $tempName = "${{ inputs.repository }}"
+          $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
+          echo "name=$safeName" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Generate SBOM file
+        if: inputs.referenceType == 'tag'
+        run: |
+          dataminer-sbom generate `
+          --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+          --package-name "${{ steps.packageName.outputs.name }}" `
+          --package-version "${{ inputs.referenceName }}" `
+          --package-supplier "Skyline Communications" `
+          --output "${{ github.workspace }}/SBOM"
+
+      - name: Upload SBOM file
+        if: inputs.referenceType == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SBOM
+          path: "${{ github.workspace }}/SBOM/*.json"
 
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
@@ -142,9 +175,6 @@ jobs:
         if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
         continue-on-error: true
-
-      - name: Install Connector Validator
-        run: dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator
   
       - name: Run Connector Validator
         run: dataminer-validator validate-protocol-solution --solution-path "${{ github.workspace }}" --output-directory "${{ github.workspace }}" --output-file-name "validateResults" --perform-restore false
@@ -385,8 +415,10 @@ jobs:
           echo "ref type" ${{ inputs.referenceType }}
           echo "repository" ${{ inputs.repository }}
 
-      - name: Install Package Creation
-        run: dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
+      - name: Install .NET Tools
+        run: |
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom
 
       - name: Find .sln file
         id: findSlnFile        
@@ -450,26 +482,18 @@ jobs:
       - name: NuGet restore solution
         run: dotnet restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
-#ON RELEASE OR PRE-RELEASE
-
       - name: Create package name
-        if: inputs.referenceType == 'tag'
-        id: packageNameRelease
+        id: packageName
         run: |
           tempName="${{ inputs.repository }}"
           echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
         shell: bash
 
+#ON RELEASE OR PRE-RELEASE
       - name: Create DMProtocol - Release
         if: inputs.referenceType == 'tag'
-        run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageNameRelease.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ inputs.referenceName  }}" --debug "${{ inputs.debug }}"
+        run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageName.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ inputs.referenceName  }}" --debug "${{ inputs.debug }}"
       
-      - uses: actions/upload-artifact@v4
-        if: inputs.referenceType == 'tag'
-        with:
-          name: Connector Package
-          path: "${{ github.workspace }}/${{ steps.packageNameRelease.outputs.name }}.dmprotocol"
-
 #ON BUILD
       - name: Find and extract Protocol Version
         if: inputs.referenceType != 'tag'
@@ -488,25 +512,40 @@ jobs:
           echo "PROTOCOL_VERSION=$protocol_version" >> $GITHUB_ENV
         shell: bash
 
-      - name: Create package name
-        if: inputs.referenceType != 'tag'
-        id: packageNameDevelopment
-        run: |
-          tempName="${{ inputs.repository }}"
-          echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
-        shell: bash
-
       - name: Create DMProtocol - Build
         if: inputs.referenceType != 'tag'
         run: |
-          dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageNameDevelopment.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}" --debug "${{ inputs.debug }}"
+          dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageName.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}" --debug "${{ inputs.debug }}"
         shell: bash
 
+      - name: Retrieve SBOM file
+        if: inputs.referenceType == 'tag'
+        id: retrieveSbomFile
+        uses: actions/download-artifact@v4
+        with:
+          name: SBOM
+          path: _SBOM
+
+      - name: Find SBOM file
+        if: inputs.referenceType == 'tag'
+        id: findSbomFile
+        run: |
+          IFS=$'\n'
+          echo sbomFile=$(find _SBOM -type f -name '*.json') >> $GITHUB_OUTPUT
+          unset IFS
+        shell: bash
+
+      - name: Add SBOM to package
+        if: inputs.referenceType == 'tag'
+        run: |
+          dataminer-sbom add `
+          --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" `
+          --package-file "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmprotocol"
+
       - uses: actions/upload-artifact@v4
-        if: inputs.referenceType != 'tag'
         with:
           name: Connector Package
-          path: "${{ github.workspace }}/${{ steps.packageNameDevelopment.outputs.name }}.dmprotocol"
+          path: "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmprotocol"
 
   artifact_registration:
     name: Artifact Registration and Upload

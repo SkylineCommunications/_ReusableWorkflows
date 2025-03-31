@@ -71,12 +71,13 @@ jobs:
         with:
           java-version: 17
           distribution: 'zulu'
- 
+
       - name: Find .sln file
-        id: findSlnFile        
+        id: findSlnFile
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
+
       - name: Detect .csproj files
         id: detectCsprojFiles
         run: |
@@ -85,6 +86,7 @@ jobs:
           if($csprojFileCount -gt 0){ $result = "true" }
           Write-Output "csproj-file-present=$($result)" >> $Env:GITHUB_OUTPUT
         shell: pwsh
+
         # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
         if: inputs.owner == 'SkylineCommunications'
@@ -101,7 +103,7 @@ jobs:
             dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
           }
         shell: pwsh
-        
+
       - name: Enable Skyline Azure Cloud NuGet Registry
         env:
           AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
@@ -136,9 +138,39 @@ jobs:
             dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
           }
 
+      - name: Install .NET Tools
+        run: |
+          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global
+
       - name: Building
         if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
+
+      - name: Create package name
+        if: inputs.referenceType == 'tag'
+        id: packageName
+        run: |
+          $tempName = "${{ inputs.repository }}"
+          $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
+          echo "name=$safeName" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Generate SBOM file
+        if: inputs.referenceType == 'tag'
+        run: |
+          dataminer-sbom generate `
+          --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+          --package-name "${{ steps.packageName.outputs.name }}" `
+          --package-version "${{ inputs.referenceName }}" `
+          --package-supplier "Skyline Communications" `
+          --output "${{ github.workspace }}/SBOM"
+
+      - name: Upload SBOM file
+        if: inputs.referenceType == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SBOM
+          path: "${{ github.workspace }}/SBOM/*.json"
 
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
@@ -293,6 +325,7 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom
   
       - name: Create package name
         id: packageName
@@ -309,6 +342,30 @@ jobs:
         if: inputs.referenceType != 'tag'
         run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --build-number ${{ inputs.runNumber }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}" --debug "${{ inputs.debug }}"
   
+      - name: Retrieve SBOM file
+        if: inputs.referenceType == 'tag'
+        id: retrieveSbomFile
+        uses: actions/download-artifact@v4
+        with:
+          name: SBOM
+          path: _SBOM
+
+      - name: Find SBOM file
+        if: inputs.referenceType == 'tag'
+        id: findSbomFile
+        run: |
+          IFS=$'\n'
+          echo sbomFile=$(find _SBOM -type f -name '*.json') >> $GITHUB_OUTPUT
+          unset IFS
+        shell: bash
+
+      - name: Add SBOM to package
+        if: inputs.referenceType == 'tag'
+        run: |
+          dataminer-sbom add `
+          --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" `
+          --package-file "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp"
+
       - uses: actions/upload-artifact@v4
         with:
           name: DataMiner Installation Package
@@ -472,14 +529,15 @@ jobs:
         with:
           name: DataMiner Installation Package
           path: _DataMinerInstallationPackage
-          
+
       - name: Find Installation package
-        id: findInstallationPackage        
+        id: findInstallationPackage
         run: |
           IFS=$'\n'
           echo dmappPackageName=$(find _DataMinerInstallationPackage -type f -name '*.dmapp') >> $GITHUB_OUTPUT
           unset IFS
-        shell: bash  
+        shell: bash
+
       - name: Install .NET Tools
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 3.0.*
