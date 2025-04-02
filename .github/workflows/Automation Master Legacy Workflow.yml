@@ -101,8 +101,10 @@ jobs:
         run: |
           dotnet tool install --tool-path .\.tools\TestProjectDetector Skyline.DataMiner.CICD.Tools.TestProjectDetector
 
-      - name: Install NuGetPackageConfigDetector
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
+      - name: Install .NET Tools
+        run: | 
+          dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
+          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.0.*
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
@@ -184,6 +186,33 @@ jobs:
       - name: Building
         run: msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release  "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m # /verbosity:minimal
 
+      - name: Create package name
+        if: inputs.referenceType == 'tag'
+        id: packageName
+        run: |
+          $tempName = "${{ inputs.repository }}"
+          $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
+          echo "name=$safeName" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Generate SBOM file
+        if: inputs.referenceType == 'tag'
+        run: |
+          dataminer-sbom generate `
+           --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+           --package-name "${{ steps.packageName.outputs.name }}" `
+           --package-version "${{ inputs.referenceName }}" `
+           --package-supplier "Skyline Communications" `
+           --output "${{ github.workspace }}/SBOM" `
+           --debug "${{ inputs.debug }}"
+
+      - name: Upload SBOM file
+        if: inputs.referenceType == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SBOM
+          path: "${{ github.workspace }}/SBOM/*.json"
+
       - name: Run Test Project Detector
         id: detect-unit-tests
         run: |
@@ -209,18 +238,6 @@ jobs:
         if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
         run: nuget install OpenCover -OutputDirectory ".\.dotcover"
         
-      # - name: Test Error
-      #   if: fromJson(steps.detect-unit-tests.outputs.testProjectDetectionOutput).Error == null
-      #   run: |
-      #     echo "No errors found"
-      # - name: Output detected unit tests
-      #   run: |
-      #     echo ${{ env.detected-unit-tests }}
-        #if: steps.detected-unit-tests.outputs.testProjectDetectionOutput != ""
-        #  echo "Detected tests Test: " ${{ steps.detect-unit-tests.outputs.testProjectDetectionOutputTest }}
-        #  echo "Detected tests Test json: " ${{ steps.detect-unit-tests.outputs.testProjectDetectionOutputTestJson }}
-        #shell: cmd
-
       - name: Unit Tests
         id: unit-tests
         if: env.detected-unit-tests != 'none' && env.detected-unit-tests != ''
@@ -351,29 +368,29 @@ jobs:
               nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
             }
           shell: pwsh
-  
+
         - name: NuGet restore solution
           run: nuget restore "${{ steps.findSlnFile.outputs.solutionFilePath }}"
-  
+
         - name: Install .NET Tools
           run: |
             dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
-    
+
         - name: Create package name
           id: packageName
           run: |
             tempName="${{ inputs.repository }}"
             echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
           shell: bash
-    
+
         - name: Create dmapp package
           if: inputs.referenceType == 'tag'
           run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --version ${{ inputs.referenceName }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}" --debug "${{ inputs.debug }}"
-    
+
         - name: Create dmapp package
           if: inputs.referenceType != 'tag'
           run: dataminer-package-create dmapp "${{ github.workspace }}" --type automation --build-number ${{ inputs.runNumber }} --output "${{ github.workspace }}" --name "${{ steps.packageName.outputs.name }}" --debug "${{ inputs.debug }}"
-    
+
         - uses: actions/upload-artifact@v4
           with:
             name: DataMiner Installation Package
@@ -546,13 +563,36 @@ jobs:
           IFS=$'\n'
           echo dmappPackageName=$(find _DataMinerInstallationPackage -type f -name '*.dmapp') >> $GITHUB_OUTPUT
           unset IFS
-        shell: bash  
-        
+        shell: bash
+
       - name: Install .NET Tools
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 3.0.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
-  
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
+
+      - name: Retrieve SBOM file
+        id: retrieveSbomFile
+        uses: actions/download-artifact@v4
+        with:
+            name: SBOM
+            path: _SBOM
+
+      - name: Find SBOM file
+        id: findSbomFile
+        run: |
+          IFS=$'\n'
+          echo sbomFile=$(find _SBOM -type f -name '*.json') >> $GITHUB_OUTPUT
+          unset IFS
+        shell: bash
+
+      - name: Add SBOM to package
+        run: |
+          dataminer-sbom add \
+          --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" \
+          --package-file "${{ steps.findInstallationPackage.outputs.dmappPackageName }}" \
+          --debug "${{ inputs.debug }}"
+
       - name: Create or Extend Catalog.yml
         run: |
           github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
