@@ -104,7 +104,7 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
-          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --prerelease
+          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.0.*
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
@@ -599,7 +599,7 @@ jobs:
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 3.0.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom --prerelease
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
 
       - name: Retrieve SBOM file
         id: retrieveSbomFile
