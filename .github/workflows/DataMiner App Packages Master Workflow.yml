@@ -150,6 +150,7 @@ jobs:
       - name: Install Tools
         run: |
           dotnet tool install dotnet-sonarscanner --global
+          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.0.*
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
@@ -253,6 +254,29 @@ jobs:
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
+
+      - name: Create package name
+        if: inputs.referenceType == 'tag'
+        id: packageName
+        run: |
+          $tempName = "${{ inputs.repository }}"
+          $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
+          echo "name=$safeName" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Generate SBOM file
+        if: inputs.referenceType == 'tag'
+        run: |
+          for file in $(find . -type f -name "*.dmapp"); do
+            echo "Generating SBOM for $file"
+            dataminer-sbom generate-and-add \
+            --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" \
+            --package-file "$file" \
+            --package-name "${{ steps.packageName.outputs.name }}" \
+            --package-version "${{ inputs.referenceName }}" \
+            --package-supplier "Skyline Communications" \
+            --debug "${{ inputs.debug }}"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
