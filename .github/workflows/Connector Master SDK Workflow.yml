@@ -11,7 +11,7 @@ on:
       #artifact-id-release: 
       artifact-id: 
         description: "Artifact ID of uploaded Package if successful."
-        value: ${{ jobs.artifact_creation_registration.outputs.artifact-id }}
+        value: ${{ jobs.artifact_registration.outputs.artifact-id }}
       # artifact-id-development: 
       #   description: "Artifact ID of dev uploaded Package if successful."
     inputs:
