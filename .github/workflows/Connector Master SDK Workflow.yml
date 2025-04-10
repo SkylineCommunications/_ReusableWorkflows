@@ -632,6 +632,8 @@ jobs:
 
       - name: Upload to Catalog
         id: uploadToCatalog
+        env:
+          CICDIsForSkyline: "${{ inputs.owner == 'SkylineCommunications' }}"
         run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }} --debug "${{ inputs.debug }}")" >> $GITHUB_OUTPUT
 
       - name: (Release) Set artifact Id
