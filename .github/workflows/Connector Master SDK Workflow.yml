@@ -152,23 +152,23 @@ jobs:
           echo "name=$safeName" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
-      - name: Generate SBOM file
-        if: inputs.referenceType == 'tag'
-        run: |
-          dataminer-sbom generate `
-          --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
-          --package-name "${{ steps.packageName.outputs.name }}" `
-          --package-version "${{ inputs.referenceName }}" `
-          --package-supplier "Skyline Communications" `
-          --output "${{ github.workspace }}/SBOM" `
-          --debug "${{ inputs.debug }}"
+      # - name: Generate SBOM file
+      #   if: inputs.referenceType == 'tag'
+      #   run: |
+      #     dataminer-sbom generate `
+      #     --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+      #     --package-name "${{ steps.packageName.outputs.name }}" `
+      #     --package-version "${{ inputs.referenceName }}" `
+      #     --package-supplier "Skyline Communications" `
+      #     --output "${{ github.workspace }}/SBOM" `
+      #     --debug "${{ inputs.debug }}"
 
-      - name: Upload SBOM file
-        if: inputs.referenceType == 'tag'
-        uses: actions/upload-artifact@v4
-        with:
-          name: SBOM
-          path: "${{ github.workspace }}/SBOM/*.json"
+      # - name: Upload SBOM file
+      #   if: inputs.referenceType == 'tag'
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: SBOM
+      #     path: "${{ github.workspace }}/SBOM/*.json"
 
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
@@ -583,27 +583,27 @@ jobs:
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
           dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
 
-      - name: Retrieve SBOM file
-        id: retrieveSbomFile
-        uses: actions/download-artifact@v4
-        with:
-          name: SBOM
-          path: _SBOM
+      # - name: Retrieve SBOM file
+      #   id: retrieveSbomFile
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: SBOM
+      #     path: _SBOM
   
-      - name: Find SBOM file
-        id: findSbomFile
-        run: |
-          IFS=$'\n'
-          echo sbomFile=$(find _SBOM -type f -name '*.json') >> $GITHUB_OUTPUT
-          unset IFS
-        shell: bash
+      # - name: Find SBOM file
+      #   id: findSbomFile
+      #   run: |
+      #     IFS=$'\n'
+      #     echo sbomFile=$(find _SBOM -type f -name '*.json') >> $GITHUB_OUTPUT
+      #     unset IFS
+      #   shell: bash
   
-      - name: Add SBOM to package
-        run: |
-          dataminer-sbom add \
-          --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" \
-          --package-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" \
-          --debug "${{ inputs.debug }}"
+      # - name: Add SBOM to package
+      #   run: |
+      #     dataminer-sbom add \
+      #     --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" \
+      #     --package-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" \
+      #     --debug "${{ inputs.debug }}"
   
       - name: Create or Extend Catalog.yml
         run: |
