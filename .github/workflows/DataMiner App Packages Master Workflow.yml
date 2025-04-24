@@ -264,19 +264,19 @@ jobs:
           echo "name=$safeName" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
-      # - name: Generate SBOM file
-      #   if: inputs.referenceType == 'tag'
-      #   run: |
-      #     find . -type f -name "*.dmapp" -print0 | while IFS= read -r -d '' file; do
-      #       echo "Generating SBOM for $file"
-      #       dataminer-sbom generate-and-add \
-      #         --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" \
-      #         --package-file "$file" \
-      #         --package-name "${{ steps.packageName.outputs.name }}" \
-      #         --package-version "${{ inputs.referenceName }}" \
-      #         --package-supplier "Skyline Communications" \
-      #         --debug "${{ inputs.debug }}"
-      #     done
+      - name: Generate SBOM file
+        if: inputs.referenceType == 'tag'
+        run: |
+          find . -type f -name "*.dmapp" -print0 | while IFS= read -r -d '' file; do
+            echo "Generating SBOM for $file"
+            dataminer-sbom generate-and-add \
+              --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" \
+              --package-file "$file" \
+              --package-name "${{ steps.packageName.outputs.name }}" \
+              --package-version "${{ inputs.referenceName }}" \
+              --package-supplier "Skyline Communications" \
+              --debug "${{ inputs.debug }}"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
