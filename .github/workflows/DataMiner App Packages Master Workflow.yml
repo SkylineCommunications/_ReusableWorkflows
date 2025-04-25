@@ -179,6 +179,31 @@ jobs:
         continue-on-error: false
         shell: bash
 
+      - name: Apply SourceCode Url To Manifest
+        run: |      
+          $manifestFiles = Get-ChildItem -Recurse -Filter 'manifest.yml' |
+              Where-Object { $_.FullName -match '[\\/]CatalogInformation[\\/]' }
+      
+          foreach ($file in $manifestFiles) {
+              $lines = Get-Content -Path $file.FullName
+              $updated = $false
+      
+              for ($i = 0; $i -lt $lines.Count; $i++) {
+                  if ($lines[$i] -match '^\s*source_code_url:\s*$') {
+                      $indent = ($lines[$i] -match '^(\s*)source_code_url:')[1]
+                      $lines[$i] = "$indent" + "source_code_url: 'https://github.com/${{ inputs.repository }}'"
+                      $updated = $true
+                      break
+                  }
+              }
+      
+              if ($updated) {
+                  Write-Host "Updating: $($file.FullName) with 'source_code_url: https://github.com/${{ inputs.repository }}'"
+                  Set-Content -Path $file.FullName -Value $lines -Encoding UTF8
+              }
+          }
+        shell: pwsh
+
       - name: Trigger Initial Analysis
         if: ${{ fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status == 'NONE' }}
         env:
