@@ -179,7 +179,7 @@ jobs:
         continue-on-error: false
         shell: bash
 
-      - name: UpdateSourceCodeUrl
+      - name: Apply SourceCode Url To Manifest
         run: |      
           $manifestFiles = Get-ChildItem -Recurse -Filter 'manifest.yml' |
               Where-Object { $_.FullName -match '[\\/]CatalogInformation[\\/]' }
@@ -191,7 +191,7 @@ jobs:
               for ($i = 0; $i -lt $lines.Count; $i++) {
                   if ($lines[$i] -match '^\s*source_code_url:\s*$') {
                       $indent = ($lines[$i] -match '^(\s*)source_code_url:')[1]
-                      $lines[$i] = "$indent" + "source_code_url: https://github.com/${{ inputs.repository }}"
+                      $lines[$i] = "$indent" + "source_code_url: 'https://github.com/${{ inputs.repository }}'"
                       $updated = $true
                       break
                   }
