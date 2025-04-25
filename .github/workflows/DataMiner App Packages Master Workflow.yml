@@ -198,7 +198,7 @@ jobs:
               }
       
               if ($updated) {
-                  Write-Host "Updating: $($file.FullName) with 'source_code_url: https://github.com/${{ inputs.repository }}"'
+                  Write-Host "Updating: $($file.FullName) with 'source_code_url: https://github.com/${{ inputs.repository }}'"
                   Set-Content -Path $file.FullName -Value $lines -Encoding UTF8
               }
           }
