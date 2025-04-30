@@ -8,12 +8,6 @@ on:
       quality_gate: 
         description: "Results from Skyline Quality Gate."
         value: ${{ jobs.validate_skyline_quality_gate.outputs.quality }}
-      #artifact-id-release: 
-      artifact-id: 
-        description: "Artifact ID of uploaded Package if successful."
-        value: ${{ jobs.artifact_registration.outputs.artifact-id }}
-      # artifact-id-development: 
-      #   description: "Artifact ID of dev uploaded Package if successful."
     inputs:
       referenceName:
         required: true
@@ -399,11 +393,6 @@ jobs:
   artifact_creation:
     name: Artifact Creation
     runs-on: ubuntu-latest
-    env:
-      result-artifact-id: none
-    outputs:
-      artifact-id: ${{ env.result-artifact-id }}
-
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
@@ -527,10 +516,6 @@ jobs:
     if: inputs.referenceType == 'tag'
     runs-on: ubuntu-latest
     needs: [validate_skyline_quality_gate,artifact_creation]
-    env:
-      result-artifact-id: none
-    outputs:
-      artifact-id: ${{ env.result-artifact-id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -634,7 +619,4 @@ jobs:
         id: uploadToCatalog
         env:
           CICDIsForSkyline: "${{ inputs.owner == 'SkylineCommunications' }}"
-        run: echo "id=$(dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }} --debug "${{ inputs.debug }}")" >> $GITHUB_OUTPUT
-
-      - name: (Release) Set artifact Id
-        run: echo "result-artifact-id=${{ steps.uploadToCatalog.outputs.id }}" >> $GITHUB_ENV
+        run: dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }} --debug "${{ inputs.debug }}"
