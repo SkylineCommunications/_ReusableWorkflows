@@ -80,8 +80,8 @@ jobs:
         
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --prerelease
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --prerelease
 
        # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
       - name: Enable Skyline GitHub NuGet Registry
@@ -341,7 +341,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --prerelease
 
       - name: Create or Extend Catalog.yml
         run: |
@@ -407,7 +407,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --prerelease
 
       - name: Find .sln file
         id: findSlnFile        
@@ -564,9 +564,9 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 4.0.*
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --prerelease
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --prerelease
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom --prerelease
 
       - name: Retrieve SBOM file
         id: retrieveSbomFile

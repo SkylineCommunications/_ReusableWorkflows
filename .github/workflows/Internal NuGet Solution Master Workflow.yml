@@ -62,13 +62,13 @@ jobs:
           distribution: 'zulu'
 
       - name: Install NuGetToggleOnBuild
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetToggleOnBuild --global
+        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetToggleOnBuild --global --prerelease
 
       - name: Install NuGetPreBuildApplyBranchOrTag
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPreBuildApplyBranchOrTag --global
+        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPreBuildApplyBranchOrTag --global --prerelease
 
       - name: Install NuGetValidateSkylineSpecifications
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetValidateSkylineSpecifications --global
+        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetValidateSkylineSpecifications --global --prerelease
 
       - name: Find .sln file
         id: findSlnFile        
