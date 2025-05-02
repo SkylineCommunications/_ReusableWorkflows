@@ -8,9 +8,6 @@ on:
       quality_gate: 
         description: "Results from Skyline Quality Gate."
         value: ${{ jobs.CI_SDK.outputs.quality_gate }}${{ jobs.CI_Legacy.outputs.quality_gate }}
-      artifact-id: 
-        description: "Artifact ID of uploaded Package if successful."
-        value: ${{ jobs.CI_SDK.outputs.artifact-id }}${{ jobs.CI_Legacy.outputs.artifact-id }}
     inputs:
       referenceName:
         required: true
