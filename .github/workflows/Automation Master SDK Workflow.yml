@@ -506,7 +506,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 3.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 4.0.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
 
@@ -558,7 +558,6 @@ jobs:
           path: "${{ github.workspace }}/${{ env.catalogDetails }}"
 
       - name: Upload to Catalog
-        id: uploadToCatalog
         env:
           CICDIsForSkyline: "${{ inputs.owner == 'SkylineCommunications' }}"
         run: dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmappPackageName }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }} --debug "${{ inputs.debug }}"

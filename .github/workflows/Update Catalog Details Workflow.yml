@@ -23,7 +23,7 @@ jobs:
                        
         - name: Install .NET Tools
           run: |
-            dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 3.0.*
+            dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 4.0.*
             dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
         
         - name: Create or Extend Catalog.yml
@@ -74,7 +74,6 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
         - name: Upload to Catalog
-          id: uploadToCatalog
           shell: pwsh
           run: |
             dataminer-catalog-upload update-catalog-details `
