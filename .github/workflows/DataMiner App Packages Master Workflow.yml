@@ -56,13 +56,6 @@ jobs:
   skyline_cicd:
     name: Skyline CICD
     runs-on: ubuntu-latest
-    env:
-      SIGNING_CLIENT_ID: ${{ steps.signing_secrets.outputs.signing-client-id }}
-      SIGNING_CLIENT_SECRET: ${{ steps.signing_secrets.outputs.signing-client-secret }}
-      SIGNING_KEY_VAULT_CERTIFICATE: ${{ steps.signing_secrets.outputs.signing-key-vault-certificate }}
-      SIGNING_KEY_VAULT_URL: ${{ steps.signing_secrets.outputs.signing-key-vault-url }}
-      SIGNING_TENANT_ID: ${{ steps.signing_secrets.outputs.signing-tenant-id }}
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,7 +81,7 @@ jobs:
             echo "client-id=${{ inputs.oidc-client-id }}" >> $GITHUB_OUTPUT
             echo "tenant-id=${{ inputs.oidc-tenant-id }}" >> $GITHUB_OUTPUT
             echo "subscription-id=${{ inputs.oidc-subscription-id }}" >> $GITHUB_OUTPUT
-          elif [ "${{ inputs.owner }}" == "SkylineCommunications" ]; then
+          elsif [ "${{ inputs.owner }}" == "SkylineCommunications" ]; then
             echo "Using SkylineCommunications default OIDC parameters"
             echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53" >> $GITHUB_OUTPUT
             echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40" >> $GITHUB_OUTPUT
@@ -116,13 +109,16 @@ jobs:
           signing_key_vault_url=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-key-vault-url --query value -o tsv)
           signing_tenant_id=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-tenant-id --query value -o tsv)
 
+          # Mask sensitive secrets
           echo "::add-mask::$signing_client_secret"
 
-          echo "signing-client-id=${signing_client_id}" >> $GITHUB_OUTPUT
-          echo "signing-client-secret=${signing_client_secret}" >> $GITHUB_OUTPUT
-          echo "signing-key-vault-certificate=${signing_key_vault_certificate}" >> $GITHUB_OUTPUT
-          echo "signing-key-vault-url=${signing_key_vault_url}" >> $GITHUB_OUTPUT
-          echo "signing-tenant-id=${signing_tenant_id}" >> $GITHUB_OUTPUT
+          # Export them as environment variables for the rest of the job
+          echo "SIGNING_CLIENT_ID=$signing_client_id" >> $GITHUB_ENV
+          echo "SIGNING_CLIENT_SECRET=$signing_client_secret" >> $GITHUB_ENV
+          echo "SIGNING_KEY_VAULT_CERTIFICATE=$signing_key_vault_certificate" >> $GITHUB_ENV
+          echo "SIGNING_KEY_VAULT_URL=$signing_key_vault_url" >> $GITHUB_ENV
+          echo "SIGNING_TENANT_ID=$signing_tenant_id" >> $GITHUB_ENV
+
 
       - name: DebugShowSecrets
         id: log_secrets
