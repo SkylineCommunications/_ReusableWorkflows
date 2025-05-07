@@ -116,6 +116,8 @@ jobs:
           signing_key_vault_url=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-key-vault-url --query value -o tsv)
           signing_tenant_id=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-tenant-id --query value -o tsv)
 
+          echo "::add-mask::$signing_client_secret"
+
           echo "signing-client-id=${signing_client_id}" >> $GITHUB_OUTPUT
           echo "signing-client-secret=${signing_client_secret}" >> $GITHUB_OUTPUT
           echo "signing-key-vault-certificate=${signing_key_vault_certificate}" >> $GITHUB_OUTPUT
@@ -128,9 +130,6 @@ jobs:
           echo "Showing secrets from Azure Key Vault..."
           echo "Signing Client ID is $SIGNING_CLIENT_ID"
           echo "Signing Client Secret is $SIGNING_CLIENT_SECRET"
-          echo "Signing Key Vault Certificate is $SIGNING_KEY_VAULT_CERTIFICATE"
-          echo "Signing Key Vault URL is $SIGNING_KEY_VAULT_URL"
-          echo "Signing Tenant ID is $SIGNING_TENANT_ID"
 
       - name: Validate SonarCloud Project Name
         id: validate-sonar-name
