@@ -32,6 +32,15 @@ on:
       debug:
         required: false
         type: boolean
+      oidc-client-id:
+        required: false
+        type: string
+      oidc-tenant-id:
+        required: false
+        type: string
+      oidc-subscription-id:
+        required: false
+        type: string
     secrets:
       sonarCloudToken:
         required: true
@@ -47,6 +56,13 @@ jobs:
   skyline_cicd:
     name: Skyline CICD
     runs-on: ubuntu-latest
+    env:
+      SIGNING_CLIENT_ID: ${{ steps.signing_secrets.outputs.signing-client-id }}
+      SIGNING_CLIENT_SECRET: ${{ steps.signing_secrets.outputs.signing-client-secret }}
+      SIGNING_KEY_VAULT_CERTIFICATE: ${{ steps.signing_secrets.outputs.signing-key-vault-certificate }}
+      SIGNING_KEY_VAULT_URL: ${{ steps.signing_secrets.outputs.signing-key-vault-url }}
+      SIGNING_TENANT_ID: ${{ steps.signing_secrets.outputs.signing-tenant-id }}
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,7 +77,61 @@ jobs:
         uses: awalsh128/cache-apt-pkgs-action@v1.5.0
         with:
           packages: mono-complete
-        
+
+      - name: Set Azure OIDC parameters
+        id: set_oidc
+        run: |
+          echo "Determining Azure OIDC parameters..."
+
+          if [ "${{ inputs.oidc-client-id }}" != "" ]; then
+            echo "Using provided OIDC parameters"
+            echo "client-id=${{ inputs.oidc-client-id }}" >> $GITHUB_OUTPUT
+            echo "tenant-id=${{ inputs.oidc-tenant-id }}" >> $GITHUB_OUTPUT
+            echo "subscription-id=${{ inputs.oidc-subscription-id }}" >> $GITHUB_OUTPUT
+          elif [ "${{ inputs.owner }}" == "SkylineCommunications" ]; then
+            echo "Using SkylineCommunications default OIDC parameters"
+            echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53" >> $GITHUB_OUTPUT
+            echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40" >> $GITHUB_OUTPUT
+            echo "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220" >> $GITHUB_OUTPUT
+          else
+            echo "No OIDC parameters provided and owner does not match SkylineCommunications"
+            exit 1
+          fi
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ steps.set_oidc.outputs.client-id }}
+          tenant-id: ${{ steps.set_oidc.outputs.tenant-id }}
+          subscription-id: ${{ steps.set_oidc.outputs.subscription-id }}
+    
+      - name: Retrieve signing secrets from Azure Key Vault
+        id: signing_secrets
+        run: |
+          echo "Fetching secrets from Azure Key Vault..."
+
+          signing_client_id=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-client-id --query value -o tsv)
+          signing_client_secret=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-client-secret --query value -o tsv)
+          signing_key_vault_certificate=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-key-vault-certificate --query value -o tsv)
+          signing_key_vault_url=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-key-vault-url --query value -o tsv)
+          signing_tenant_id=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-tenant-id --query value -o tsv)
+
+          echo "signing-client-id=${signing_client_id}" >> $GITHUB_OUTPUT
+          echo "signing-client-secret=${signing_client_secret}" >> $GITHUB_OUTPUT
+          echo "signing-key-vault-certificate=${signing_key_vault_certificate}" >> $GITHUB_OUTPUT
+          echo "signing-key-vault-url=${signing_key_vault_url}" >> $GITHUB_OUTPUT
+          echo "signing-tenant-id=${signing_tenant_id}" >> $GITHUB_OUTPUT
+
+      - name: DebugShowSecrets
+        id: log_secrets
+        run: |
+          echo "Showing secrets from Azure Key Vault..."
+          echo "Signing Client ID is $SIGNING_CLIENT_ID"
+          echo "Signing Client Secret is $SIGNING_CLIENT_SECRET"
+          echo "Signing Key Vault Certificate is $SIGNING_KEY_VAULT_CERTIFICATE"
+          echo "Signing Key Vault URL is $SIGNING_KEY_VAULT_URL"
+          echo "Signing Tenant ID is $SIGNING_TENANT_ID"
+
       - name: Validate SonarCloud Project Name
         id: validate-sonar-name
         run: |
