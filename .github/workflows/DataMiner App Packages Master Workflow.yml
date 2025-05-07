@@ -3,7 +3,7 @@ name: DataMiner App Packages
 permissions:
   id-token: write
   contents: read
-  
+
 # Controls when the workflow will run
 on:
   # Allows you to run this workflow from another workflow
@@ -86,16 +86,18 @@ jobs:
               "client-id=${{ inputs.oidc-client-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
               "tenant-id=${{ inputs.oidc-tenant-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
               "subscription-id=${{ inputs.oidc-subscription-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "use-oidc=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
           elseif ("${{ inputs.owner }}" -eq "SkylineCommunications") {
               Write-Output "Using SkylineCommunications default OIDC parameters"
               "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
               "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
               "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "use-oidc=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
           else {
               Write-Output "No OIDC parameters provided and owner does not match SkylineCommunications"
-              exit 1
+              "use-oidc=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
 
       - name: Azure Login
@@ -111,28 +113,28 @@ jobs:
         run: |
           Write-Output "Fetching secrets from Azure Key Vault..."
 
-          $signing_client_id = az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-client-id --query value -o tsv
-          $signing_client_secret = az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-client-secret --query value -o tsv
-          $signing_key_vault_certificate = az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-key-vault-certificate --query value -o tsv
-          $signing_key_vault_url = az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-key-vault-url --query value -o tsv
-          $signing_tenant_id = az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-tenant-id --query value -o tsv
+          # List of secret names
+          $secretNames = @(
+            "signing-client-id",              # SIGNING_CLIENT_ID
+            "signing-client-secret",          # SIGNING_CLIENT_SECRET
+            "signing-key-vault-certificate",  # SIGNING_KEY_VAULT_CERTIFICATE
+            "signing-key-vault-url",          # SIGNING_KEY_VAULT_URL
+            "signing-tenant-id"               # SIGNING_TENANT_ID
+          )
 
-          # Mask sensitive secrets
-          Write-Output "::add-mask::$signing_client_secret"
+          foreach ($secretName in $secretNames) {
+            # Retrieve secret value
+            $secretValue = az keyvault secret show --vault-name kv-master-cicd-secrets --name $secretName --query value -o tsv
 
-          # Export them as environment variables for the rest of the job
-          "SIGNING_CLIENT_ID=$signing_client_id" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "SIGNING_CLIENT_SECRET=$signing_client_secret" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "SIGNING_KEY_VAULT_CERTIFICATE=$signing_key_vault_certificate" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "SIGNING_KEY_VAULT_URL=$signing_key_vault_url" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "SIGNING_TENANT_ID=$signing_tenant_id" | Out-File -FilePath $env:GITHUB_ENV -Append
+            # Mask secret value
+            Write-Output "::add-mask::$secretValue"
 
-      - name: DebugShowSecrets
-        id: log_secrets
-        run: |
-          echo "Showing secrets from Azure Key Vault..."
-          echo "Signing Client ID is $SIGNING_CLIENT_ID"
-          echo "Signing Client Secret is $SIGNING_CLIENT_SECRET"
+            # Convert secret name to environment variable format (uppercase + replace hyphens with underscores)
+            $envVarName = $secretName.ToUpper().Replace("-", "_")
+
+            # Export as environment variable
+            "$envVarName=$secretValue" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
 
       - name: Validate SonarCloud Project Name
         id: validate-sonar-name
@@ -374,6 +376,33 @@ jobs:
               --package-supplier "Skyline Communications" \
               --debug "${{ inputs.debug }}"
           done
+
+      - name: Sign generated dmapp packages
+        if: steps.set_oidc.outputs.use-oidc == 'true'
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
+        run: |
+          Write-Output "Locating .dmapp files in bin folders..."
+
+          # Get all .dmapp files in bin or subfolders of bin
+          $dmappFiles = Get-ChildItem -Path "**/bin" -Recurse -Filter *.dmapp
+
+          if ($dmappFiles.Count -eq 0) {
+              Write-Output "No .dmapp files found."
+          }
+
+          foreach ($file in $dmappFiles) {
+              # Get the parent folder path
+              $parentPath = $file.Directory.FullName
+
+              Write-Output "Signing .dmapp in: $parentPath"
+
+              # Execute the signing command
+              dataminer-package-signature sign -kvu $env:SIGNING_KEY_VAULT_URL -kvc $env:SIGNING_KEY_VAULT_CERTIFICATE -o $parentPath
+          }
 
       - uses: actions/upload-artifact@v4
         with:
