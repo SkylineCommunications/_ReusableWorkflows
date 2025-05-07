@@ -73,23 +73,26 @@ jobs:
 
       - name: Set Azure OIDC parameters
         id: set_oidc
+        shell: pwsh
         run: |
-          echo "Determining Azure OIDC parameters..."
+          Write-Output "Determining Azure OIDC parameters..."
 
-          if [ "${{ inputs.oidc-client-id }}" != "" ]; then
-            echo "Using provided OIDC parameters"
-            echo "client-id=${{ inputs.oidc-client-id }}" >> $GITHUB_OUTPUT
-            echo "tenant-id=${{ inputs.oidc-tenant-id }}" >> $GITHUB_OUTPUT
-            echo "subscription-id=${{ inputs.oidc-subscription-id }}" >> $GITHUB_OUTPUT
-          elsif [ "${{ inputs.owner }}" == "SkylineCommunications" ]; then
-            echo "Using SkylineCommunications default OIDC parameters"
-            echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53" >> $GITHUB_OUTPUT
-            echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40" >> $GITHUB_OUTPUT
-            echo "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220" >> $GITHUB_OUTPUT
-          else
-            echo "No OIDC parameters provided and owner does not match SkylineCommunications"
-            exit 1
-          fi
+          if ("${{ inputs.oidc-client-id }}" -ne "") {
+              Write-Output "Using provided OIDC parameters"
+              "client-id=${{ inputs.oidc-client-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "tenant-id=${{ inputs.oidc-tenant-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "subscription-id=${{ inputs.oidc-subscription-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+          elseif ("${{ inputs.owner }}" -eq "SkylineCommunications") {
+              Write-Output "Using SkylineCommunications default OIDC parameters"
+              "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+          else {
+              Write-Output "No OIDC parameters provided and owner does not match SkylineCommunications"
+              exit 1
+          }
 
       - name: Azure Login
         uses: azure/login@v2
@@ -97,28 +100,28 @@ jobs:
           client-id: ${{ steps.set_oidc.outputs.client-id }}
           tenant-id: ${{ steps.set_oidc.outputs.tenant-id }}
           subscription-id: ${{ steps.set_oidc.outputs.subscription-id }}
-    
+
       - name: Retrieve signing secrets from Azure Key Vault
         id: signing_secrets
+        shell: pwsh
         run: |
-          echo "Fetching secrets from Azure Key Vault..."
+          Write-Output "Fetching secrets from Azure Key Vault..."
 
-          signing_client_id=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-client-id --query value -o tsv)
-          signing_client_secret=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-client-secret --query value -o tsv)
-          signing_key_vault_certificate=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-key-vault-certificate --query value -o tsv)
-          signing_key_vault_url=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-key-vault-url --query value -o tsv)
-          signing_tenant_id=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-tenant-id --query value -o tsv)
+          $signing_client_id = az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-client-id --query value -o tsv
+          $signing_client_secret = az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-client-secret --query value -o tsv
+          $signing_key_vault_certificate = az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-key-vault-certificate --query value -o tsv
+          $signing_key_vault_url = az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-key-vault-url --query value -o tsv
+          $signing_tenant_id = az keyvault secret show --vault-name kv-master-cicd-secrets --name signing-tenant-id --query value -o tsv
 
           # Mask sensitive secrets
-          echo "::add-mask::$signing_client_secret"
+          Write-Output "::add-mask::$signing_client_secret"
 
           # Export them as environment variables for the rest of the job
-          echo "SIGNING_CLIENT_ID=$signing_client_id" >> $GITHUB_ENV
-          echo "SIGNING_CLIENT_SECRET=$signing_client_secret" >> $GITHUB_ENV
-          echo "SIGNING_KEY_VAULT_CERTIFICATE=$signing_key_vault_certificate" >> $GITHUB_ENV
-          echo "SIGNING_KEY_VAULT_URL=$signing_key_vault_url" >> $GITHUB_ENV
-          echo "SIGNING_TENANT_ID=$signing_tenant_id" >> $GITHUB_ENV
-
+          "SIGNING_CLIENT_ID=$signing_client_id" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SIGNING_CLIENT_SECRET=$signing_client_secret" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SIGNING_KEY_VAULT_CERTIFICATE=$signing_key_vault_certificate" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SIGNING_KEY_VAULT_URL=$signing_key_vault_url" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SIGNING_TENANT_ID=$signing_tenant_id" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: DebugShowSecrets
         id: log_secrets
