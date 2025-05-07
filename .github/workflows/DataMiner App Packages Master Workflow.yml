@@ -402,7 +402,7 @@ jobs:
               Write-Output "Signing .dmapp in: $parentPath"
 
               # Execute the signing command
-              dataminer-package-signature sign -kvu $env:SIGNING_KEY_VAULT_URL -kvc $env:SIGNING_KEY_VAULT_CERTIFICATE -o $parentPath
+              dataminer-package-signature sign $file -kvu $env:SIGNING_KEY_VAULT_URL -kvc $env:SIGNING_KEY_VAULT_CERTIFICATE -o $parentPath
           }
 
       - uses: actions/upload-artifact@v4
