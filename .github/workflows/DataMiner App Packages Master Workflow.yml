@@ -163,6 +163,7 @@ jobs:
       - name: Install Tools
         run: |
           dotnet tool install dotnet-sonarscanner --global
+          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.0.*
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
@@ -437,7 +438,6 @@ jobs:
 
       - name: Install Tools
         run: |
-          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.0.*
           dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 1.0.*
 
       - name: Sign generated dmapp packages
