@@ -331,25 +331,25 @@ jobs:
 
       - name: Extract artifact contents preserving original structure
         run: |
-          Write-Output "Extracting all zip files and restoring original structure..."
+          Write-Output "Extracting all zip and dmapp files and restoring original structure..."
 
           $downloadRoot = Resolve-Path "downloaded_artifacts"
 
-          Get-ChildItem -Path $downloadRoot -Recurse -Filter *.zip, *.dmapp | ForEach-Object {
-              $file = $_.FullName
-              $relativePath = $file.Substring($downloadRoot.Path.Length + 1) -replace '\\', '/'
+          Get-ChildItem -Path $downloadRoot -Recurse -File | Where-Object { $_.Extension -in '.zip', '.dmapp' } | ForEach-Object {
+              $archiveFile = $_.FullName
+              $relativePath = $archiveFile.Substring($downloadRoot.Path.Length + 1) -replace '\\', '/'
               $relativeFolder = Split-Path $relativePath
 
-              # Target extraction path: workspace + relative folder
+              # Target extraction path: workspace + relative folder (minus the file name)
               $destination = Join-Path $PWD $relativeFolder
 
-              Write-Output "Extracting $file to $destination"
+              Write-Output "Extracting $archiveFile to $destination"
 
               # Make sure destination exists
               New-Item -ItemType Directory -Force -Path $destination | Out-Null
 
               # Extract to target path
-              Expand-Archive -Path $file -DestinationPath $destination -Force
+              Expand-Archive -Path $archiveFile -DestinationPath $destination -Force
           }
         shell: pwsh
 
