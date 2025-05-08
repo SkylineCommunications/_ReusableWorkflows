@@ -356,23 +356,28 @@ jobs:
           Write-Output "Extracting all zip and dmapp files and restoring original structure..."
 
           $downloadRoot = Resolve-Path "downloaded_artifacts"
+          $workspaceRoot = Resolve-Path "."
 
           Get-ChildItem -Path $downloadRoot -Recurse -File | Where-Object { $_.Extension -in '.zip', '.dmapp' } | ForEach-Object {
               $archiveFile = $_.FullName
               $relativePath = $archiveFile.Substring($downloadRoot.Path.Length + 1) -replace '\\', '/'
-              $relativeFolder = Split-Path $relativePath
+              $targetPath = Join-Path $workspaceRoot $relativePath
 
-              # Target extraction path: workspace + relative folder (minus the file name)
-              $destination = Join-Path $PWD $relativeFolder
+              # Ensure target directory exists
+              $targetFolder = Split-Path $targetPath
+              if (-not (Test-Path $targetFolder)) {
+                  New-Item -ItemType Directory -Path $targetFolder -Force | Out-Null
+              }
 
-              Write-Output "Extracting $archiveFile to $destination"
-
-              # Make sure destination exists
-              New-Item -ItemType Directory -Force -Path $destination | Out-Null
-
-              # Extract to target path
-              Expand-Archive -Path $archiveFile -DestinationPath $destination -Force
+              # Move the file
+              Move-Item -Path $archiveFile -Destination $targetPath -Force
+              Write-Output "Moved $relativePath to workspace root"
           }
+
+          # Remove the downloaded_artifacts directory after migration
+          Write-Output "Removing downloaded_artifacts folder..."
+          Remove-Item -Path $downloadRoot -Recurse -Force
+          Write-Output "Cleanup complete."
         shell: pwsh
 
       - name: Set Azure OIDC parameters
