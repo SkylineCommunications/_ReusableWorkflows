@@ -428,17 +428,20 @@ jobs:
         shell: pwsh
 
       - name: Generate SBOM file
+        shell: pwsh
         run: |
-          find . -type f -name "*.dmapp" -print0 | while IFS= read -r -d '' file; do
-            echo "Generating SBOM for $file"
-            dataminer-sbom generate-and-add \
-              --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" \
-              --package-file "$file" \
-              --package-name "${{ steps.packageName.outputs.name }}" \
-              --package-version "${{ inputs.referenceName }}" \
-              --package-supplier "Skyline Communications" \
-              --debug "${{ inputs.debug }}"
-          done
+          Get-ChildItem -Recurse -Filter *.dmapp | ForEach-Object {
+              $file = $_.FullName
+              Write-Host "Generating SBOM for $file"
+              
+              & dataminer-sbom generate-and-add `
+                --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+                --package-file "$file" `
+                --package-name "${{ steps.packageName.outputs.name }}" `
+                --package-version "${{ inputs.referenceName }}" `
+                --package-supplier "Skyline Communications" `
+                --debug "${{ inputs.debug }}"
+          }
 
       - name: Sign generated dmapp packages
         shell: pwsh
