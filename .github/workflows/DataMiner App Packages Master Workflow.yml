@@ -348,7 +348,7 @@ jobs:
       - name: Download artifact from CI
         uses: actions/download-artifact@v4
         with:
-          name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }})
+          name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned
           path: downloaded_artifacts
 
       - name: Extract artifact contents preserving original structure
