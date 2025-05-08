@@ -291,6 +291,30 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
 
+      - name: Create package name
+        id: packageName
+        run: |
+          $tempName = "${{ inputs.repository }}"
+          $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
+          echo "name=$safeName" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Generate SBOM file
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse -Filter *.dmapp | ForEach-Object {
+              $file = $_.FullName
+              Write-Host "Generating SBOM for $file"
+              
+              & dataminer-sbom generate-and-add `
+                --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+                --package-file "$file" `
+                --package-name "${{ steps.packageName.outputs.name }}" `
+                --package-version "${{ inputs.referenceName }}" `
+                --package-supplier "Skyline Communications" `
+                --debug "${{ inputs.debug }}"
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }})
@@ -419,30 +443,6 @@ jobs:
           dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.0.*
           dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 1.0.*
 
-      - name: Create package name
-        id: packageName
-        run: |
-          $tempName = "${{ inputs.repository }}"
-          $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
-          echo "name=$safeName" >> $env:GITHUB_OUTPUT
-        shell: pwsh
-
-      - name: Generate SBOM file
-        shell: pwsh
-        run: |
-          Get-ChildItem -Recurse -Filter *.dmapp | ForEach-Object {
-              $file = $_.FullName
-              Write-Host "Generating SBOM for $file"
-              
-              & dataminer-sbom generate-and-add `
-                --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
-                --package-file "$file" `
-                --package-name "${{ steps.packageName.outputs.name }}" `
-                --package-version "${{ inputs.referenceName }}" `
-                --package-supplier "Skyline Communications" `
-                --debug "${{ inputs.debug }}"
-          }
-
       - name: Sign generated dmapp packages
         shell: pwsh
         env:
@@ -470,7 +470,9 @@ jobs:
           }
 
       - name: Authenticate with GitHub CLI
-        run: gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+        shell: pwsh
+        run: |
+          "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Find Version Comment
         id: findVersionComment
