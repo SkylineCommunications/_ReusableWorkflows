@@ -326,7 +326,7 @@ jobs:
   skyline_cd:
     name: Skyline Catalog Release
     runs-on: windows-latest
-    # if: github.ref_type == 'tag'  DISABLED FOR TESTING
+    if: github.ref_type == 'tag'
     needs: skyline_ci
     steps:
       - uses: actions/checkout@v4
@@ -343,7 +343,6 @@ jobs:
           fi
         shell: bash
 
-
 # Alternative option here, is to perform the dotnet build again, but that needs all the nuget access again, etc.
       - name: Download artifact from CI
         uses: actions/download-artifact@v4
@@ -351,7 +350,7 @@ jobs:
           name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned
           path: downloaded_artifacts
 
-      - name: Extract artifact contents preserving original structure
+      - name: Extract artifact contents putting them back in the bin folders.
         run: |
           Write-Output "Extracting all zip and dmapp files and restoring original structure..."
 
@@ -508,7 +507,6 @@ jobs:
       - name: Publish To Catalog
         env:
           DATAMINER_TOKEN: ${{ secrets.dataminerToken }}
-        if: github.ref_type == 'tag' #ADDED FOR TESTING
         shell: pwsh
         run: |
           dotnet publish `
@@ -519,13 +517,3 @@ jobs:
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
             --configuration ${{ inputs.configuration }} `
             -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) signed
-          path: |
-            **/bin/${{ inputs.configuration }}/*.dmapp
-            **/bin/${{ inputs.configuration }}/*.zip
-            **/bin/${{ inputs.configuration }}/**/*.dmapp
-            **/bin/${{ inputs.configuration }}/**/*.zip
-        continue-on-error: true
