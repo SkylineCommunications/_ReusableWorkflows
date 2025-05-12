@@ -1,8 +1,9 @@
 name: DataMiner App Packages
 
+# Needed for OIDC
 permissions:
-  id-token: write
-  contents: read
+  id-token: write # This is required for requesting the JWT
+  contents: read  # This is required for actions/checkout
 
 # Controls when the workflow will run
 on:
@@ -406,6 +407,7 @@ jobs:
 
       - name: Azure Login
         uses: azure/login@v2
+        if: steps.set_oidc.outputs.use-oidc == 'true'
         with:
           client-id: ${{ steps.set_oidc.outputs.client-id }}
           tenant-id: ${{ steps.set_oidc.outputs.tenant-id }}
@@ -413,6 +415,7 @@ jobs:
 
       - name: Retrieve signing secrets from Azure Key Vault
         id: signing_secrets
+        if: steps.set_oidc.outputs.use-oidc == 'true'
         shell: pwsh
         run: |
           Write-Output "Fetching secrets from Azure Key Vault..."
@@ -441,10 +444,12 @@ jobs:
           }
 
       - name: Install Tools
+        if: steps.set_oidc.outputs.use-oidc == 'true'
         run: |
           dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 1.0.*
 
       - name: Sign generated dmapp packages
+        if: steps.set_oidc.outputs.use-oidc == 'true'
         shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
