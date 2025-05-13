@@ -517,9 +517,9 @@ jobs:
           dotnet publish `
             "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
             --no-build `
-            --no-restore `
             -p:Version="${{ inputs.referenceName }}" `
             -p:VersionComment="${{ steps.findVersionComment.outputs.versionComment }}" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
             --configuration ${{ inputs.configuration }} `
-            -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}"
+            -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}" `
+            -p:IsPublishable=false
