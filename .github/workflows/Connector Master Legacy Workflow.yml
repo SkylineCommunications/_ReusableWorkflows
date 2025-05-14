@@ -1,66 +1,101 @@
 name: Connector Master Workflow
 
-# Controls when the workflow will run
 on:
-  # Allows you to run this workflow from another workflow
   workflow_call:
     outputs:
-      quality_gate: 
+      quality_gate:
         description: "Results from Skyline Quality Gate."
         value: ${{ jobs.validate_skyline_quality_gate.outputs.quality }}
+
     inputs:
-      referenceName:
-        required: true
-        type: string       
-      runNumber:
-        required: true
-        type: string   
-      referenceType:
-        required: true
-        type: string   
-      repository:
-        required: true
-        type: string 
-      owner:
-        required: true
+      # Optional OIDC inputs in case outside SkylineCommunications organization
+      oidc-client-id:
+        required: false
         type: string
+      oidc-tenant-id:
+        required: false
+        type: string
+      oidc-subscription-id:
+        required: false
+        type: string
+      use-oidc:
+        required: false
+        type: string
+
       sonarCloudProjectName:
         required: true
         type: string
       debug:
         required: false
         type: boolean
+
     secrets:
       api-key:
         required: false
       sonarCloudToken:
-        required: true
+        required: false
       azureToken:
         required: false
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+
 jobs:
   validate_skyline_quality_gate:
-    name: Legacy Skyline Quality Gate 
+    name: Legacy Skyline Quality Gate
     runs-on: windows-latest
     env:
       detected-unit-tests: none
     outputs:
       quality: ${{ steps.quality-step.outputs.results }}
     steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        if: inputs.use-oidc == 'true'
+        with:
+          client-id: ${{ inputs.oidc-client-id }}
+          tenant-id: ${{ inputs.oidc-tenant-id }}
+          subscription-id: ${{ inputs.oidc-subscription-id }}
+
+      - name: Retrieve needed secrets from Azure Key Vault
+        if: inputs.use-oidc == 'true'
+        shell: bash
+        run: |
+          echo "Fetching secrets from Azure Key Vault..."
+
+          # List of secret names needed for this job
+          secret_names=("azure-token" "sonar-token")
+
+          for secret_name in "${secret_names[@]}"; do
+            # Convert to uppercase and replace hyphens with underscores
+            env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+
+            # Retrieve the secret value
+            secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
+
+            # Mask the secret value
+            echo "::add-mask::$secret_value"
+
+            # Export as environment variable
+            echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
+          done
+
+      - name: Overwrite default secrets with user-defined secrets
+        shell: bash
+        run: |
+          if [[ -n "${{ secrets.azureToken }}" ]]; then
+            echo "Using provided azureToken secret"
+            echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
+          fi
+
+          if [[ -n "${{ secrets.sonarCloudToken }}" ]]; then
+            echo "Using provided sonarCloudToken secret"
+            echo "SONAR_TOKEN=${{ secrets.sonarCloudToken }}" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Initialize
-        run: |
-          echo "workspace" ${{ github.workspace }}
-          echo "ref name" ${{ inputs.referenceName }}
-          echo "run number" ${{ inputs.runNumber }}
-          echo "ref type" ${{ inputs.referenceType }}
-          echo "repository" ${{ inputs.repository }}
-
       - name: Find .sln file
-        id: findSlnFile        
+        id: findSlnFile
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
@@ -70,13 +105,6 @@ jobs:
         with:
           java-version: 17
           distribution: 'zulu'
-
-      - name: Cache SonarCloud packages
-        uses: actions/cache@v4
-        with:
-          path: ~\sonar\cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
 
       - name: Cache SonarCloud scanner
         id: cache-sonar-scanner
@@ -106,7 +134,7 @@ jobs:
           import os
           env_file = os.getenv('GITHUB_ENV')
           with open(env_file, "a") as myfile:
-               myfile.write("cleanOwner=" + str.lower("${{ inputs.owner }}"))
+               myfile.write("cleanOwner=" + str.lower("${{ github.repository_owner }}"))
         shell: python
 
       - name: Check NuGet packages.config usage
@@ -120,57 +148,30 @@ jobs:
 
       - name: Prepare Building
         uses: microsoft/setup-msbuild@v2
-        
-      # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
-      - name: Enable Skyline GitHub NuGet Registry
-        if: inputs.owner == 'SkylineCommunications'
-        run: |
-          $SOURCE_NAME="PrivateGitHubNuGets"
-          $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
-          }
-        shell: pwsh
 
-      - name: Enable Skyline Azure Cloud NuGet Registry
-        env:
-          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
-        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
+      - name: Enable Skyline NuGet Registries
+        if: github.repository_owner == 'SkylineCommunications'
         run: |
-          $SOURCE_NAME="CloudNuGets"
-          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
-          }
-        shell: pwsh
+          $sources = @(
+            @{ Name = "PrivateGitHubNugets"; URL = "https://nuget.pkg.github.com/SkylineCommunications/index.json"; Username = "USERNAME"; Password = "${{ secrets.GITHUB_TOKEN }}" },
+            @{ Name = "CloudNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"; Username = "az"; Password = "${{ env.AZURE_TOKEN }}" },
+            @{ Name = "PrivateAzureNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"; Username = "az"; Password = "${{ env.AZURE_TOKEN }}" }
+          )
 
-      - name: Enable Skyline Azure Private NuGet Registry
-        env:
-          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
-        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
-        run: |
-          $SOURCE_NAME="PrivateAzureNuGets"
-          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            nuget sources update source -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
+          foreach ($source in $sources) {
+            if ($source.Password -ne "") {
+              Write-Host "Checking source $($source.Name)..."
+              
+              if (nuget sources list | Select-String -Pattern $source.Name) {
+                Write-Host "Updating existing source $($source.Name)."
+                nuget sources update -name $source.Name -source $source.URL -username $source.Username -password $source.Password -StorePasswordInClearText
+              } else {
+                Write-Host "Adding new source $($source.Name)."
+                nuget sources add -source $source.URL -name $source.Name -username $source.Username -password $source.Password -StorePasswordInClearText
+              }
+            } else {
+              Write-Host "Skipping $($source.Name) because the password is not set."
+            }
           }
         shell: pwsh
 
@@ -181,27 +182,27 @@ jobs:
         run: msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release  "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m # /verbosity:minimal
 
       - name: Create package name
-        if: inputs.referenceType == 'tag'
+        if: github.ref_type == 'tag'
         id: packageName
         run: |
-          $tempName = "${{ inputs.repository }}"
+          $tempName = "${{ github.repository }}"
           $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
           echo "name=$safeName" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
       - name: Generate SBOM file
-        if: inputs.referenceType == 'tag'
+        if: github.ref_type == 'tag'
         run: |
           dataminer-sbom generate `
-          --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
-          --package-name "${{ steps.packageName.outputs.name }}" `
-          --package-version "${{ inputs.referenceName }}" `
-          --package-supplier "Skyline Communications" `
-          --output "${{ github.workspace }}/SBOM" `
-          --debug "${{ inputs.debug }}"
+            --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+            --package-name "${{ steps.packageName.outputs.name }}" `
+            --package-version "${{ github.ref_name }}" `
+            --package-supplier "Skyline Communications" `
+            --output "${{ github.workspace }}/SBOM" `
+            --debug "${{ inputs.debug }}"
 
       - name: Upload SBOM file
-        if: inputs.referenceType == 'tag'
+        if: github.ref_type == 'tag'
         uses: actions/upload-artifact@v4
         with:
           name: SBOM
@@ -243,28 +244,26 @@ jobs:
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
         run: |
-          echo "sonarCloudProjectStatus=$(curl https://${{ secrets.sonarCloudToken }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
+          echo "sonarCloudProjectStatus=$(curl https://${{ env.SONAR_TOKEN }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
         continue-on-error: true
 
       - name: Trigger Initial Analysis
         if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
         run: |
-            .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.cleanOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage.xml
+            .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.cleanOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage.xml
             msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m
-            .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
+            .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
         continue-on-error: true
 
       - name: Analyze
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
         run: |
-            .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.cleanOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage.xml
+            .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.cleanOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage.xml
             msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m
-            .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
+            .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
         continue-on-error: true
 
       - name: SonarCloud Quality Gate check
@@ -275,8 +274,6 @@ jobs:
         continue-on-error: true
         # Force to fail step after specific time.
         timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
 
       - name: Quality Gate
         id: quality-step
@@ -295,63 +292,73 @@ jobs:
 
   auto_generate_catalog_yaml:
     name: Auto-Generating Catalog from GitHub
-    if: ${{ inputs.referenceType == 'branch' &&  github.event_name != 'pull_request' }}
+    if: ${{ github.ref_type == 'branch' &&  github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Azure Login
+        uses: azure/login@v2
+        if: inputs.use-oidc == 'true'
+        with:
+          client-id: ${{ inputs.oidc-client-id }}
+          tenant-id: ${{ inputs.oidc-tenant-id }}
+          subscription-id: ${{ inputs.oidc-subscription-id }}
+
+      - name: Retrieve needed secrets from Azure Key Vault
+        if: inputs.use-oidc == 'true'
+        shell: bash
+        run: |
+          echo "Fetching secrets from Azure Key Vault..."
+
+          # List of secret names needed for this job
+          secret_names=("azure-token")
+
+          for secret_name in "${secret_names[@]}"; do
+            # Convert to uppercase and replace hyphens with underscores
+            env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+
+            # Retrieve the secret value
+            secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
+
+            # Mask the secret value
+            echo "::add-mask::$secret_value"
+
+            # Export as environment variable
+            echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
+          done
+
+      - name: Overwrite default secrets with user-defined secrets
+        shell: bash
+        run: |
+          if [[ -n "${{ secrets.azureToken }}" ]]; then
+            echo "Using provided azureToken secret"
+            echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/checkout@v4
       
-      # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
-      # IMPORTANT, keep this to 'dotnet nuget' and not 'nuget'. This runs in Ubuntu.
-      - name: Enable Skyline GitHub NuGet Registry
-        if: inputs.owner == 'SkylineCommunications'
+      - name: Enable Skyline NuGet Registries
+        if: github.repository_owner == 'SkylineCommunications'
         run: |
-          $SOURCE_NAME="PrivateGitHubNugets"
-          $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
-          }
-        shell: pwsh
-        
-      - name: Enable Skyline Azure Cloud NuGet Registry
-        env:
-          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
-        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
-        run: |
-          $SOURCE_NAME="CloudNuGets"
-          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
-          }
-        shell: pwsh
+          $sources = @(
+            @{ Name = "PrivateGitHubNugets"; URL = "https://nuget.pkg.github.com/SkylineCommunications/index.json"; Username = "USERNAME"; Password = "${{ secrets.GITHUB_TOKEN }}" },
+            @{ Name = "CloudNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"; Username = "az"; Password = "${{ env.AZURE_TOKEN }}" },
+            @{ Name = "PrivateAzureNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"; Username = "az"; Password = "${{ env.AZURE_TOKEN }}" }
+          )
 
-      - name: Enable Skyline Azure Private NuGet Registry
-        env:
-          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
-        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
-        run: |
-          $SOURCE_NAME="PrivateAzureNuGets"
-          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (dotnet nuget list source | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            dotnet nuget update source $SOURCE_NAME --source $SOURCE_URL --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            dotnet nuget add source $SOURCE_URL --name $SOURCE_NAME --username az --password ${{ secrets.azureToken }} --store-password-in-clear-text
+          foreach ($source in $sources) {
+            if ($source.Password -ne "") {
+              Write-Host "Checking source $($source.Name)..."
+
+              if (dotnet nuget list source | Select-String -Pattern $source.Name) {
+                Write-Host "Updating existing source $($source.Name)."
+                dotnet nuget update source $source.Name --source $source.URL --username $source.Username --password $source.Password --store-password-in-clear-text
+              } else {
+                Write-Host "Adding new source $($source.Name)."
+                dotnet nuget add source $source.URL --name $source.Name --username $source.Username --password $source.Password --store-password-in-clear-text
+              }
+            } else {
+              Write-Host "Skipping $($source.Name) because the password is not set."
+            }
           }
         shell: pwsh
 
@@ -361,8 +368,13 @@ jobs:
 
       - name: Create or Extend Catalog.yml
         run: |
-          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
-        
+          github-to-catalog-yaml \
+            --workspace "${{ github.workspace }}" \
+            --github-token ${{ secrets.GITHUB_TOKEN }} \
+            --github-repository "${{ github.repository }}" \
+            --catalog-identifier "${{ vars.catalogIdentifier }}" \
+            --debug "${{ inputs.debug }}"
+
       - name: Check if catalog.yml or manifest.yml exists
         id: check_files
         shell: pwsh
@@ -377,7 +389,7 @@ jobs:
             Write-Host "No valid file found!"
             exit 1
           }
-      
+
       - uses: actions/upload-artifact@v4
         if: env.catalogDetails != ''
         with:
@@ -399,7 +411,7 @@ jobs:
           else {
             Write-Host "No changes to commit."
           }
-        
+
       - name: Push .githubtocatalog/auto-generated-catalog
         run: |
           git push
@@ -412,77 +424,80 @@ jobs:
     runs-on: ubuntu-22.04
     needs: validate_skyline_quality_gate
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: Azure Login
+        uses: azure/login@v2
+        if: inputs.use-oidc == 'true'
+        with:
+          client-id: ${{ inputs.oidc-client-id }}
+          tenant-id: ${{ inputs.oidc-tenant-id }}
+          subscription-id: ${{ inputs.oidc-subscription-id }}
 
-      - name: Initialize
+      - name: Retrieve needed secrets from Azure Key Vault
+        if: inputs.use-oidc == 'true'
+        shell: bash
         run: |
-          echo "workspace" ${{ github.workspace }}
-          echo "ref name" ${{ inputs.referenceName }}
-          echo "run number" ${{ inputs.runNumber }}
-          echo "ref type" ${{ inputs.referenceType }}
-          echo "repository" ${{ inputs.repository }}
+          echo "Fetching secrets from Azure Key Vault..."
+
+          # List of secret names needed for this job
+          secret_names=("azure-token")
+
+          for secret_name in "${secret_names[@]}"; do
+            # Convert to uppercase and replace hyphens with underscores
+            env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+
+            # Retrieve the secret value
+            secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
+
+            # Mask the secret value
+            echo "::add-mask::$secret_value"
+
+            # Export as environment variable
+            echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
+          done
+
+      - name: Overwrite default secrets with user-defined secrets
+        shell: bash
+        run: |
+          if [[ -n "${{ secrets.azureToken }}" ]]; then
+            echo "Using provided azureToken secret"
+            echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/checkout@v4
 
       - name: Install .NET Tools
         run: |
           dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
 
       - name: Find .sln file
-        id: findSlnFile        
+        id: findSlnFile
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
 
-        # TODO: Refactor this in the future to a single stage with a loop that adds all the sources you specify.
-      - name: Enable Skyline GitHub NuGet Registry
-        if: inputs.owner == 'SkylineCommunications'
+      - name: Enable Skyline NuGet Registries
+        if: github.repository_owner == 'SkylineCommunications'
         run: |
-          $SOURCE_NAME="PrivateGitHubNuGets"
-          $SOURCE_URL="https://nuget.pkg.github.com/SkylineCommunications/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username USERNAME -password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText
-          }
-        shell: pwsh
+          $sources = @(
+            @{ Name = "PrivateGitHubNugets"; URL = "https://nuget.pkg.github.com/SkylineCommunications/index.json"; Username = "USERNAME"; Password = "${{ secrets.GITHUB_TOKEN }}" },
+            @{ Name = "CloudNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"; Username = "az"; Password = "${{ env.AZURE_TOKEN }}" },
+            @{ Name = "PrivateAzureNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"; Username = "az"; Password = "${{ env.AZURE_TOKEN }}" }
+          )
 
-      - name: Enable Skyline Azure Cloud NuGet Registry
-        env:
-          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
-        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
-        run: |
-          $SOURCE_NAME="CloudNuGets"
-          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            nuget sources update -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
-          }
-        shell: pwsh
+          foreach ($source in $sources) {
+            if ($source.Password -ne "") {
+              Write-Host "Checking source $($source.Name)..."
 
-      - name: Enable Skyline Azure Private NuGet Registry
-        env:
-          AZURE_TOKEN_EXISTS: ${{ secrets.azureToken }}
-        if: env.AZURE_TOKEN_EXISTS != null && inputs.owner == 'SkylineCommunications'
-        run: |
-          $SOURCE_NAME="PrivateAzureNuGets"
-          $SOURCE_URL="https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"
-          
-          # Check if the source exists. If it does, update it.
-          if (nuget sources list | Select-String -Pattern $SOURCE_NAME) {
-            Write-Host "Updating existing source $SOURCE_NAME."
-            nuget sources update source -name $SOURCE_NAME -source $SOURCE_URL -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
-          } else {
-            Write-Host "Adding new source $SOURCE_NAME."
-            nuget sources add -source $SOURCE_URL -name $SOURCE_NAME -username az -password ${{ secrets.azureToken }} -StorePasswordInClearText
+              if (nuget sources list | Select-String -Pattern $source.Name) {
+                Write-Host "Updating existing source $($source.Name)."
+                nuget sources update -name $source.Name -source $source.URL -username $source.Username -password $source.Password -StorePasswordInClearText
+              } else {
+                Write-Host "Adding new source $($source.Name)."
+                nuget sources add -source $source.URL -name $source.Name -username $source.Username -password $source.Password -StorePasswordInClearText
+              }
+            } else {
+              Write-Host "Skipping $($source.Name) because the password is not set."
+            }
           }
         shell: pwsh
 
@@ -492,25 +507,30 @@ jobs:
       - name: Create package name
         id: packageName
         run: |
-          tempName="${{ inputs.repository }}"
+          tempName="${{ github.repository }}"
           echo name=${tempName//[\"\/\\<>|:*?]/_} >> $GITHUB_OUTPUT
         shell: bash
 
 #ON RELEASE OR PRE-RELEASE
       - name: Create DMProtocol - Release
-        if: inputs.referenceType == 'tag'
-        run: dataminer-package-create dmprotocol ${{ github.workspace }} --name  "${{ steps.packageName.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ inputs.referenceName  }}" --debug "${{ inputs.debug }}"
-      
+        if: github.ref_type == 'tag'
+        run: |
+          dataminer-package-create dmprotocol ${{ github.workspace }} \
+            --name "${{ steps.packageName.outputs.name }}" \
+            --output ${{ github.workspace }} \
+            --version-override "${{ github.ref_name  }}" \
+            --debug "${{ inputs.debug }}"
+
 #ON BUILD
       - name: Find and extract Protocol Version
-        if: inputs.referenceType != 'tag'
+        if: github.ref_type != 'tag'
         run: |
           # Find the protocol.xml file
           xml_file=$(find "${{ github.workspace }}" -maxdepth 1 -name "protocol.xml" -or -name "Protocol.xml" | head -n 1)
 
           # Extract the Protocol Version using awk and store it in a variable
           protocol_version=$(awk -F '[><]' '/<Version>/ {print $3}' "$xml_file")
-  
+
           # Print the extracted version for verification
           echo "Extracted Protocol Version: $protocol_version"
 
@@ -519,10 +539,13 @@ jobs:
         shell: bash
 
       - name: Create DMProtocol - Build
-        if: inputs.referenceType != 'tag'
+        if: github.ref_type != 'tag'
         run: |
-          dataminer-package-create dmprotocol ${{ github.workspace }} --name "${{ steps.packageName.outputs.name }}" --output ${{ github.workspace }} --version-override "${{ env.PROTOCOL_VERSION }}_B${{ inputs.runNumber }}" --debug "${{ inputs.debug }}"
-        shell: bash
+          dataminer-package-create dmprotocol ${{ github.workspace }} \
+            --name "${{ steps.packageName.outputs.name }}" \
+            --output ${{ github.workspace }} \
+            --version-override "${{ env.PROTOCOL_VERSION }}_B${{ github.run_number }}" \
+            --debug "${{ inputs.debug }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -531,14 +554,53 @@ jobs:
 
   artifact_registration:
     name: Artifact Registration and Upload
-    if: inputs.referenceType == 'tag'
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     needs: [validate_skyline_quality_gate,artifact_creation]
     steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        if: inputs.use-oidc == 'true'
+        with:
+          client-id: ${{ inputs.oidc-client-id }}
+          tenant-id: ${{ inputs.oidc-tenant-id }}
+          subscription-id: ${{ inputs.oidc-subscription-id }}
+
+      - name: Retrieve needed secrets from Azure Key Vault
+        if: inputs.use-oidc == 'true'
+        shell: bash
+        run: |
+          echo "Fetching secrets from Azure Key Vault..."
+
+          # List of secret names needed for this job
+          secret_names=("dataminer-token")
+
+          for secret_name in "${secret_names[@]}"; do
+            # Convert to uppercase and replace hyphens with underscores
+            env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+
+            # Retrieve the secret value
+            secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
+
+            # Mask the secret value
+            echo "::add-mask::$secret_value"
+
+            # Export as environment variable
+            echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
+          done
+
+      - name: Overwrite default secrets with user-defined secrets
+        shell: bash
+        run: |
+          if [[ -n "${{ secrets.api-key }}" ]]; then
+            echo "Using provided api-key secret"
+            echo "DATAMINER_TOKEN=${{ secrets.api-key }}" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Validate auto-generated catalog YAML file existence
         shell: pwsh
         run: |
@@ -553,10 +615,10 @@ jobs:
         run: |
           #!/bin/bash
           set -e  # Exit immediately if a command exits with a non-zero status.
-          
+
           # Capture the branches containing the tag and process them
-          branches="$(git branch --contains tags/${{ inputs.referenceName }} -r | grep 'origin/' | grep -vE '.*/.*/' | sed 's#origin/##' | paste -sd ",")"
-          
+          branches="$(git branch --contains tags/${{ github.ref_name }} -r | grep 'origin/' | grep -vE '.*/.*/' | sed 's#origin/##' | paste -sd ",")"
+
           # Append to GitHub Actions output
           echo "branch=${branches}" >> $GITHUB_OUTPUT
         shell: bash 
@@ -604,13 +666,18 @@ jobs:
       - name: Add SBOM to package
         run: |
           dataminer-sbom add \
-          --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" \
-          --package-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" \
-          --debug "${{ inputs.debug }}"
+            --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" \
+            --package-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" \
+            --debug "${{ inputs.debug }}"
 
       - name: Create or Extend Catalog.yml
         run: |
-          github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
+          github-to-catalog-yaml \
+            --workspace "${{ github.workspace }}" \
+            --github-token ${{ secrets.GITHUB_TOKEN }} \
+            --github-repository "${{ github.repository }}" \
+            --catalog-identifier "${{ vars.catalogIdentifier }}" \
+            --debug "${{ inputs.debug }}"
 
       - name: Check if catalog.yml or manifest.yml exists
         id: check_files
@@ -626,7 +693,7 @@ jobs:
             Write-Host "No valid file found!"
             exit 1
           }
-      
+
       - uses: actions/upload-artifact@v4
         if: env.catalogDetails != ''
         with:
@@ -635,5 +702,11 @@ jobs:
 
       - name: Upload to Catalog
         env:
-          CICDIsForSkyline: "${{ inputs.owner == 'SkylineCommunications' }}"
-        run: dataminer-catalog-upload with-registration --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" --artifact-version ${{ inputs.referenceName }} --branch "${{ steps.findBranch.outputs.branch }}" --dm-catalog-token ${{ secrets.api-key }} --debug "${{ inputs.debug }}"
+          CICDIsForSkyline: "${{ github.repository_owner == 'SkylineCommunications' }}"
+        run: |
+          dataminer-catalog-upload with-registration \
+            --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" \
+            --artifact-version ${{ github.ref_name }} \
+            --branch "${{ steps.findBranch.outputs.branch }}" \
+            --dm-catalog-token ${{ env.DATAMINER_TOKEN }} \
+            --debug "${{ inputs.debug }}"
