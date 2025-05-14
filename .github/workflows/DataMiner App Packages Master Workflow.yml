@@ -1,5 +1,10 @@
 name: DataMiner App Packages
 
+# Needed for OIDC
+permissions:
+  id-token: write # This is required for requesting the JWT
+  contents: read  # This is required for actions/checkout
+
 # Controls when the workflow will run
 on:
   # Allows you to run this workflow from another workflow
@@ -32,6 +37,15 @@ on:
       debug:
         required: false
         type: boolean
+      oidc-client-id:
+        required: false
+        type: string
+      oidc-tenant-id:
+        required: false
+        type: string
+      oidc-subscription-id:
+        required: false
+        type: string
     secrets:
       sonarCloudToken:
         required: true
@@ -44,8 +58,8 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  skyline_cicd:
-    name: Skyline CICD
+  skyline_ci:
+    name: Skyline Quality Gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +75,7 @@ jobs:
         uses: awalsh128/cache-apt-pkgs-action@v1.5.0
         with:
           packages: mono-complete
-        
+
       - name: Validate SonarCloud Project Name
         id: validate-sonar-name
         run: |
@@ -271,7 +285,6 @@ jobs:
         continue-on-error: true
 
       - name: SonarCloud Quality Gate check
-        if: inputs.referenceType == 'branch'
         id: sonarcloud-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
@@ -281,7 +294,6 @@ jobs:
           SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
 
       - name: Create package name
-        if: inputs.referenceType == 'tag'
         id: packageName
         run: |
           $tempName = "${{ inputs.repository }}"
@@ -290,7 +302,6 @@ jobs:
         shell: pwsh
 
       - name: Generate SBOM file
-        if: inputs.referenceType == 'tag'
         run: |
           find . -type f -name "*.dmapp" -print0 | while IFS= read -r -d '' file; do
             echo "Generating SBOM for $file"
@@ -305,7 +316,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }})
+          name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned
           path: |
             **/bin/${{ inputs.configuration }}/*.dmapp
             **/bin/${{ inputs.configuration }}/*.zip
@@ -313,12 +324,163 @@ jobs:
             **/bin/${{ inputs.configuration }}/**/*.zip
         continue-on-error: true
 
+  skyline_cd:
+    name: Skyline Catalog Release
+    runs-on: windows-latest
+    if: github.ref_type == 'tag'
+    needs: skyline_ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Find .sln file
+        id: findSlnFile
+        run: |
+          if [[ -z "${{ inputs.solutionFilterName }}" ]]; then
+            echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+          else
+            echo solutionFilePath=$(find . -type f -name '${{ inputs.solutionFilterName }}') >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+# Alternative option here, is to perform the dotnet build again, but that needs all the nuget access again, etc.
+      - name: Download artifact from CI
+        uses: actions/download-artifact@v4
+        with:
+          name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned
+          path: downloaded_artifacts
+
+      - name: Extract artifact contents putting them back in the bin folders.
+        run: |
+          Write-Output "Extracting all zip and dmapp files and restoring original structure..."
+
+          $downloadRoot = Resolve-Path "downloaded_artifacts"
+          $workspaceRoot = Resolve-Path "."
+
+          Get-ChildItem -Path $downloadRoot -Recurse -File | Where-Object { $_.Extension -in '.zip', '.dmapp' } | ForEach-Object {
+              $archiveFile = $_.FullName
+              $relativePath = $archiveFile.Substring($downloadRoot.Path.Length + 1) -replace '\\', '/'
+              $targetPath = Join-Path $workspaceRoot $relativePath
+
+              # Ensure target directory exists
+              $targetFolder = Split-Path $targetPath
+              if (-not (Test-Path $targetFolder)) {
+                  New-Item -ItemType Directory -Path $targetFolder -Force | Out-Null
+              }
+
+              # Move the file
+              Move-Item -Path $archiveFile -Destination $targetPath -Force
+              Write-Output "Moved $relativePath to workspace root"
+          }
+
+          # Remove the downloaded_artifacts directory after migration
+          Write-Output "Removing downloaded_artifacts folder..."
+          Remove-Item -Path $downloadRoot -Recurse -Force
+          Write-Output "Cleanup complete."
+        shell: pwsh
+
+      - name: Set Azure OIDC parameters
+        id: set_oidc
+        shell: pwsh
+        run: |
+          Write-Output "Determining Azure OIDC parameters..."
+
+          if ("${{ inputs.oidc-client-id }}" -ne "") {
+              Write-Output "Using provided OIDC parameters"
+              "client-id=${{ inputs.oidc-client-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "tenant-id=${{ inputs.oidc-tenant-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "subscription-id=${{ inputs.oidc-subscription-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "use-oidc=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+          elseif ("${{ inputs.owner }}" -eq "SkylineCommunications") {
+              Write-Output "Using SkylineCommunications default OIDC parameters"
+              "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "use-oidc=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+          else {
+              Write-Output "No OIDC parameters provided and owner does not match SkylineCommunications"
+              "use-oidc=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+
+      - name: Azure Login
+        uses: azure/login@v2
+        if: steps.set_oidc.outputs.use-oidc == 'true'
+        with:
+          client-id: ${{ steps.set_oidc.outputs.client-id }}
+          tenant-id: ${{ steps.set_oidc.outputs.tenant-id }}
+          subscription-id: ${{ steps.set_oidc.outputs.subscription-id }}
+
+      - name: Retrieve signing secrets from Azure Key Vault
+        id: signing_secrets
+        if: steps.set_oidc.outputs.use-oidc == 'true'
+        shell: pwsh
+        run: |
+          Write-Output "Fetching secrets from Azure Key Vault..."
+
+          # List of secret names
+          $secretNames = @(
+            "signing-client-id",              # SIGNING_CLIENT_ID
+            "signing-client-secret",          # SIGNING_CLIENT_SECRET
+            "signing-key-vault-certificate",  # SIGNING_KEY_VAULT_CERTIFICATE
+            "signing-key-vault-url",          # SIGNING_KEY_VAULT_URL
+            "signing-tenant-id"               # SIGNING_TENANT_ID
+          )
+
+          foreach ($secretName in $secretNames) {
+            # Retrieve secret value
+            $secretValue = az keyvault secret show --vault-name kv-master-cicd-secrets --name $secretName --query value -o tsv
+
+            # Mask secret value
+            Write-Output "::add-mask::$secretValue"
+
+            # Convert secret name to environment variable format (uppercase + replace hyphens with underscores)
+            $envVarName = $secretName.ToUpper().Replace("-", "_")
+
+            # Export as environment variable
+            "$envVarName=$secretValue" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+
+      - name: Install Tools
+        if: steps.set_oidc.outputs.use-oidc == 'true'
+        run: |
+          dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 1.0.*
+
+      - name: Sign generated dmapp packages
+        if: steps.set_oidc.outputs.use-oidc == 'true'
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
+        run: |
+          Write-Output "Locating .dmapp files in bin folders..."
+
+          # Get all .dmapp files in bin or subfolders of bin
+          $dmappFiles = Get-ChildItem -Path "**/bin" -Recurse -Filter *.dmapp
+
+          if ($dmappFiles.Count -eq 0) {
+              Write-Output "No .dmapp files found."
+          }
+
+          foreach ($file in $dmappFiles) {
+              # Get the parent folder path
+              $parentPath = $file.Directory.FullName
+
+              Write-Output "Signing .dmapp in: $parentPath"
+
+              # Execute the signing command
+              dataminer-package-signature sign $file -kvu $env:SIGNING_KEY_VAULT_URL -kvc $env:SIGNING_KEY_VAULT_CERTIFICATE -o $parentPath
+          }
+
       - name: Authenticate with GitHub CLI
-        if: inputs.referenceType == 'tag'
-        run: gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+        shell: pwsh
+        run: |
+          "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Find Version Comment
-        if: inputs.referenceType == 'tag'
         id: findVersionComment
         run: |
           echo "Checking for release notes associated with the reference: '${{ inputs.referenceName }}'"
@@ -348,7 +510,6 @@ jobs:
         shell: bash
 
       - name: Publish To Catalog
-        if: inputs.referenceType == 'tag'
         env:
           DATAMINER_TOKEN: ${{ secrets.dataminerToken }}
         shell: pwsh
@@ -360,4 +521,5 @@ jobs:
             -p:VersionComment="${{ steps.findVersionComment.outputs.versionComment }}" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
             --configuration ${{ inputs.configuration }} `
-            -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}"
+            -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}" `
+            -p:IsPublishable=false
