@@ -1,35 +1,126 @@
 name: Update Catalog Details
 
-# Controls when the workflow will run
+# Needed for OIDC, checkout, git-push, ...
+permissions: write-all
+
 on:
-  # Allows you to run this workflow from another workflow
   workflow_call:
     inputs:
+      # Optional OIDC inputs in case outside SkylineCommunications organization
+      oidc-client-id:
+        required: false
+        type: string
+      oidc-tenant-id:
+        required: false
+        type: string
+      oidc-subscription-id:
+        required: false
+        type: string
+
       debug:
         required: false
         type: boolean
+
     secrets:
       api-key:
-        required: true
+        required: false
 
 jobs:
+  check_oidc:
+    name: Check OIDC
+    runs-on: ubuntu-latest
+    outputs:
+      client-id: ${{ steps.set_oidc.outputs.client-id }}
+      tenant-id: ${{ steps.set_oidc.outputs.tenant-id }}
+      subscription-id: ${{ steps.set_oidc.outputs.subscription-id }}
+      use-oidc: ${{ steps.set_oidc.outputs.use-oidc }}
+    steps:
+      - name: Set Azure OIDC parameters
+        id: set_oidc
+        run: |
+          echo "Determining Azure OIDC parameters..."
+
+          if [[ -n "${{ inputs.oidc-client-id }}" ]]; then
+            echo "Using provided OIDC parameters"
+            {
+              echo "client-id=${{ inputs.oidc-client-id }}"
+              echo "tenant-id=${{ inputs.oidc-tenant-id }}"
+              echo "subscription-id=${{ inputs.oidc-subscription-id }}"
+              echo "use-oidc=true"
+            } >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.repository_owner }}" == "SkylineCommunications" ]]; then
+            echo "Using SkylineCommunications default OIDC parameters"
+            {
+              echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53"
+              echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40"
+              echo "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220"
+              echo "use-oidc=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "No OIDC parameters provided and owner does not match SkylineCommunications"
+            echo "use-oidc=false" >> "$GITHUB_OUTPUT"
+          fi
+
   update_catalog_details:
       name: Update Catalog Details
       runs-on: ubuntu-latest
-      permissions:
-        contents: write
+      needs: check_oidc
       steps:
+        - name: Azure Login
+          uses: azure/login@v2
+          if: needs.check_oidc.outputs.use-oidc == 'true'
+          with:
+            client-id: ${{ needs.check_oidc.outputs.client-id }}
+            tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+            subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+        - name: Retrieve needed secrets from Azure Key Vault
+          if: needs.check_oidc.outputs.use-oidc == 'true'
+          shell: bash
+          run: |
+            echo "Fetching secrets from Azure Key Vault..."
+
+            # List of secret names needed for this job
+            secret_names=("dataminer-token")
+
+            for secret_name in "${secret_names[@]}"; do
+              # Convert to uppercase and replace hyphens with underscores
+              env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+
+              # Retrieve the secret value
+              secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
+
+              # Mask the secret value
+              echo "::add-mask::$secret_value"
+
+              # Export as environment variable
+              echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
+            done
+
+        - name: Overwrite default secrets with user-defined secrets
+          shell: bash
+          run: |
+            if [[ -n "${{ secrets.api-key }}" ]]; then
+              echo "Using provided api-key secret"
+              echo "DATAMINER_TOKEN=${{ secrets.api-key }}" >> "$GITHUB_ENV"
+            fi
+
         - uses: actions/checkout@v4
-                       
+
         - name: Install .NET Tools
           run: |
             dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 4.0.*
             dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
-        
+
         - name: Create or Extend Catalog.yml
           run: |
-            github-to-catalog-yaml --workspace "${{ github.workspace }}" --github-token ${{ secrets.GITHUB_TOKEN }} --github-repository "${{ github.repository }}" --catalog-identifier "${{ vars.catalogIdentifier }}" --debug "${{ inputs.debug }}"
-       
+            github-to-catalog-yaml \
+              --workspace "${{ github.workspace }}" \
+              --github-token ${{ secrets.GITHUB_TOKEN }} \
+              --github-repository "${{ github.repository }}" \
+              --catalog-identifier "${{ vars.catalogIdentifier }}" \
+              --debug "${{ inputs.debug }}"
+
         - name: Check if catalog.yml or manifest.yml exists
           id: check_files
           shell: pwsh
@@ -44,7 +135,7 @@ jobs:
               Write-Host "No valid file found!"
               exit 1
             }
-        
+
         - uses: actions/upload-artifact@v4
           if: env.catalogDetails != ''
           with:
@@ -57,7 +148,7 @@ jobs:
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git add "${{ github.workspace }}/.githubtocatalog/auto-generated-catalog.yml"
-            
+
             # Check if there are any changes to be committed
             git diff --staged --quiet
             if ($LASTEXITCODE -ne 0) {
@@ -66,18 +157,17 @@ jobs:
             else {
               Write-Host "No changes to commit."
             }
-          
+
         - name: Push .githubtocatalog/auto-generated-catalog
           run: |
             git push
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
+
         - name: Upload to Catalog
           shell: pwsh
           run: |
             dataminer-catalog-upload update-catalog-details `
               --path-to-catalog-yml "${{ github.workspace }}/${{ env.catalogDetails }}" `
-              --dm-catalog-token "${{ secrets.api-key }}" `
+              --dm-catalog-token "${{ env.DATAMINER_TOKEN }}" `
               --debug "${{ inputs.debug }}"
-  
