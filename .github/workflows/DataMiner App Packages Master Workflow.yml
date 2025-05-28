@@ -3,26 +3,38 @@ name: DataMiner App Packages
 # Needed for OIDC, checkout, git-push, ...
 permissions: write-all
 
-# Controls when the workflow will run
 on:
-  # Allows you to run this workflow from another workflow
   workflow_call:
     inputs:
+      # No need to specify these as the workflow can access github.* (https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs#github-context)
+      # When a reusable workflow is triggered by a caller workflow, the github context is always associated with the caller workflow.
       referenceName:
-        required: true
+        required: false
         type: string
       runNumber:
-        required: true
+        required: false
         type: string
       referenceType:
-        required: true
+        required: false
         type: string
       repository:
-        required: true
+        required: false
         type: string
       owner:
-        required: true
+        required: false
         type: string
+
+      # Optional OIDC inputs in case outside SkylineCommunications organization
+      oidc-client-id:
+        required: false
+        type: string
+      oidc-tenant-id:
+        required: false
+        type: string
+      oidc-subscription-id:
+        required: false
+        type: string
+
       sonarCloudProjectName:
         required: true
         type: string
@@ -35,18 +47,10 @@ on:
       debug:
         required: false
         type: boolean
-      oidc-client-id:
-        required: false
-        type: string
-      oidc-tenant-id:
-        required: false
-        type: string
-      oidc-subscription-id:
-        required: false
-        type: string
+
     secrets:
       sonarCloudToken:
-        required: true
+        required: false
       dataminerToken:
         required: false
       azureToken:
@@ -54,12 +58,136 @@ on:
       overrideCatalogDownloadToken:
         required: false
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  check_deprecated_item:
+    name: Check deprecated items
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if obsolete inputs are still used
+        run: |
+          input_names=("referenceName" "runNumber" "referenceType" "repository" "owner")
+
+          for input_name in "${input_names[@]}"; do
+            value="${{ inputs.referenceName }}"  # placeholder, see note below
+            case $input_name in
+              referenceName) value="${{ inputs.referenceName }}" ;;
+              runNumber) value="${{ inputs.runNumber }}" ;;
+              referenceType) value="${{ inputs.referenceType }}" ;;
+              repository) value="${{ inputs.repository }}" ;;
+              owner) value="${{ inputs.owner }}" ;;
+            esac
+
+            if [ -n "$value" ]; then
+              echo "::warning::The input '$input_name' can be safely removed as this is not required anymore."
+            fi
+          done
+
+      - name: Check if obsolete secrets are still used
+        if: github.repository_owner == 'SkylineCommunications'
+        run: |
+          secret_names=("azureToken" "sonarCloudToken")
+
+          for secret_name in "${secret_names[@]}"; do
+            value="${{ secrets.sonarCloudToken }}"  # placeholder, see note below
+            case $secret_name in
+              sonarCloudToken) value="${{ secrets.sonarCloudToken }}" ;;
+              azureToken) value="${{ secrets.azureToken }}" ;;
+            esac
+
+            if [ -n "$value" ]; then
+              echo "::warning::The secret '$secret_name' can be safely removed as this is not required anymore."
+            fi
+          done
+
+  check_oidc:
+    name: Check OIDC
+    runs-on: ubuntu-latest
+    outputs:
+      client-id: ${{ steps.set_oidc.outputs.client-id }}
+      tenant-id: ${{ steps.set_oidc.outputs.tenant-id }}
+      subscription-id: ${{ steps.set_oidc.outputs.subscription-id }}
+      use-oidc: ${{ steps.set_oidc.outputs.use-oidc }}
+    steps:
+      - name: Set Azure OIDC parameters
+        id: set_oidc
+        run: |
+          echo "Determining Azure OIDC parameters..."
+
+          if [[ -n "${{ inputs.oidc-client-id }}" ]]; then
+            echo "Using provided OIDC parameters"
+            {
+              echo "client-id=${{ inputs.oidc-client-id }}"
+              echo "tenant-id=${{ inputs.oidc-tenant-id }}"
+              echo "subscription-id=${{ inputs.oidc-subscription-id }}"
+              echo "use-oidc=true"
+            } >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.repository_owner }}" == "SkylineCommunications" ]]; then
+            echo "Using SkylineCommunications default OIDC parameters"
+            {
+              echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53"
+              echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40"
+              echo "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220"
+              echo "use-oidc=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "No OIDC parameters provided and owner does not match SkylineCommunications"
+            echo "use-oidc=false" >> "$GITHUB_OUTPUT"
+          fi
+
   skyline_ci:
     name: Skyline Quality Gate
     runs-on: ubuntu-latest
+    needs: check_oidc
     steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        if: needs.check_oidc.outputs.use-oidc == 'true'
+        with:
+          client-id: ${{ needs.check_oidc.outputs.client-id }}
+          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+      - name: Retrieve needed secrets from Azure Key Vault
+        if: needs.check_oidc.outputs.use-oidc == 'true'
+        shell: bash
+        run: |
+          echo "Fetching secrets from Azure Key Vault..."
+
+          # List of secret names needed for this job
+          secret_names=("dataminer-token" "azure-token" "sonar-token")
+
+          for secret_name in "${secret_names[@]}"; do
+            # Convert to uppercase and replace hyphens with underscores
+            env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+
+            # Retrieve the secret value
+            secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
+
+            # Mask the secret value
+            echo "::add-mask::$secret_value"
+
+            # Export as environment variable
+            echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
+          done
+
+      - name: Overwrite default secrets with user-defined secrets
+        shell: bash
+        run: |
+          if [[ -n "${{ secrets.azureToken }}" ]]; then
+            echo "Using provided azureToken secret"
+            echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
+          fi
+
+          if [[ -n "${{ secrets.sonarCloudToken }}" ]]; then
+            echo "Using provided sonarCloudToken secret"
+            echo "SONAR_TOKEN=${{ secrets.sonarCloudToken }}" >> "$GITHUB_ENV"
+          fi
+
+          if [[ -n "${{ secrets.dataminerToken }}" ]]; then
+            echo "Using provided dataminerToken secret"
+            echo "DATAMINER_TOKEN=${{ secrets.dataminerToken }}" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -68,7 +196,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      
+
       - name: Cache and Install Mono
         uses: awalsh128/cache-apt-pkgs-action@v1.5.0
         with:
@@ -93,7 +221,7 @@ jobs:
       - name: Validate SonarCloud Secret Token
         id: validate-sonar-token
         run: |
-          if [[ -z "${{ secrets.sonarCloudToken }}" ]]; then
+          if [[ -z "${{ env.SONAR_TOKEN }}" ]]; then
             echo "Error: sonarCloudToken is not set."
             echo "Please create a SonarCloud token by visiting: https://sonarcloud.io/account/security and copy the value of the created token."
             repo_url="https://github.com/${{ github.repository }}/settings/secrets/actions"
@@ -108,9 +236,9 @@ jobs:
 
       - name: Validate DataMiner Secret Token
         id: validate-dataminer-token
-        if: inputs.referenceType == 'tag'
+        if: github.ref_type == 'tag'
         run: |
-          if [[ -z "${{ secrets.dataminerToken }}" ]]; then
+          if [[ -z "${{ env.DATAMINER_TOKEN }}" ]]; then
             echo "Error: dataminerToken is not set. Release not possible!"
             echo "Please create or re-use an admin.dataminer.services token by visiting: https://admin.dataminer.services/."
             echo "Navigate to the right organization, then go to Keys and create or find a key with the permissions Register catalog items, Download catalog versions, and Read catalog items."
@@ -131,21 +259,18 @@ jobs:
         shell: bash
 
       - name: Enable Skyline NuGet Registries
-        if: inputs.owner == 'SkylineCommunications'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AZURE_TOKEN: ${{ secrets.azureToken }}  
+        if: github.repository_owner == 'SkylineCommunications'
         run: |
           $sources = @(
             @{ Name = "PrivateGitHubNugets"; URL = "https://nuget.pkg.github.com/SkylineCommunications/index.json"; Username = "USERNAME"; Password = "${{ secrets.GITHUB_TOKEN }}" },
-            @{ Name = "CloudNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"; Username = "az"; Password = "${{ secrets.azureToken }}" },
-            @{ Name = "PrivateAzureNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"; Username = "az"; Password = "${{ secrets.azureToken }}" }
+            @{ Name = "CloudNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"; Username = "az"; Password = "${{ env.AZURE_TOKEN }}" },
+            @{ Name = "PrivateAzureNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"; Username = "az"; Password = "${{ env.AZURE_TOKEN }}" }
           )
-      
+
           foreach ($source in $sources) {
             if ($source.Password -ne "") {
               Write-Host "Checking source $($source.Name)..."
-              
+
               if (dotnet nuget list source | Select-String -Pattern $source.Name) {
                 Write-Host "Updating existing source $($source.Name)."
                 dotnet nuget update source $source.Name --source $source.URL --username $source.Username --password $source.Password --store-password-in-clear-text
@@ -170,13 +295,13 @@ jobs:
           import os
           env_file = os.getenv('GITHUB_ENV')
           with open(env_file, "a") as myfile:
-              myfile.write("lowerCaseOwner=" + str.lower("${{ inputs.owner }}"))
+              myfile.write("lowerCaseOwner=" + str.lower("${{ github.repository_owner }}"))
         shell: python
 
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
         run: |
-          sonarCloudProjectStatus=$(curl -s -u "${{ secrets.sonarCloudToken }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }}")
+          sonarCloudProjectStatus=$(curl -s -u "${{ env.SONAR_TOKEN }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }}")
 
           # Check if the response is empty or not valid JSON
           if [ -z "$sonarCloudProjectStatus" ] || ! echo "$sonarCloudProjectStatus" | jq . > /dev/null 2>&1; then
@@ -192,25 +317,25 @@ jobs:
         shell: bash
 
       - name: Apply SourceCode Url To Manifest
-        run: |      
+        run: |
           $manifestFiles = Get-ChildItem -Recurse -Filter 'manifest.yml' |
               Where-Object { $_.FullName -match '[\\/]CatalogInformation[\\/]' }
-      
+
           foreach ($file in $manifestFiles) {
               $lines = Get-Content -Path $file.FullName
               $updated = $false
-      
+
               for ($i = 0; $i -lt $lines.Count; $i++) {
                   if ($lines[$i] -match '^\s*source_code_url:\s*$') {
                       $indent = ($lines[$i] -match '^(\s*)source_code_url:')[1]
-                      $lines[$i] = "$indent" + "source_code_url: 'https://github.com/${{ inputs.repository }}'"
+                      $lines[$i] = "$indent" + "source_code_url: 'https://github.com/${{ github.repository }}'"
                       $updated = $true
                       break
                   }
               }
-      
+
               if ($updated) {
-                  Write-Host "Updating: $($file.FullName) with 'source_code_url: https://github.com/${{ inputs.repository }}'"
+                  Write-Host "Updating: $($file.FullName) with 'source_code_url: https://github.com/${{ github.repository }}'"
                   Set-Content -Path $file.FullName -Value $lines -Encoding UTF8
               }
           }
@@ -220,66 +345,61 @@ jobs:
         if: ${{ fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status == 'NONE' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
         run: |
-            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
             dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
-            -p:GenerateDataMinerPackage=false `
-            --configuration ${{ inputs.configuration }} `
-            -nodeReuse:false
-            dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
+              -p:GenerateDataMinerPackage=false `
+              --configuration ${{ inputs.configuration }} `
+              -nodeReuse:false
+            dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
         continue-on-error: true
         shell: pwsh
 
       - name: Start Analysis
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
         run: |
-            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ secrets.sonarCloudToken }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
         continue-on-error: true
 
       - name: Build for pre-release
-        if: inputs.referenceType == 'branch'
+        if: github.ref_type == 'branch'
         env:
-          DATAMINER_TOKEN: ${{ secrets.dataminerToken }}
           OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.overrideCatalogDownloadToken }}
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
-          -p:Version="0.0.${{ inputs.runNumber }}" `
-          --configuration ${{ inputs.configuration }} `
-          -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
-          -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" `
-          -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}" `
-          -nodeReuse:false
+            -p:Version="0.0.${{ github.run_number }}" `
+            --configuration ${{ inputs.configuration }} `
+            -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
+            -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" `
+            -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}" `
+            -nodeReuse:false
         shell: pwsh
 
       - name: Build for release
-        if: inputs.referenceType == 'tag'
+        if: github.ref_type == 'tag'
         env:
-          DATAMINER_TOKEN: ${{ secrets.dataminerToken }}
           OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.overrideCatalogDownloadToken }}
         run: |
           dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
-          -p:Version="${{ inputs.referenceName }}" `
-          --configuration ${{ inputs.configuration }} `
-          -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
-          -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" `
-          -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}" `
-          -nodeReuse:false
+            -p:Version="${{ github.ref_name }}" `
+            --configuration ${{ inputs.configuration }} `
+            -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
+            -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" `
+            -p:SkylineDataMinerSdkDebug="${{ inputs.debug }}" `
+            -nodeReuse:false
         shell: pwsh
 
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
         id: unit-tests
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --no-build --configuration ${{ inputs.configuration }} --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
-  
+
       - name: Stop Analysis
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
         run: |
-            dotnet sonarscanner end /d:sonar.token="${{ secrets.sonarCloudToken }}"
+            dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
         continue-on-error: true
 
       - name: SonarCloud Quality Gate check
@@ -288,13 +408,11 @@ jobs:
         with:
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
         timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.sonarCloudToken }}
 
       - name: Create package name
         id: packageName
         run: |
-          $tempName = "${{ inputs.repository }}"
+          $tempName = "${{ github.repository }}"
           $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
           echo "name=$safeName" >> $env:GITHUB_OUTPUT
         shell: pwsh
@@ -307,7 +425,7 @@ jobs:
               --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" \
               --package-file "$file" \
               --package-name "${{ steps.packageName.outputs.name }}" \
-              --package-version "${{ inputs.referenceName }}" \
+              --package-version "${{ github.ref_name }}" \
               --package-supplier "Skyline Communications" \
               --debug "${{ inputs.debug }}"
           done
@@ -326,12 +444,51 @@ jobs:
     name: Skyline Catalog Release
     runs-on: windows-latest
     if: github.ref_type == 'tag'
-    needs: skyline_ci
+    needs: [skyline_ci, check_oidc]
     steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        if: needs.check_oidc.outputs.use-oidc == 'true'
+        with:
+          client-id: ${{ needs.check_oidc.outputs.client-id }}
+          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+      - name: Retrieve needed secrets from Azure Key Vault
+        if: needs.check_oidc.outputs.use-oidc == 'true'
+        shell: bash
+        run: |
+          echo "Fetching secrets from Azure Key Vault..."
+
+          # List of secret names needed for this job
+          secret_names=("dataminer-token" "signing-client-id" "signing-client-secret" "signing-tenant-id" "signing-key-vault-certificate" "signing-key-vault-url")
+
+          for secret_name in "${secret_names[@]}"; do
+            # Convert to uppercase and replace hyphens with underscores
+            env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+
+            # Retrieve the secret value
+            secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
+
+            # Mask the secret value
+            echo "::add-mask::$secret_value"
+
+            # Export as environment variable
+            echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
+          done
+
+      - name: Overwrite default secrets with user-defined secrets
+        shell: bash
+        run: |
+          if [[ -n "${{ secrets.dataminerToken }}" ]]; then
+            echo "Using provided dataminerToken secret"
+            echo "DATAMINER_TOKEN=${{ secrets.dataminerToken }}" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Find .sln file
         id: findSlnFile
         run: |
@@ -378,76 +535,13 @@ jobs:
           Write-Output "Cleanup complete."
         shell: pwsh
 
-      - name: Set Azure OIDC parameters
-        id: set_oidc
-        shell: pwsh
-        run: |
-          Write-Output "Determining Azure OIDC parameters..."
-
-          if ("${{ inputs.oidc-client-id }}" -ne "") {
-              Write-Output "Using provided OIDC parameters"
-              "client-id=${{ inputs.oidc-client-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-              "tenant-id=${{ inputs.oidc-tenant-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-              "subscription-id=${{ inputs.oidc-subscription-id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-              "use-oidc=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          }
-          elseif ("${{ inputs.owner }}" -eq "SkylineCommunications") {
-              Write-Output "Using SkylineCommunications default OIDC parameters"
-              "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-              "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-              "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-              "use-oidc=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          }
-          else {
-              Write-Output "No OIDC parameters provided and owner does not match SkylineCommunications"
-              "use-oidc=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          }
-
-      - name: Azure Login
-        uses: azure/login@v2
-        if: steps.set_oidc.outputs.use-oidc == 'true'
-        with:
-          client-id: ${{ steps.set_oidc.outputs.client-id }}
-          tenant-id: ${{ steps.set_oidc.outputs.tenant-id }}
-          subscription-id: ${{ steps.set_oidc.outputs.subscription-id }}
-
-      - name: Retrieve signing secrets from Azure Key Vault
-        id: signing_secrets
-        if: steps.set_oidc.outputs.use-oidc == 'true'
-        shell: pwsh
-        run: |
-          Write-Output "Fetching secrets from Azure Key Vault..."
-
-          # List of secret names
-          $secretNames = @(
-            "signing-client-id",              # SIGNING_CLIENT_ID
-            "signing-client-secret",          # SIGNING_CLIENT_SECRET
-            "signing-key-vault-certificate",  # SIGNING_KEY_VAULT_CERTIFICATE
-            "signing-key-vault-url",          # SIGNING_KEY_VAULT_URL
-            "signing-tenant-id"               # SIGNING_TENANT_ID
-          )
-
-          foreach ($secretName in $secretNames) {
-            # Retrieve secret value
-            $secretValue = az keyvault secret show --vault-name kv-master-cicd-secrets --name $secretName --query value -o tsv
-
-            # Mask secret value
-            Write-Output "::add-mask::$secretValue"
-
-            # Convert secret name to environment variable format (uppercase + replace hyphens with underscores)
-            $envVarName = $secretName.ToUpper().Replace("-", "_")
-
-            # Export as environment variable
-            "$envVarName=$secretValue" | Out-File -FilePath $env:GITHUB_ENV -Append
-          }
-
       - name: Install Tools
-        if: steps.set_oidc.outputs.use-oidc == 'true'
+        if: needs.check_oidc.outputs.use-oidc == 'true'
         run: |
           dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 1.0.*
 
       - name: Sign generated dmapp packages
-        if: steps.set_oidc.outputs.use-oidc == 'true'
+        if: needs.check.outputs.use-oidc == 'true'
         shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
@@ -481,24 +575,24 @@ jobs:
       - name: Find Version Comment
         id: findVersionComment
         run: |
-          echo "Checking for release notes associated with the reference: '${{ inputs.referenceName }}'"
-      
+          echo "Checking for release notes associated with the reference: '${{ github.ref_name }}'"
+
           # Retrieve the release note body
-          RELEASE_NOTE=$(gh release view "${{ inputs.referenceName }}" --json body -q '.body' 2>/dev/null || echo "")
-          
+          RELEASE_NOTE=$(gh release view "${{ github.ref_name }}" --json body -q '.body' 2>/dev/null || echo "")
+
           escape_special_chars() {
             echo "$1" | sed -e 's/,/%2c/g' -e 's/"/%22/g' -e 's/;/%3b/g'
           }
-          
+
           if [[ -n "$RELEASE_NOTE" ]]; then
             ESCAPED_RELEASE_NOTE=$(escape_special_chars "$RELEASE_NOTE")
-            echo "Release note found for '${{ inputs.referenceName }}': $ESCAPED_RELEASE_NOTE"
+            echo "Release note found for '${{ github.ref_name }}': $ESCAPED_RELEASE_NOTE"
             # Escape multiline string for GITHUB_OUTPUT
             echo "versionComment<<EOF" >> $GITHUB_OUTPUT
             echo "$ESCAPED_RELEASE_NOTE" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           else
-            echo "No release note found for '${{ inputs.referenceName }}'. Falling back to tag or commit message."
+            echo "No release note found for '${{ github.ref_name }}'. Falling back to tag or commit message."
             VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
             ESCAPED_VERSION_COMMENT=$(escape_special_chars "$VERSION_COMMENT")
             echo "Fallback version comment: $ESCAPED_VERSION_COMMENT"
@@ -508,14 +602,12 @@ jobs:
         shell: bash
 
       - name: Publish To Catalog
-        env:
-          DATAMINER_TOKEN: ${{ secrets.dataminerToken }}
         shell: pwsh
         run: |
           dotnet publish `
             "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
             --no-build `
-            -p:Version="${{ inputs.referenceName }}" `
+            -p:Version="${{ github.ref_name }}" `
             -p:VersionComment="${{ steps.findVersionComment.outputs.versionComment }}" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
             --configuration ${{ inputs.configuration }} `
