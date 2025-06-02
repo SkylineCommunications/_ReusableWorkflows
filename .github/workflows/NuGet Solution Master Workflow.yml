@@ -345,9 +345,9 @@ jobs:
         uses: azure/login@v2
         if: needs.check_oidc.outputs.use-oidc == 'true'
         with:
-          client-id: ${{ inputs.oidc-client-id }}
-          tenant-id: ${{ inputs.oidc-tenant-id }}
-          subscription-id: ${{ inputs.oidc-subscription-id }}
+          client-id: ${{ needs.check_oidc.outputs.client-id }}
+          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Retrieve needed secrets from Azure Key Vault
         if: needs.check_oidc.outputs.use-oidc == 'true'
