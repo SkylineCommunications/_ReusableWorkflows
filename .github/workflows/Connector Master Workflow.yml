@@ -1,113 +1,183 @@
 name: Connector Master Workflow
 
-# Controls when the workflow will run
+# Needed for OIDC, checkout, git-push, ...
+permissions: write-all
+
 on:
-  # Allows you to run this workflow from another workflow
   workflow_call:
     outputs:
-      quality_gate: 
+      quality_gate:
         description: "Results from Skyline Quality Gate."
         value: ${{ jobs.CI_SDK.outputs.quality_gate }}${{ jobs.CI_Legacy.outputs.quality_gate }}
+
     inputs:
+      # No need to specify these as the workflow can access github.* (https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs#github-context)
+      # When a reusable workflow is triggered by a caller workflow, the github context is always associated with the caller workflow.
       referenceName:
-        required: true
-        type: string       
-      runNumber:
-        required: true
-        type: string   
-      referenceType:
-        required: true
-        type: string   
-      repository:
-        required: true
-        type: string 
-      owner:
-        required: true
+        required: false
         type: string
+      runNumber:
+        required: false
+        type: string
+      referenceType:
+        required: false
+        type: string
+      repository:
+        required: false
+        type: string
+      owner:
+        required: false
+        type: string
+
+      # Optional OIDC inputs in case outside SkylineCommunications organization
+      oidc-client-id:
+        required: false
+        type: string
+      oidc-tenant-id:
+        required: false
+        type: string
+      oidc-subscription-id:
+        required: false
+        type: string
+
       sonarCloudProjectName:
         required: true
         type: string
       debug:
         required: false
         type: boolean
+
     secrets:
       api-key:
-        required: true
+        required: false
       sonarCloudToken:
-        required: true
+        required: false
       azureToken:
         required: false
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+
 jobs:
+  check_deprecated_item:
+    name: Check deprecated items
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if obsolete inputs are still used
+        run: |
+          input_names=("referenceName" "runNumber" "referenceType" "repository" "owner")
+
+          for input_name in "${input_names[@]}"; do
+            value="${{ inputs.referenceName }}"  # placeholder, see note below
+            case $input_name in
+              referenceName) value="${{ inputs.referenceName }}" ;;
+              runNumber) value="${{ inputs.runNumber }}" ;;
+              referenceType) value="${{ inputs.referenceType }}" ;;
+              repository) value="${{ inputs.repository }}" ;;
+              owner) value="${{ inputs.owner }}" ;;
+            esac
+
+            if [ -n "$value" ]; then
+              echo "::warning::The input '$input_name' can be safely removed as this is not required anymore."
+            fi
+          done
+
+      - name: Check if obsolete secrets are still used
+        if: github.repository_owner == 'SkylineCommunications'
+        run: |
+          secret_names=("azureToken" "sonarCloudToken")
+
+          for secret_name in "${secret_names[@]}"; do
+            value="${{ secrets.sonarCloudToken }}"  # placeholder, see note below
+            case $secret_name in
+              sonarCloudToken) value="${{ secrets.sonarCloudToken }}" ;;
+              azureToken) value="${{ secrets.azureToken }}" ;;
+            esac
+
+            if [ -n "$value" ]; then
+              echo "::warning::The secret '$secret_name' can be safely removed as this is not required anymore."
+            fi
+          done
+
+  check_oidc:
+    name: Check OIDC
+    runs-on: ubuntu-latest
+    outputs:
+      client-id: ${{ steps.set_oidc.outputs.client-id }}
+      tenant-id: ${{ steps.set_oidc.outputs.tenant-id }}
+      subscription-id: ${{ steps.set_oidc.outputs.subscription-id }}
+      use-oidc: ${{ steps.set_oidc.outputs.use-oidc }}
+    steps:
+      - name: Set Azure OIDC parameters
+        id: set_oidc
+        run: |
+          echo "Determining Azure OIDC parameters..."
+
+          if [[ -n "${{ inputs.oidc-client-id }}" ]]; then
+            echo "Using provided OIDC parameters"
+            {
+              echo "client-id=${{ inputs.oidc-client-id }}"
+              echo "tenant-id=${{ inputs.oidc-tenant-id }}"
+              echo "subscription-id=${{ inputs.oidc-subscription-id }}"
+              echo "use-oidc=true"
+            } >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.repository_owner }}" == "SkylineCommunications" ]]; then
+            echo "Using SkylineCommunications default OIDC parameters"
+            {
+              echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53"
+              echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40"
+              echo "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220"
+              echo "use-oidc=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "No OIDC parameters provided and owner does not match SkylineCommunications"
+            echo "use-oidc=false" >> "$GITHUB_OUTPUT"
+          fi
+
   check_solution_type:
       name: Check Project Types
-      runs-on: windows-latest
+      runs-on: ubuntu-latest
       outputs:
         isSdk: ${{ steps.checker.outputs.isSdk }}
 
       steps:
-        # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
         - uses: actions/checkout@v4
 
-        - name: Initialize
-          run: |
-            echo "workspace" ${{ github.workspace }}
-            echo "github url" ${{ github.repositoryUrl }}
-            echo "ref name" ${{ inputs.referenceName }}
-            echo "run number" ${{ inputs.runNumber }}
-            echo "ref type" ${{ inputs.referenceType }}
-            echo "repository" ${{ inputs.repository }}
-            echo "sonarCloudProjectName" ${{ inputs.sonarCloudProjectName }}
-
         - name: Install SDKChecker
-          run: |
-            dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global
-          shell: pwsh
+          run: dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global
 
         - name: Run SDKChecker
           id: checker
           run: |
-            $output = $(SDKChecker --workspace "${{ github.workspace }}" --repositoryName "${{ github.repositoryUrl }}" --repositoryBranch "${{ inputs.referenceName }}")
-            if ([String]::IsNullOrWhiteSpace($output)) {
-              echo "isSdk=true" >> $env:GITHUB_OUTPUT
-            } else {
-              echo "isSdk=false" >> $env:GITHUB_OUTPUT
-            }
-            Write-Host "Output: $output"
-          shell: pwsh       
+            output="$(SDKChecker --workspace "${{ github.workspace }}" --repositoryName "${{ github.repositoryUrl }}" --repositoryBranch "${{ github.ref_name }}")"
+            if [ -z "$output" ]; then
+              echo "isSdk=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "isSdk=false" >> "$GITHUB_OUTPUT"
+            fi
+            echo "Output: $output"
 
   CI_Legacy:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master Legacy Workflow.yml@main
-    needs: check_solution_type
+    uses: ./.github/workflows/Connector Master Legacy Workflow.yml
+    needs: [check_solution_type, check_oidc]
     if: needs.check_solution_type.outputs.isSdk == 'false'
     with:
-      referenceName: ${{ github.ref_name }}
-      runNumber: ${{ github.run_number }}
-      referenceType: ${{ github.ref_type }}
-      repository: ${{ github.repository }}
-      owner: ${{ github.repository_owner }}
+      oidc-client-id: ${{ needs.check_oidc.outputs.client-id }}
+      oidc-tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+      oidc-subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+      use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+
       sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
       debug: ${{ inputs.debug }}
-    secrets:
-      # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
-      api-key: ${{ secrets.api-key }}
-      sonarCloudToken: ${{ secrets.sonarCloudToken }}
-      azureToken: ${{ secrets.azureToken }}
+    secrets: inherit
 
   CI_SDK:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master SDK Workflow.yml@main
-    needs: check_solution_type
+    uses: ./.github/workflows/Connector Master SDK Workflow.yml
+    needs: [check_solution_type, check_oidc]
     if: needs.check_solution_type.outputs.isSdk == 'true'
     with:
-      referenceName: ${{ github.ref_name }}
-      runNumber: ${{ github.run_number }}
-      referenceType: ${{ github.ref_type }}
-      repository: ${{ github.repository }}
-      owner: ${{ github.repository_owner }}
+      oidc-client-id: ${{ needs.check_oidc.outputs.client-id }}
+      oidc-tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+      oidc-subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+      use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+
       sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
       debug: ${{ inputs.debug }}
-    secrets:
-      # The API-key: generated in the DCP Admin app (https://admin.dataminer.services/) as authentication for a certain DataMiner System.
-      api-key: ${{ secrets.api-key }}
-      sonarCloudToken: ${{ secrets.sonarCloudToken }}
-      azureToken: ${{ secrets.azureToken }}
+    secrets: inherit
