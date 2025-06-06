@@ -255,7 +255,6 @@ jobs:
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
         id: unit-tests
-        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
         continue-on-error: true
 
