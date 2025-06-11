@@ -294,7 +294,7 @@ jobs:
           dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetChangeVersion --global --version 2.*
 
       - name: Update Skyline.DataMiner.Core.AppPackages
-        run: NuGetChangeVersion Skyline.DataMiner.Core.AppPackageInstaller --workspace "${{ github.workspace }}" --solution "${{ steps.findSlnFile.outputs.solutionFilePath }}" --nugetVersion $VERSION_APPPACKAGEINSTALLER
+        run: NuGetChangeVersion --name Skyline.DataMiner.Core.AppPackageInstaller --workspace "${{ github.workspace }}" --solution "${{ steps.findSlnFile.outputs.solutionFilePath }}" --nugetVersion $VERSION_APPPACKAGEINSTALLER
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
