@@ -58,6 +58,9 @@ on:
       overrideCatalogDownloadToken:
         required: false
 
+env:
+  VERSION_APPPACKAGEINSTALLER: '2.1.2'
+
 jobs:
   check_deprecated_item:
     name: Check deprecated items
@@ -288,6 +291,10 @@ jobs:
         run: |
           dotnet tool install dotnet-sonarscanner --global
           dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.0.*
+          dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetChangeVersion --global --version 2.*
+
+      - name: Update Skyline.DataMiner.Core.AppPackages
+        run: NuGetChangeVersion Skyline.DataMiner.Core.AppPackageInstaller --workspace "${{ github.workspace }}" --solution "${{ steps.findSlnFile.outputs.solutionFilePath }}" --nugetVersion $VERSION_APPPACKAGEINSTALLER
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
