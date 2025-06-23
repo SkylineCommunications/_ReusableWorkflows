@@ -59,7 +59,7 @@ on:
         required: false
 
 env:
-  VERSION_APPPACKAGEINSTALLER: '2.1.2'
+  VERSION_APPPACKAGEINSTALLER: '2.2.0'
 
 jobs:
   check_deprecated_item:
