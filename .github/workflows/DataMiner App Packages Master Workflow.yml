@@ -316,9 +316,12 @@ jobs:
 
           $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
 
-          $jsonContent | ConvertTo-Json -Depth 10 | Set-Content $globalJsonPath -Encoding UTF8
+          $updatedJson = $jsonContent | ConvertTo-Json -Depth 10
+
+          $updatedJson | Set-Content $globalJsonPath -Encoding UTF8
+
           Write-Host "Updated global.json:"
-          Write-Host $jsonContent
+          Write-Host $updatedJson
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
