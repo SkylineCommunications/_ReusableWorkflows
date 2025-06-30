@@ -60,6 +60,7 @@ on:
 
 env:
   VERSION_APPPACKAGEINSTALLER: '2.2.0'
+  VERSION_SDK: '1.1.3'
 
 jobs:
   check_deprecated_item:
@@ -295,6 +296,28 @@ jobs:
 
       - name: Update Skyline.DataMiner.Core.AppPackages
         run: NuGetChangeVersion --name Skyline.DataMiner.Core.AppPackageInstaller --workspace "${{ github.workspace }}" --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}" --nugetVersion $VERSION_APPPACKAGEINSTALLER
+
+
+      - name: Update Skyline.DataMiner.Sdk version in global.json (if present)
+        shell: pwsh
+        run: |
+          $globalJsonPath = Join-Path $env:GITHUB_WORKSPACE "global.json"
+
+          if (-Not (Test-Path $globalJsonPath)) {
+            Write-Host "No global.json found. Skipping update."
+            return
+          }
+
+          $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
+
+          if (-not $jsonContent.'msbuild-sdks') {
+            $jsonContent | Add-Member -MemberType NoteProperty -Name 'msbuild-sdks' -Value @{}
+          }
+
+          $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
+
+          $jsonContent | ConvertTo-Json -Depth 10 | Set-Content $globalJsonPath -Encoding UTF8
+
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
