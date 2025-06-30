@@ -59,8 +59,8 @@ on:
         required: false
 
 env:
-  VERSION_APPPACKAGEINSTALLER: '2.2.0'
-  VERSION_SDK: '1.1.3'
+  VERSION_APPPACKAGEINSTALLER: '3.0.0-test1'
+  VERSION_SDK: '2.0.0-test1'
 
 jobs:
   check_deprecated_item:
@@ -317,7 +317,8 @@ jobs:
           $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
 
           $jsonContent | ConvertTo-Json -Depth 10 | Set-Content $globalJsonPath -Encoding UTF8
-
+          Write-Host "Updated global.json:"
+          Write-Host $updatedJson
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
