@@ -635,10 +635,6 @@ jobs:
           fi
         shell: bash
 
-      - name: Update Skyline.DataMiner.Core.AppPackages
-        run: NuGetChangeVersion --name Skyline.DataMiner.Core.AppPackageInstaller --workspace "${{ github.workspace }}" --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}" --nugetVersion $VERSION_APPPACKAGEINSTALLER
-
-
       - name: Update Skyline.DataMiner.Sdk version in global.json (if present)
         shell: pwsh
         run: |
