@@ -318,7 +318,7 @@ jobs:
 
           $jsonContent | ConvertTo-Json -Depth 10 | Set-Content $globalJsonPath -Encoding UTF8
           Write-Host "Updated global.json:"
-          Write-Host $updatedJson
+          Write-Host $jsonContent
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
