@@ -59,7 +59,8 @@ on:
         required: false
 
 env:
-  VERSION_APPPACKAGEINSTALLER: '2.2.0'
+  VERSION_APPPACKAGEINSTALLER: '3.0.0-test1'
+  VERSION_SDK: '2.0.0-test1'
 
 jobs:
   check_deprecated_item:
@@ -295,6 +296,32 @@ jobs:
 
       - name: Update Skyline.DataMiner.Core.AppPackages
         run: NuGetChangeVersion --name Skyline.DataMiner.Core.AppPackageInstaller --workspace "${{ github.workspace }}" --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}" --nugetVersion $VERSION_APPPACKAGEINSTALLER
+
+
+      - name: Update Skyline.DataMiner.Sdk version in global.json (if present)
+        shell: pwsh
+        run: |
+          $globalJsonPath = Join-Path $env:GITHUB_WORKSPACE "global.json"
+
+          if (-Not (Test-Path $globalJsonPath)) {
+            Write-Host "No global.json found. Skipping update."
+            return
+          }
+
+          $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
+
+          if (-not $jsonContent.'msbuild-sdks') {
+            $jsonContent | Add-Member -MemberType NoteProperty -Name 'msbuild-sdks' -Value @{}
+          }
+
+          $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
+
+          $updatedJson = $jsonContent | ConvertTo-Json -Depth 10
+
+          $updatedJson | Set-Content $globalJsonPath -Encoding UTF8
+
+          Write-Host "Updated global.json:"
+          Write-Host $updatedJson
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
@@ -607,6 +634,31 @@ jobs:
             echo "versionComment=$ESCAPED_VERSION_COMMENT" >> $GITHUB_OUTPUT
           fi
         shell: bash
+
+      - name: Update Skyline.DataMiner.Sdk version in global.json (if present)
+        shell: pwsh
+        run: |
+          $globalJsonPath = Join-Path $env:GITHUB_WORKSPACE "global.json"
+
+          if (-Not (Test-Path $globalJsonPath)) {
+            Write-Host "No global.json found. Skipping update."
+            return
+          }
+
+          $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
+
+          if (-not $jsonContent.'msbuild-sdks') {
+            $jsonContent | Add-Member -MemberType NoteProperty -Name 'msbuild-sdks' -Value @{}
+          }
+
+          $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
+
+          $updatedJson = $jsonContent | ConvertTo-Json -Depth 10
+
+          $updatedJson | Set-Content $globalJsonPath -Encoding UTF8
+
+          Write-Host "Updated global.json:"
+          Write-Host $updatedJson
 
       - name: Publish To Catalog
         shell: pwsh
