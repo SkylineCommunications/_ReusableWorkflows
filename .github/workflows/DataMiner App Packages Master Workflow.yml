@@ -59,7 +59,7 @@ on:
         required: false
 
 env:
-  VERSION_APPPACKAGEINSTALLER: '3.0.0'
+  VERSION_APPPACKAGEINSTALLER: '3.0.1'
   VERSION_SDK: '2.0.1'
 
 jobs:
