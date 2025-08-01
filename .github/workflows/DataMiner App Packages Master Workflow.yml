@@ -59,8 +59,8 @@ on:
         required: false
 
 env:
-  VERSION_APPPACKAGEINSTALLER: '3.0.1'
-  VERSION_SDK: '2.0.1'
+  VERSION_APPPACKAGEINSTALLER: '3.0.2'
+  VERSION_SDK: '2.0.2'
 
 jobs:
   check_deprecated_item:
