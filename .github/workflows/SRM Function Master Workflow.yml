@@ -45,7 +45,7 @@ jobs:
     outputs:
       quality: ${{ steps.quality-step.outputs.results}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Initialize
         run: |
           echo "workspace" ${{ github.workspace }}

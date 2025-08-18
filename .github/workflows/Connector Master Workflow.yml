@@ -138,7 +138,7 @@ jobs:
         isSdk: ${{ steps.checker.outputs.isSdk }}
 
       steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v5
 
         - name: Install SDKChecker
           run: dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global
