@@ -184,7 +184,8 @@ jobs:
               /d:sonar.host.url="https://sonarcloud.io" `
               /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" `
               /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx" `
-              /d:sonar.exclusions="**/*.html,**/*.yml,**/*.xml"
+              /d:sonar.exclusions="**/*.yml,**/*.xml" `
+              /d:sonar.cpd.exclusions="**/*.cs"
         continue-on-error: true
 
       - name: Building
@@ -196,6 +197,22 @@ jobs:
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
         continue-on-error: true
   
+      - name: Stop Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+        run: |
+            dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
+        continue-on-error: true
+
+      - name: SonarCloud Quality Gate check
+        id: sonarcloud-quality-gate-check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        with:
+          scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
+        continue-on-error: true
+        # Force to fail step after specific time.
+        timeout-minutes: 5
+
       - name: Run Connector Validator
         run: |
           dataminer-validator validate-protocol-solution `
@@ -227,22 +244,6 @@ jobs:
           fi
         continue-on-error: true
         shell: bash
-
-      - name: Stop Analysis
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-        run: |
-            dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
-        continue-on-error: true
-
-      - name: SonarCloud Quality Gate check
-        id: sonarcloud-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        with:
-          scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
-        continue-on-error: true
-        # Force to fail step after specific time.
-        timeout-minutes: 5
 
       - name: Quality Gate
         id: quality-step
