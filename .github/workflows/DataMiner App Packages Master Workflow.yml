@@ -379,7 +379,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
         run: |
-            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+            dotnet sonarscanner begin `
+              /k:"${{ inputs.sonarCloudProjectName }}" `
+              /o:"${{ env.lowerCaseOwner }}" `
+              /d:sonar.token="${{ env.SONAR_TOKEN }}" `
+              /d:sonar.host.url="https://sonarcloud.io" `
+              /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" `
+              /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx" `
+              /d:sonar.exclusions="**/*.yml,**/*.xml"
             dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
               -p:GenerateDataMinerPackage=false `
               --configuration ${{ inputs.configuration }} `
@@ -392,7 +399,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
         run: |
-            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
+            dotnet sonarscanner begin `
+              /k:"${{ inputs.sonarCloudProjectName }}" `
+              /o:"${{ env.lowerCaseOwner }}" `
+              /d:sonar.token="${{ env.SONAR_TOKEN }}" `
+              /d:sonar.host.url="https://sonarcloud.io" `
+              /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" `
+              /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx" `
+              /d:sonar.exclusions="**/*.yml,**/*.xml"
         continue-on-error: true
 
       - name: Build for pre-release
