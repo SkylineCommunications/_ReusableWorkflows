@@ -106,36 +106,12 @@ jobs:
           java-version: 17
           distribution: 'zulu'
 
-      - name: Cache SonarCloud scanner
-        id: cache-sonar-scanner
-        uses: actions/cache@v4
-        with:
-          path: .\.sonar\scanner
-          key: ${{ runner.os }}-sonar-scanner
-          restore-keys: ${{ runner.os }}-sonar-scanner
-
-      - name: Install SonarCloud scanner
-        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
-        run: |
-          dotnet tool install dotnet-sonarscanner --tool-path .\.sonar\scanner
-
-      - name: Install TestProjectDetector
-        run: |
-          dotnet tool install --tool-path .\.tools\TestProjectDetector Skyline.DataMiner.CICD.Tools.TestProjectDetector
-
       - name: Install .NET Tools
         run: |
-          dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --global
-          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.0.*
-
-      - name: Prepare SonarCloud Variables
-        id: prepSonarCloudVar
-        run: |
-          import os
-          env_file = os.getenv('GITHUB_ENV')
-          with open(env_file, "a") as myfile:
-               myfile.write("cleanOwner=" + str.lower("${{ github.repository_owner }}"))
-        shell: python
+          dotnet tool install Skyline.DataMiner.CICD.Tools.TestProjectDetector --tool-path .\.tools\TestProjectDetector 
+          dotnet tool install -g dotnet-sonarscanner
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
 
       - name: Check NuGet packages.config usage
         run: |
@@ -175,38 +151,69 @@ jobs:
           }
         shell: pwsh
 
+      - name: Prepare SonarCloud Variables
+        id: prepSonarCloudVar
+        run: |
+          import os
+          env_file = os.getenv('GITHUB_ENV')
+          with open(env_file, "a") as myfile:
+              myfile.write("lowerCaseOwner=" + str.lower("${{ github.repository_owner }}"))
+        shell: python
+
+      - name: Get SonarCloud Status
+        id: get-sonarcloud-status
+        run: |
+          sonarCloudProjectStatus=$(curl -s -u "${{ env.SONAR_TOKEN }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }}")
+
+          # Check if the response is empty or not valid JSON
+          if [ -z "$sonarCloudProjectStatus" ] || ! echo "$sonarCloudProjectStatus" | jq . > /dev/null 2>&1; then
+            echo "Error: The SONAR_TOKEN is invalid, expired, or the response is empty. Please check: https://sonarcloud.io/account/security and update your token: https://github.com/${{ github.repository }}/settings/secrets/actions" >&2
+            echo "Returned response: $sonarCloudProjectStatus" >&2
+            exit 1
+          fi
+
+          # Output the JSON response if valid
+          echo "Returned response: $sonarCloudProjectStatus"
+          echo "sonarCloudProjectStatus=$sonarCloudProjectStatus" >> $GITHUB_OUTPUT
+        continue-on-error: false
+        shell: bash
+
+      - name: Trigger Initial Analysis
+        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+        run: |
+            dotnet sonarscanner begin `
+              /k:"${{ inputs.sonarCloudProjectName }}" `
+              /o:"${{ env.lowerCaseOwner }}" `
+              /d:sonar.token="${{ env.SONAR_TOKEN }}" `
+              /d:sonar.host.url="https://sonarcloud.io" `
+              /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" `
+              /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx" `
+              /d:sonar.exclusions="**/*.yml,**/*.xml"
+            msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m
+            dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN  }}"
+        continue-on-error: true
+
+      - name: Start Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+        run: |
+            dotnet sonarscanner begin `
+              /k:"${{ inputs.sonarCloudProjectName }}" `
+              /o:"${{ env.lowerCaseOwner }}" `
+              /d:sonar.token="${{ env.SONAR_TOKEN }}" `
+              /d:sonar.host.url="https://sonarcloud.io" `
+              /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" `
+              /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx" `
+              /d:sonar.exclusions="**/*.yml,**/*.xml"
+        continue-on-error: true
+
       - name: Restore NuGet
         run: nuget restore
 
       - name: Building
         run: msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release  "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m # /verbosity:minimal
-
-      - name: Create package name
-        if: github.ref_type == 'tag'
-        id: packageName
-        run: |
-          $tempName = "${{ github.repository }}"
-          $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
-          echo "name=$safeName" >> $env:GITHUB_OUTPUT
-        shell: pwsh
-
-      - name: Generate SBOM file
-        if: github.ref_type == 'tag'
-        run: |
-          dataminer-sbom generate `
-            --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
-            --package-name "${{ steps.packageName.outputs.name }}" `
-            --package-version "${{ github.ref_name }}" `
-            --package-supplier "Skyline Communications" `
-            --output "${{ github.workspace }}/SBOM" `
-            --debug "${{ inputs.debug }}"
-
-      - name: Upload SBOM file
-        if: github.ref_type == 'tag'
-        uses: actions/upload-artifact@v4
-        with:
-          name: SBOM
-          path: "${{ github.workspace }}/SBOM/*.json"
 
       - name: Run Test Project Detector
         id: detect-unit-tests
@@ -241,29 +248,11 @@ jobs:
         continue-on-error: true
         shell: cmd
 
-      - name: Get SonarCloud Status
-        id: get-sonarcloud-status
-        run: |
-          echo "sonarCloudProjectStatus=$(curl https://${{ env.SONAR_TOKEN }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
-        continue-on-error: true
-
-      - name: Trigger Initial Analysis
-        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
+      - name: Stop Analysis
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
         run: |
-            .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.cleanOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage.xml
-            msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m
-            .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
-        continue-on-error: true
-
-      - name: Analyze
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-        run: |
-            .\.sonar\scanner\dotnet-sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.cleanOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths=coverage.xml
-            msbuild.exe "${{ steps.findSlnFile.outputs.solutionFilePath }}" /clp:ErrorsOnly /fileLogger /flp:errorsonly /nologo /t:Clean,Restore,Build /p:Configuration=Release "/p:DefineConstants=`"DCFv1;DBInfo;ALARM_SQUASHING`"" /p:ReferencePath="${{ github.workspace }}\Dlls" /m
-            .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
+            dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
         continue-on-error: true
 
       - name: SonarCloud Quality Gate check
@@ -289,6 +278,33 @@ jobs:
           if "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             exit(1)
         shell: python
+
+      - name: Create package name
+        if: github.ref_type == 'tag'
+        id: packageName
+        run: |
+          $tempName = "${{ github.repository }}"
+          $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
+          echo "name=$safeName" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Generate SBOM file
+        if: github.ref_type == 'tag'
+        run: |
+          dataminer-sbom generate `
+            --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+            --package-name "${{ steps.packageName.outputs.name }}" `
+            --package-version "${{ github.ref_name }}" `
+            --package-supplier "Skyline Communications" `
+            --output "${{ github.workspace }}/SBOM" `
+            --debug "${{ inputs.debug }}"
+
+      - name: Upload SBOM file
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SBOM
+          path: "${{ github.workspace }}/SBOM/*.json"
 
   auto_generate_catalog_yaml:
     name: Auto-Generating Catalog from GitHub
