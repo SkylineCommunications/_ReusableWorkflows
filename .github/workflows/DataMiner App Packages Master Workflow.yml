@@ -408,6 +408,7 @@ jobs:
               /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx" `
               /d:sonar.exclusions="**/*.yml,**/*.xml"
         continue-on-error: true
+        shell: pwsh
 
       - name: Build for pre-release
         if: github.ref_type == 'branch'
