@@ -104,17 +104,9 @@ jobs:
           echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Detect .csproj files
-        id: detectCsprojFiles
-        run: |
-          $csprojFileCount = Get-ChildItem . -Recurse -File -Filter *.csproj | Where-Object { $_.Name -notlike 'QAction_Helper.csproj' } | Measure-Object | Select-Object -ExpandProperty Count
-          $result = "false"
-          if($csprojFileCount -gt 0){ $result = "true" }
-          Write-Output "csproj-file-present=$($result)" >> $Env:GITHUB_OUTPUT
-        shell: pwsh
-
       - name: Install .NET Tools
         run: |
+          dotnet tool install -g dotnet-sonarscanner
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
 
@@ -143,44 +135,90 @@ jobs:
             }
           }
         shell: pwsh
+  
+      - name: Prepare SonarCloud Variables
+        id: prepSonarCloudVar
+        run: |
+          import os
+          env_file = os.getenv('GITHUB_ENV')
+          with open(env_file, "a") as myfile:
+              myfile.write("lowerCaseOwner=" + str.lower("${{ github.repository_owner }}"))
+        shell: python
+
+      - name: Get SonarCloud Status
+        id: get-sonarcloud-status
+        run: |
+          sonarCloudProjectStatus=$(curl -s -u "${{ env.SONAR_TOKEN }}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }}")
+
+          # Check if the response is empty or not valid JSON
+          if [ -z "$sonarCloudProjectStatus" ] || ! echo "$sonarCloudProjectStatus" | jq . > /dev/null 2>&1; then
+            echo "Error: The SONAR_TOKEN is invalid, expired, or the response is empty. Please check: https://sonarcloud.io/account/security and update your token: https://github.com/${{ github.repository }}/settings/secrets/actions" >&2
+            echo "Returned response: $sonarCloudProjectStatus" >&2
+            exit 1
+          fi
+
+          # Output the JSON response if valid
+          echo "Returned response: $sonarCloudProjectStatus"
+          echo "sonarCloudProjectStatus=$sonarCloudProjectStatus" >> $GITHUB_OUTPUT
+        continue-on-error: false
+        shell: bash
+
+      - name: Trigger Initial Analysis
+        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+        run: |
+            dotnet sonarscanner begin `
+              /k:"${{ inputs.sonarCloudProjectName }}" `
+              /o:"${{ env.lowerCaseOwner }}" `
+              /d:sonar.token="${{ env.SONAR_TOKEN }}" `
+              /d:sonar.host.url="https://sonarcloud.io" `
+              /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" `
+              /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx" `
+              /d:sonar.exclusions="**/*.yml,**/*.xml"
+            dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
+            dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN  }}"
+        continue-on-error: true
+
+      - name: Start Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+        run: |
+            dotnet sonarscanner begin `
+              /k:"${{ inputs.sonarCloudProjectName }}" `
+              /o:"${{ env.lowerCaseOwner }}" `
+              /d:sonar.token="${{ env.SONAR_TOKEN }}" `
+              /d:sonar.host.url="https://sonarcloud.io" `
+              /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" `
+              /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx" `
+              /d:sonar.exclusions="**/*.yml,**/*.xml"
+        continue-on-error: true
 
       - name: Building
         run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
 
-      - name: Create package name
-        if: github.ref_type == 'tag'
-        id: packageName
-        run: |
-          $tempName = "${{ github.repository }}"
-          $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
-          echo "name=$safeName" >> $env:GITHUB_OUTPUT
-        shell: pwsh
-
-      - name: Generate SBOM file
-        if: github.ref_type == 'tag'
-        run: |
-          dataminer-sbom generate `
-            --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
-            --package-name "${{ steps.packageName.outputs.name }}" `
-            --package-version "${{ github.ref_name }}" `
-            --package-supplier "Skyline Communications" `
-            --output "${{ github.workspace }}/SBOM" `
-            --debug "${{ inputs.debug }}"
-
-      - name: Upload SBOM file
-        if: github.ref_type == 'tag'
-        uses: actions/upload-artifact@v4
-        with:
-          name: SBOM
-          path: "${{ github.workspace }}/SBOM/*.json"
-
       - name: Unit Tests
       # when not using MSTest you'll need to install coverlet.collector nuget in your test solutions
         id: unit-tests
-        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
         continue-on-error: true
   
+      - name: Stop Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+        run: |
+            dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
+        continue-on-error: true
+
+      - name: SonarCloud Quality Gate check
+        id: sonarcloud-quality-gate-check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        with:
+          scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
+        continue-on-error: true
+        # Force to fail step after specific time.
+        timeout-minutes: 5
+
       - name: Run Connector Validator
         run: |
           dataminer-validator validate-protocol-solution `
@@ -213,81 +251,49 @@ jobs:
         continue-on-error: true
         shell: bash
 
-      - name: Install SonarCloud scanner
-        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
-        run: |
-          dotnet tool install dotnet-sonarscanner --global
-  
-      - name: Prepare SonarCloud Variables
-        id: prepSonarCloudVar
-        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
-        run: |
-          import os
-          env_file = os.getenv('GITHUB_ENV')
-          with open(env_file, "a") as myfile:
-              myfile.write("lowerCaseOwner=" + str.lower("${{ github.repository_owner }}"))
-        shell: python
-
-      - name: Get SonarCloud Status
-        id: get-sonarcloud-status
-        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
-        run: |
-          echo "sonarCloudProjectStatus=$(curl https://${{ env.SONAR_TOKEN }}@sonarcloud.io/api/qualitygates/project_status?projectKey=${{ inputs.sonarCloudProjectName }})" >> $env:GITHUB_OUTPUT
-        continue-on-error: true
-
-      - name: Trigger Initial Analysis
-        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true' && fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-        run: |
-            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN  }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
-            dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
-            dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN  }}"
-        continue-on-error: true
-
-      - name: Analyze
-        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-        run: |
-            dotnet sonarscanner begin /k:"${{ inputs.sonarCloudProjectName }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN  }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
-            dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
-            dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN  }}"
-        continue-on-error: true
-
-      - name: SonarCloud Quality Gate check
-        id: sonarcloud-quality-gate-check
-        if: steps.detectCsprojFiles.outputs.csproj-file-present == 'true'
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        with:
-          scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
-        continue-on-error: true
-        # Force to fail step after specific time.
-        timeout-minutes: 5
-
       - name: Quality Gate
         id: quality-step
         run: |
-          if "${{ steps.detectCsprojFiles.outputs.csproj-file-present }}" == "false":
-            print("SonarCloud quality gate skipped as no .csproj files were detected.")
-            if "${{ steps.validator-quality-gate.outcome }}" == "failure":
-              print("Quality gate failed due to:")
-              print("- Validator issues")
-              exit(1)
-          else:
-            if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-              print("Quality gate failed due to:")
-            if "${{ steps.unit-tests.outcome }}" == "failure":
-              print("- Test failures")
-            if "${{ steps.validator-quality-gate.outcome }}" == "failure":
-              print("- Validator issues")
-            if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
-              print("- Could not retrieve SonarCloud quality gate status")
-            if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-              print("- Code analysis quality gate failed")
-            if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-              exit(1)
+          if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+            print("Quality gate failed due to:")
+          if "${{ steps.unit-tests.outcome }}" == "failure":
+            print("- Test failures")
+          if "${{ steps.validator-quality-gate.outcome }}" == "failure":
+            print("- Validator issues")
+          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
+            print("- Could not retrieve SonarCloud quality gate status")
+          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+            print("- Code analysis quality gate failed")
+          if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+            exit(1)
         shell: python
+        
+      - name: Create package name
+        if: github.ref_type == 'tag'
+        id: packageName
+        run: |
+          $tempName = "${{ github.repository }}"
+          $safeName = $tempName -replace '[\"\/\\<>|:*?]', '_'
+          echo "name=$safeName" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Generate SBOM file
+        if: github.ref_type == 'tag'
+        run: |
+          dataminer-sbom generate `
+            --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
+            --package-name "${{ steps.packageName.outputs.name }}" `
+            --package-version "${{ github.ref_name }}" `
+            --package-supplier "Skyline Communications" `
+            --output "${{ github.workspace }}/SBOM" `
+            --debug "${{ inputs.debug }}"
+
+      - name: Upload SBOM file
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SBOM
+          path: "${{ github.workspace }}/SBOM/*.json"
 
   auto_generate_catalog_yaml:
     name: Auto-Generating Catalog from GitHub
