@@ -577,7 +577,7 @@ jobs:
           echo "Fetching secrets from Azure Key Vault..."
 
           # List of secret names needed for this job
-          secret_names=("dataminer-token")
+          secret_names=("dataminer-token" "signing-client-id" "signing-client-secret" "signing-tenant-id" "signing-key-vault-certificate" "signing-key-vault-url" "protocol-signing-username" "protocol-signing-password")
 
           for secret_name in "${secret_names[@]}"; do
             # Convert to uppercase and replace hyphens with underscores
@@ -697,6 +697,27 @@ jobs:
             Write-Host "No valid file found!"
             exit 1
           }
+
+      - name: Install Tools
+        if: inputs.use-oidc == 'true'
+        run: |
+          # dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --version 2.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --prerelease
+
+      - name: Sign generated dmprotocol package
+        if: inputs.use-oidc == 'true'
+        env:
+          AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
+          AZURE_KEY_VAULT_URL: ${{ env.SIGNING_KEY_VAULT_URL }}
+          AZURE_KEY_VAULT_CERTIFICATE: ${{ env.SIGNING_KEY_VAULT_CERTIFICATE }}
+          SIGNING_USERNAME: ${{ env.PROTOCOL_SIGNING_USERNAME }}
+          SIGNING_PASSWORD: ${{ env.PROTOCOL_SIGNING_PASSWORD }}
+        run: |
+          dataminer-package-signature sign dmprotocol \
+            --package-location ${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }} \
+            --debug "${{ inputs.debug }}"
 
       - uses: actions/upload-artifact@v4
         if: env.catalogDetails != ''
