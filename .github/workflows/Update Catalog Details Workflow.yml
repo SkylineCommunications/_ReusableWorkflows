@@ -109,8 +109,8 @@ jobs:
 
         - name: Install .NET Tools
           run: |
-            dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 4.0.*
-            dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
+            dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 4.*
+            dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.*
 
         - name: Create or Extend Catalog.yml
           run: |

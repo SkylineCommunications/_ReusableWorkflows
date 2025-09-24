@@ -107,8 +107,8 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install -g dotnet-sonarscanner
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 1.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.*
 
       - name: Enable Skyline NuGet Registries
         if: github.repository_owner == 'SkylineCommunications'
@@ -369,7 +369,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.*
 
       - name: Create or Extend Catalog.yml
         run: |
@@ -470,7 +470,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 3.*
 
       - name: Find .sln file
         id: findSlnFile
@@ -648,9 +648,9 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 4.0.*
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 4.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.*
 
       - name: Retrieve SBOM file
         id: retrieveSbomFile
@@ -701,7 +701,7 @@ jobs:
       - name: Install Tools
         if: inputs.use-oidc == 'true'
         run: |
-          # dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --version 2.0.*
+          # dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --version 2.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --prerelease
 
       - name: Sign generated dmprotocol package
