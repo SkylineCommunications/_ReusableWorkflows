@@ -599,8 +599,8 @@ jobs:
           AZURE_KEY_VAULT_URL: ${{ env.SIGNING_KEY_VAULT_URL }}
           AZURE_KEY_VAULT_CERTIFICATE: ${{ env.SIGNING_KEY_VAULT_CERTIFICATE }}
         run: |
-          dataminer-package-signature sign dmapp`
-            --package-location ${{ github.workspace }} `
+          dataminer-package-signature sign dmapp `
+            --package-location "${{ github.workspace }}" `
             --debug ${{ inputs.debug }}
 
       - name: Authenticate with GitHub CLI

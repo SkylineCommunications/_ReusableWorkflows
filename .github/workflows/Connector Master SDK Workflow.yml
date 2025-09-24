@@ -716,7 +716,7 @@ jobs:
           SIGNING_PASSWORD: ${{ env.PROTOCOL_SIGNING_PASSWORD }}
         run: |
           dataminer-package-signature sign dmprotocol \
-            --package-location ${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }} \
+            --package-location "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" \
             --debug "${{ inputs.debug }}"
 
       - uses: actions/upload-artifact@v4
