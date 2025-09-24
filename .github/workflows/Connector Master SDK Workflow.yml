@@ -676,12 +676,13 @@ jobs:
             --debug "${{ inputs.debug }}"
 
       - name: Create or Extend Catalog.yml
+        shell: pwsh
         run: |
-          github-to-catalog-yaml \
-            --workspace "${{ github.workspace }}" \
-            --github-token ${{ secrets.GITHUB_TOKEN }} \
-            --github-repository "${{ github.repository }}" \
-            --catalog-identifier "${{ vars.catalogIdentifier }}" \
+          github-to-catalog-yaml `
+            --workspace "${{ github.workspace }}" `
+            --github-token ${{ secrets.GITHUB_TOKEN }} `
+            --github-repository "${{ github.repository }}" `
+            --catalog-identifier "${{ vars.catalogIdentifier }}" `
             --debug "${{ inputs.debug }}"
 
       - name: Check if catalog.yml or manifest.yml exists
