@@ -701,14 +701,14 @@ jobs:
           }
 
       - name: Install Tools
-        if: inputs.use-oidc == 'true' && ${{ github.repository_owner == 'SkylineCommunications' }}
+        if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' }}
         run: |
           # dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --version 2.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --prerelease
 
       - name: Sign generated dmprotocol package
         shell: pwsh
-        if: inputs.use-oidc == 'true' && ${{ github.repository_owner == 'SkylineCommunications' }}
+        if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' }}
         env:
           AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
