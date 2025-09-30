@@ -586,8 +586,7 @@ jobs:
       - name: Install Tools
         if: needs.check_oidc.outputs.use-oidc == 'true'
         run: |
-          # dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 2.*
-          dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --prerelease
+          dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 2.*
 
       - name: Sign generated dmapp packages
         if: needs.check_oidc.outputs.use-oidc == 'true'

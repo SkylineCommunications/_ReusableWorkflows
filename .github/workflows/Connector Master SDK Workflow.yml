@@ -703,8 +703,7 @@ jobs:
       - name: Install Tools
         if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' }}
         run: |
-          # dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --version 2.*
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --prerelease
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --version 2.*
 
       - name: Sign generated dmprotocol package
         shell: pwsh
