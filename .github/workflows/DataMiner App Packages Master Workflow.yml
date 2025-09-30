@@ -291,7 +291,7 @@ jobs:
       - name: Install Tools
         run: |
           dotnet tool install dotnet-sonarscanner --global
-          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.0.*
+          dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.*
           dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetChangeVersion --global --version 2.*
 
       - name: Update Skyline.DataMiner.Core.AppPackages
@@ -586,34 +586,21 @@ jobs:
       - name: Install Tools
         if: needs.check_oidc.outputs.use-oidc == 'true'
         run: |
-          dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 1.0.*
+          dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 2.*
 
       - name: Sign generated dmapp packages
-        if: needs.check.outputs.use-oidc == 'true'
+        if: needs.check_oidc.outputs.use-oidc == 'true'
         shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
+          AZURE_KEY_VAULT_URL: ${{ env.SIGNING_KEY_VAULT_URL }}
+          AZURE_KEY_VAULT_CERTIFICATE: ${{ env.SIGNING_KEY_VAULT_CERTIFICATE }}
         run: |
-          Write-Output "Locating .dmapp files in bin folders..."
-
-          # Get all .dmapp files in bin or subfolders of bin
-          $dmappFiles = Get-ChildItem -Path "**/bin" -Recurse -Filter *.dmapp
-
-          if ($dmappFiles.Count -eq 0) {
-              Write-Output "No .dmapp files found."
-          }
-
-          foreach ($file in $dmappFiles) {
-              # Get the parent folder path
-              $parentPath = $file.Directory.FullName
-
-              Write-Output "Signing .dmapp in: $parentPath"
-
-              # Execute the signing command
-              dataminer-package-signature sign $file -kvu $env:SIGNING_KEY_VAULT_URL -kvc $env:SIGNING_KEY_VAULT_CERTIFICATE -o $parentPath
-          }
+          dataminer-package-signature sign dmapp `
+            --package-location "${{ github.workspace }}" `
+            --debug ${{ inputs.debug }}
 
       - name: Authenticate with GitHub CLI
         shell: pwsh

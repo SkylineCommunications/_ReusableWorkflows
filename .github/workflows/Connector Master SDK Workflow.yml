@@ -107,8 +107,8 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install -g dotnet-sonarscanner
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 1.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.*
 
       - name: Enable Skyline NuGet Registries
         if: github.repository_owner == 'SkylineCommunications'
@@ -369,7 +369,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.*
 
       - name: Create or Extend Catalog.yml
         run: |
@@ -470,7 +470,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 2.0.*
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 3.*
 
       - name: Find .sln file
         id: findSlnFile
@@ -559,7 +559,7 @@ jobs:
   artifact_registration:
     name: Artifact Registration and Upload
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: [validate_skyline_quality_gate,artifact_creation]
     steps:
       - name: Azure Login
@@ -577,7 +577,7 @@ jobs:
           echo "Fetching secrets from Azure Key Vault..."
 
           # List of secret names needed for this job
-          secret_names=("dataminer-token")
+          secret_names=("dataminer-token" "signing-client-id" "signing-client-secret" "signing-tenant-id" "signing-key-vault-certificate" "signing-key-vault-url" "protocol-signing-username" "protocol-signing-password")
 
           for secret_name in "${secret_names[@]}"; do
             # Convert to uppercase and replace hyphens with underscores
@@ -648,9 +648,9 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 4.0.*
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.0.*
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Sbom --version 1.0.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.CatalogUpload --version 4.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.GitHubToCatalogYaml --version 2.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.*
 
       - name: Retrieve SBOM file
         id: retrieveSbomFile
@@ -668,19 +668,21 @@ jobs:
         shell: bash
 
       - name: Add SBOM to package
+        shell: pwsh
         run: |
-          dataminer-sbom add \
-            --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" \
-            --package-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" \
+          dataminer-sbom add `
+            --sbom-file "${{ steps.findSbomFile.outputs.sbomFile }}" `
+            --package-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" `
             --debug "${{ inputs.debug }}"
 
       - name: Create or Extend Catalog.yml
+        shell: pwsh
         run: |
-          github-to-catalog-yaml \
-            --workspace "${{ github.workspace }}" \
-            --github-token ${{ secrets.GITHUB_TOKEN }} \
-            --github-repository "${{ github.repository }}" \
-            --catalog-identifier "${{ vars.catalogIdentifier }}" \
+          github-to-catalog-yaml `
+            --workspace "${{ github.workspace }}" `
+            --github-token ${{ secrets.GITHUB_TOKEN }} `
+            --github-repository "${{ github.repository }}" `
+            --catalog-identifier "${{ vars.catalogIdentifier }}" `
             --debug "${{ inputs.debug }}"
 
       - name: Check if catalog.yml or manifest.yml exists
@@ -698,6 +700,27 @@ jobs:
             exit 1
           }
 
+      - name: Install Tools
+        if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' }}
+        run: |
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --version 2.*
+
+      - name: Sign generated dmprotocol package
+        shell: pwsh
+        if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' }}
+        env:
+          AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
+          AZURE_KEY_VAULT_URL: ${{ env.SIGNING_KEY_VAULT_URL }}
+          AZURE_KEY_VAULT_CERTIFICATE: ${{ env.SIGNING_KEY_VAULT_CERTIFICATE }}
+          SIGNING_USERNAME: ${{ env.PROTOCOL_SIGNING_USERNAME }}
+          SIGNING_PASSWORD: ${{ env.PROTOCOL_SIGNING_PASSWORD }}
+        run: |
+          dataminer-package-signature sign dmprotocol `
+            --package-location "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" `
+            --debug "${{ inputs.debug }}"
+
       - uses: actions/upload-artifact@v4
         if: env.catalogDetails != ''
         with:
@@ -705,12 +728,13 @@ jobs:
           path: "${{ github.workspace }}/${{ env.catalogDetails }}"
 
       - name: Upload to Catalog
+        shell: pwsh
         env:
           CICDIsForSkyline: "${{ github.repository_owner == 'SkylineCommunications' }}"
         run: |
-          dataminer-catalog-upload with-registration \
-            --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" \
-            --artifact-version ${{ github.ref_name }} \
-            --branch "${{ steps.findBranch.outputs.branch }}" \
-            --dm-catalog-token ${{ env.DATAMINER_TOKEN }} \
+          dataminer-catalog-upload with-registration `
+            --path-to-artifact "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" `
+            --artifact-version ${{ github.ref_name }} `
+            --branch "${{ steps.findBranch.outputs.branch }}" `
+            --dm-catalog-token ${{ env.DATAMINER_TOKEN }} `
             --debug "${{ inputs.debug }}"
