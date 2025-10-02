@@ -59,7 +59,7 @@ jobs:
           echo "Fetching secrets from Azure Key Vault..."
 
           # List of secret names needed for this job
-          secret_names=("azure-token" "sonar-token")
+          secret_names=("azure-token" "sonar-token" "dataminer-token")
 
           for secret_name in "${secret_names[@]}"; do
             # Convert to uppercase and replace hyphens with underscores
@@ -88,6 +88,11 @@ jobs:
             echo "SONAR_TOKEN=${{ secrets.sonarCloudToken }}" >> "$GITHUB_ENV"
           fi
 
+          if [[ -n "${{ secrets.api-key }}" ]]; then
+            echo "Using provided api-key secret"
+            echo "DATAMINER_TOKEN=${{ secrets.api-key }}" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
@@ -107,7 +112,8 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install -g dotnet-sonarscanner
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 1.*
+          # dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 2.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --prerelease
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.*
 
       - name: Enable Skyline NuGet Registries
@@ -219,22 +225,33 @@ jobs:
         # Force to fail step after specific time.
         timeout-minutes: 5
 
-      - name: Run Connector Validator
+      - name: Run Connector Validator - Validate
         run: |
-          dataminer-validator validate-protocol-solution `
+          dataminer-validator validate protocol-solution `
             --solution-path "${{ github.workspace }}" `
             --output-directory "${{ github.workspace }}" `
             --output-file-name "validateResults" `
             --perform-restore false
         continue-on-error: true
 
+      - name: Run Connector Validator - Compare
+        run: |
+          dataminer-validator compare protocol-solution `
+            --solution-path "${{ github.workspace }}" `
+            --output-directory "${{ github.workspace }}" `
+            --output-file-name "compareResults" `
+            --perform-restore false
+        continue-on-error: true
+
       - name: Archive Results
         uses: actions/upload-artifact@v4
         with:
-          name: validateResults
+          name: validatorResults
           path: |
             ${{ github.workspace }}/validateResults.json
             ${{ github.workspace }}/validateResults.html
+            ${{ github.workspace }}/compareResults.json
+            ${{ github.workspace }}/compareResults.html
         continue-on-error: true
 
       - name: Validator Quality Gate
@@ -246,6 +263,12 @@ jobs:
 
           if [ "$critical" != 0 ] || [ "$major" != 0 ]; then
             echo "Error: CriticalIssueCount or MajorIssueCount is not 0"
+            exit 1
+          fi
+
+          issueCount=$(jq '.Issues | length' "${{ github.workspace }}/compareResults.json")
+          if [ "$issueCount" != 0 ]; then
+            echo "Compare Error: Issues found"
             exit 1
           fi
         continue-on-error: true
