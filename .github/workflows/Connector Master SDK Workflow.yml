@@ -231,7 +231,8 @@ jobs:
             --solution-path "${{ github.workspace }}" `
             --output-directory "${{ github.workspace }}" `
             --output-file-name "validateResults" `
-            --perform-restore false
+            --perform-restore false `
+            --debug "${{ inputs.debug }}"
         continue-on-error: true
 
       - name: Run Connector Validator - Compare
@@ -239,7 +240,8 @@ jobs:
           dataminer-validator compare protocol-solution `
             --solution-path "${{ github.workspace }}" `
             --output-directory "${{ github.workspace }}" `
-            --output-file-name "compareResults"
+            --output-file-name "compareResults" `
+            --debug "${{ inputs.debug }}"
         continue-on-error: true
 
       - name: Archive Results
