@@ -301,7 +301,7 @@ jobs:
 
       - name: Upload SBOM file
         if: github.ref_type == 'tag'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SBOM
           path: "${{ github.workspace }}/SBOM/*.json"
@@ -406,7 +406,7 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: env.catalogDetails != ''
         with:
           name: Catalog Details
@@ -563,7 +563,7 @@ jobs:
             --version-override "${{ env.PROTOCOL_VERSION }}_B${{ github.run_number }}" \
             --debug "${{ inputs.debug }}"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Connector Package
           path: "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmprotocol"
@@ -710,7 +710,7 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: env.catalogDetails != ''
         with:
           name: Catalog Details

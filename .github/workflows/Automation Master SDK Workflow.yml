@@ -257,7 +257,7 @@ jobs:
 
       - name: Upload SBOM file
         if: github.ref_type == 'tag'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SBOM
           path: "${{ github.workspace }}/SBOM/*.json"
@@ -373,7 +373,7 @@ jobs:
             --name "${{ steps.packageName.outputs.name }}" \
             --debug "${{ inputs.debug }}"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: DataMiner Installation Package
           path: "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp"
@@ -478,7 +478,7 @@ jobs:
               exit 1
             }
 
-        - uses: actions/upload-artifact@v4
+        - uses: actions/upload-artifact@v5
           if: env.catalogDetails != ''
           with:
             name: Catalog Details
@@ -648,7 +648,7 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: env.catalogDetails != ''
         with:
           name: Catalog Details
