@@ -202,7 +202,7 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Cache and Install Mono
-        uses: awalsh128/cache-apt-pkgs-action@v1.5.3
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.0
         with:
           packages: mono-complete
 
