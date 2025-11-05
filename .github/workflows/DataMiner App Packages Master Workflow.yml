@@ -612,8 +612,10 @@ jobs:
         run: |
           echo "Checking for release notes associated with the reference: '${{ github.ref_name }}'"
 
-          # Retrieve the release note body
-          RELEASE_NOTE=$(gh release view "${{ github.ref_name }}" --json body -q '.body' 2>/dev/null || echo "")
+          # Retrieve the release information (both body and name)
+          RELEASE_INFO=$(gh release view "${{ github.ref_name }}" --json body,name 2>/dev/null || echo "{}")
+          RELEASE_NOTE=$(echo "$RELEASE_INFO" | jq -r '.body // ""' 2>/dev/null || echo "")
+          RELEASE_TITLE=$(echo "$RELEASE_INFO" | jq -r '.name // ""' 2>/dev/null || echo "")
 
           escape_special_chars() {
             echo "$1" | sed -e 's/,/%2c/g' -e 's/"/%22/g' -e 's/;/%3b/g'
@@ -621,17 +623,20 @@ jobs:
 
           if [[ -n "$RELEASE_NOTE" ]]; then
             ESCAPED_RELEASE_NOTE=$(escape_special_chars "$RELEASE_NOTE")
-            echo "Release note found for '${{ github.ref_name }}': $ESCAPED_RELEASE_NOTE"
+            echo "Release description found for '${{ github.ref_name }}': $ESCAPED_RELEASE_NOTE"
             # Escape multiline string for GITHUB_OUTPUT
             echo "versionComment<<EOF" >> $GITHUB_OUTPUT
             echo "$ESCAPED_RELEASE_NOTE" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
+          elif [[ -n "$RELEASE_TITLE" ]]; then
+            ESCAPED_RELEASE_TITLE=$(escape_special_chars "$RELEASE_TITLE")
+            echo "Release title found for '${{ github.ref_name }}': $ESCAPED_RELEASE_TITLE"
+            echo "versionComment=$ESCAPED_RELEASE_TITLE" >> $GITHUB_OUTPUT
           else
-            echo "No release note found for '${{ github.ref_name }}'. Falling back to tag or commit message."
+            echo "No release description or title found for '${{ github.ref_name }}'. Falling back to tag or commit message."
             VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
             ESCAPED_VERSION_COMMENT=$(escape_special_chars "$VERSION_COMMENT")
             echo "Fallback version comment: $ESCAPED_VERSION_COMMENT"
-            # Escape fallback as well
             echo "versionComment=$ESCAPED_VERSION_COMMENT" >> $GITHUB_OUTPUT
           fi
         shell: bash
