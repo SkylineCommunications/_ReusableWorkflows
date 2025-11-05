@@ -244,7 +244,7 @@ jobs:
         continue-on-error: true
 
       - name: Archive Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: validatorResults
           path: |
@@ -313,7 +313,7 @@ jobs:
 
       - name: Upload SBOM file
         if: github.ref_type == 'tag'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SBOM
           path: "${{ github.workspace }}/SBOM/*.json"
@@ -418,7 +418,7 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: env.catalogDetails != ''
         with:
           name: Catalog Details
@@ -574,7 +574,7 @@ jobs:
             --debug "${{ inputs.debug }}"
         shell: bash
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Connector Package
           path: "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmprotocol"
@@ -744,7 +744,7 @@ jobs:
             --package-location "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" `
             --debug "${{ inputs.debug }}"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: env.catalogDetails != ''
         with:
           name: Catalog Details
