@@ -350,19 +350,24 @@ jobs:
         shell: bash
 
       - name: Apply SourceCode Url To Manifest
+        id: apply-source-code-url
         run: |
           $manifestFiles = Get-ChildItem -Recurse -Filter 'manifest.yml' |
               Where-Object { $_.FullName -match '[\\/]CatalogInformation[\\/]' }
+
+          $filesUpdated = $false
 
           foreach ($file in $manifestFiles) {
               $lines = Get-Content -Path $file.FullName
               $updated = $false
 
               for ($i = 0; $i -lt $lines.Count; $i++) {
+                  # Only update if source_code_url exists but is empty (no value after the colon)
                   if ($lines[$i] -match '^\s*source_code_url:\s*$') {
                       $indent = ($lines[$i] -match '^(\s*)source_code_url:')[1]
                       $lines[$i] = "$indent" + "source_code_url: 'https://github.com/${{ github.repository }}'"
                       $updated = $true
+                      $filesUpdated = $true
                       break
                   }
               }
@@ -370,9 +375,31 @@ jobs:
               if ($updated) {
                   Write-Host "Updating: $($file.FullName) with 'source_code_url: https://github.com/${{ github.repository }}'"
                   Set-Content -Path $file.FullName -Value $lines -Encoding UTF8
+              } else {
+                  Write-Host "Skipping: $($file.FullName) - source_code_url is already populated or not found"
               }
           }
+
+          # Output whether any files were updated
+          echo "files-updated=$filesUpdated" >> $env:GITHUB_OUTPUT
         shell: pwsh
+
+      - name: Commit manifest changes
+        if: steps.apply-source-code-url.outputs.files-updated == 'True'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          
+          # Double-check there are actual changes to commit
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: auto-populate source_code_url in manifest"
+            git push
+            echo "? Committed and pushed manifest changes"
+          else
+            echo "No changes to commit"
+          fi
+        shell: bash
 
       - name: Trigger Initial Analysis
         if: ${{ fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status == 'NONE' }}
