@@ -90,7 +90,7 @@ jobs:
             echo "SONAR_TOKEN=${{ secrets.sonarCloudToken }}" >> "$GITHUB_ENV"
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -305,7 +305,7 @@ jobs:
             echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Find .sln file
         id: findSlnFile
@@ -422,7 +422,7 @@ jobs:
               echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
             fi
 
-        - uses: actions/checkout@v5
+        - uses: actions/checkout@v6
 
         - name: Enable Skyline NuGet Registries
           if: github.repository_owner == 'SkylineCommunications'
@@ -551,7 +551,7 @@ jobs:
             echo "DATAMINER_TOKEN=${{ secrets.api-key }}" >> "$GITHUB_ENV"
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
