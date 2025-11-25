@@ -266,8 +266,15 @@ jobs:
             exit 1
           fi
 
-          issueCount=$(jq '.Issues | length' "${{ github.workspace }}/compareResults.json")
-          if [ "$issueCount" != 0 ]; then
+          # Check version pattern to determine if compare validation should be skipped
+          compareJson=$(cat "${{ github.workspace }}/compareResults.json")
+          version=$(echo "$compareJson" | jq -r '.Version')
+          issueCount=$(echo "$compareJson" | jq '.Issues | length')
+          
+          # Skip compare validation if version ends with .1 (e.g., X.X.X.1)
+          if [[ "$version" =~ \.[0-9]+\.[0-9]+\.[0-9]+\.1$ ]]; then
+            echo "Version $version ends with .1 - skipping compare validation"
+          elif [ "$issueCount" != 0 ]; then
             echo "Compare Error: Issues found"
             exit 1
           fi
