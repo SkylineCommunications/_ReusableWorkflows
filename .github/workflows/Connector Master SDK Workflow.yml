@@ -261,8 +261,6 @@ jobs:
           critical=$(echo "$json" | jq -r '.CriticalIssueCount')
           major=$(echo "$json" | jq -r '.MajorIssueCount')
 
-          echo "DEBUG: Critical issues: $critical, Major issues: $major"
-
           if [ "$critical" != 0 ] || [ "$major" != 0 ]; then
             echo "Error: CriticalIssueCount or MajorIssueCount is not 0"
             exit 1
@@ -273,24 +271,12 @@ jobs:
           version=$(echo "$compareJson" | jq -r '.Version')
           issueCount=$(echo "$compareJson" | jq '.Issues | length')
           
-          echo "DEBUG: Version extracted: '$version'"
-          echo "DEBUG: Issue count: $issueCount"
-          echo "DEBUG: Testing regex pattern against version..."
-          
           # Skip compare validation if version ends with .1 (e.g., X.X.X.1)
           if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.1$ ]]; then
-            echo "DEBUG: Regex matched - version ends with .1 pattern"
             echo "Version $version ends with .1 - skipping compare validation"
-          else
-            echo "DEBUG: Regex did not match - checking issue count"
-            if [ "$issueCount" != 0 ]; then
-              echo "Compare Error: Found $issueCount issues"
-              echo "DEBUG: First few issues from compareResults.json:"
-              echo "$compareJson" | jq '.Issues[0:3]'
-              exit 1
-            else
-              echo "DEBUG: No issues found in compare validation"
-            fi
+          elif [ "$issueCount" != 0 ]; then
+            echo "Compare Error: Found $issueCount issues"
+            exit 1
           fi
         continue-on-error: true
         shell: bash
