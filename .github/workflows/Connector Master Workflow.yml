@@ -140,6 +140,13 @@ jobs:
       steps:
         - uses: actions/checkout@v6
 
+        - name: Setup .NET
+          uses: actions/setup-dotnet@v5
+          with:
+            dotnet-version: |
+              '8.0.x'
+              '10.0.x'
+
         - name: Install SDKChecker
           run: dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global
 
