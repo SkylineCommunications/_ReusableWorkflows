@@ -93,7 +93,7 @@ jobs:
             echo "DATAMINER_TOKEN=${{ secrets.api-key }}" >> "$GITHUB_ENV"
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -362,7 +362,7 @@ jobs:
             echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Enable Skyline NuGet Registries
         if: github.repository_owner == 'SkylineCommunications'
@@ -489,7 +489,7 @@ jobs:
             echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install .NET Tools
         run: |
@@ -624,7 +624,7 @@ jobs:
             echo "DATAMINER_TOKEN=${{ secrets.api-key }}" >> "$GITHUB_ENV"
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
