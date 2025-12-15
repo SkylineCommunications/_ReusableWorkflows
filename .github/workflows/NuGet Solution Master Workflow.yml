@@ -313,7 +313,7 @@ jobs:
       - name: Building
         run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: NugetPackages
           path: "${{ github.workspace }}/_NuGetResults"
@@ -417,7 +417,7 @@ jobs:
           unset IFS
         shell: bash
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: SignedNugetPackages
           path: "${{ github.workspace }}/_SignedNuGetResults"
