@@ -467,7 +467,7 @@ jobs:
 
       - name: Generate SBOM file
         run: |
-          find . -type f -name "*.dmapp" -print0 | while IFS= read -r -d '' file; do
+          find . -type f \( -name "*.dmapp" -o -name "*.dmtest" \) -print0 | while IFS= read -r -d '' file; do
             echo "Generating SBOM for $file"
             dataminer-sbom generate-and-add \
               --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" \
@@ -483,8 +483,10 @@ jobs:
           name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned
           path: |
             **/bin/${{ inputs.configuration }}/*.dmapp
+            **/bin/${{ inputs.configuration }}/*.dmtest
             **/bin/${{ inputs.configuration }}/*.zip
             **/bin/${{ inputs.configuration }}/**/*.dmapp
+            **/bin/${{ inputs.configuration }}/**/*.dmtest
             **/bin/${{ inputs.configuration }}/**/*.zip
         continue-on-error: true
 
@@ -561,7 +563,7 @@ jobs:
           $downloadRoot = Resolve-Path "downloaded_artifacts"
           $workspaceRoot = Resolve-Path "."
 
-          Get-ChildItem -Path $downloadRoot -Recurse -File | Where-Object { $_.Extension -in '.zip', '.dmapp' } | ForEach-Object {
+          Get-ChildItem -Path $downloadRoot -Recurse -File | Where-Object { $_.Extension -in '.zip', '.dmapp', '.dmtest' } | ForEach-Object {
               $archiveFile = $_.FullName
               $relativePath = $archiveFile.Substring($downloadRoot.Path.Length + 1) -replace '\\', '/'
               $targetPath = Join-Path $workspaceRoot $relativePath
