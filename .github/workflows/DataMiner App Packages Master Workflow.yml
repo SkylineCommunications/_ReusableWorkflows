@@ -558,7 +558,7 @@ jobs:
 
       - name: Extract artifact contents putting them back in the bin folders.
         run: |
-          Write-Output "Extracting all zip and dmapp files and restoring original structure..."
+          Write-Output "Extracting all zip, dmapp and dmtest files and restoring original structure..."
 
           $downloadRoot = Resolve-Path "downloaded_artifacts"
           $workspaceRoot = Resolve-Path "."
@@ -590,7 +590,7 @@ jobs:
         run: |
           dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 2.*
 
-      - name: Sign generated dmapp packages
+      - name: Sign generated dmapp/dmtest packages
         if: needs.check_oidc.outputs.use-oidc == 'true'
         shell: pwsh
         env:
