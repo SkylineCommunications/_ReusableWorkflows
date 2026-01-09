@@ -60,7 +60,7 @@ on:
 
 env:
   VERSION_APPPACKAGEINSTALLER: '3.1.1'
-  VERSION_SDK: '2.2.0'
+  VERSION_SDK: '2.3.0'
 
 jobs:
   check_deprecated_item:
@@ -467,7 +467,7 @@ jobs:
 
       - name: Generate SBOM file
         run: |
-          find . -type f -name "*.dmapp" -print0 | while IFS= read -r -d '' file; do
+          find . -type f \( -name "*.dmapp" -o -name "*.dmtest" \) -print0 | while IFS= read -r -d '' file; do
             echo "Generating SBOM for $file"
             dataminer-sbom generate-and-add \
               --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" \
@@ -483,8 +483,10 @@ jobs:
           name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned
           path: |
             **/bin/${{ inputs.configuration }}/*.dmapp
+            **/bin/${{ inputs.configuration }}/*.dmtest
             **/bin/${{ inputs.configuration }}/*.zip
             **/bin/${{ inputs.configuration }}/**/*.dmapp
+            **/bin/${{ inputs.configuration }}/**/*.dmtest
             **/bin/${{ inputs.configuration }}/**/*.zip
         continue-on-error: true
 
@@ -556,12 +558,12 @@ jobs:
 
       - name: Extract artifact contents putting them back in the bin folders.
         run: |
-          Write-Output "Extracting all zip and dmapp files and restoring original structure..."
+          Write-Output "Extracting all zip, dmapp and dmtest files and restoring original structure..."
 
           $downloadRoot = Resolve-Path "downloaded_artifacts"
           $workspaceRoot = Resolve-Path "."
 
-          Get-ChildItem -Path $downloadRoot -Recurse -File | Where-Object { $_.Extension -in '.zip', '.dmapp' } | ForEach-Object {
+          Get-ChildItem -Path $downloadRoot -Recurse -File | Where-Object { $_.Extension -in '.zip', '.dmapp', '.dmtest' } | ForEach-Object {
               $archiveFile = $_.FullName
               $relativePath = $archiveFile.Substring($downloadRoot.Path.Length + 1) -replace '\\', '/'
               $targetPath = Join-Path $workspaceRoot $relativePath
@@ -588,7 +590,7 @@ jobs:
         run: |
           dotnet tool install Skyline.DataMiner.CICD.Tools.PackageSign --global --version 2.*
 
-      - name: Sign generated dmapp packages
+      - name: Sign generated dmapp/dmtest packages
         if: needs.check_oidc.outputs.use-oidc == 'true'
         shell: pwsh
         env:
