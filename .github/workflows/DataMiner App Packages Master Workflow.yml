@@ -478,7 +478,7 @@ jobs:
               --debug "${{ inputs.debug }}"
           done
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned
           path: |
