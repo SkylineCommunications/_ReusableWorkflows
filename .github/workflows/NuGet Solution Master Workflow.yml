@@ -205,11 +205,11 @@ jobs:
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetPreBuildApplyBranchOrTag
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetValidateSkylineSpecifications
 
-      - name: Find .sln file
+      - name: Find solution file
         id: findSlnFile
         run: |
           if [[ -z "${{ inputs.solutionName }}" ]]; then
-            echo solutionFilePath=$(find . -type f -name '*.sln' | sort -r | head -n 1) >> $GITHUB_OUTPUT
+            echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx' | sort -r | head -n 1) >> $GITHUB_OUTPUT
           else
             echo solutionFilePath=$(find . -type f -name '${{ inputs.solutionName }}') >> $GITHUB_OUTPUT
           fi

@@ -103,10 +103,10 @@ jobs:
           java-version: 17
           distribution: 'zulu'
  
-      - name: Find .sln file
+      - name: Find solution file
         id: findSlnFile
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+          echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Install .NET Tools
@@ -500,12 +500,12 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 3.*
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 4.*
 
-      - name: Find .sln file
+      - name: Find solution file
         id: findSlnFile
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+          echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Enable Skyline NuGet Registries

@@ -94,10 +94,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Find .sln file
+      - name: Find solution file
         id: findSlnFile
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+          echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Set up JDK 17
@@ -355,10 +355,10 @@ jobs:
         - name: Set up NuGet
           uses: nuget/setup-nuget@v2.0.1
 
-        - name: Find .sln file
+        - name: Find solution file
           id: findSlnFile
           run: |
-            echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+            echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
           shell: bash
 
         - name: Enable Skyline NuGet Registries
@@ -392,7 +392,7 @@ jobs:
 
         - name: Install .NET Tools
           run: |
-            dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager --version 3.*
+            dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager --version 4.*
 
         - name: Create package name
           id: packageName
