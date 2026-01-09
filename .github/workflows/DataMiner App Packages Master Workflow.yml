@@ -551,7 +551,7 @@ jobs:
 
 # Alternative option here, is to perform the dotnet build again, but that needs all the nuget access again, etc.
       - name: Download artifact from CI
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned
           path: downloaded_artifacts

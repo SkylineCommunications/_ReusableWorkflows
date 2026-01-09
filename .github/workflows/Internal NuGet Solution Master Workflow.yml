@@ -353,7 +353,7 @@ jobs:
     steps:
       - name: Download Unsigned NuGet
         id: downloadUnsignedNuget
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: NugetPackages
           path: _NuGetResults
