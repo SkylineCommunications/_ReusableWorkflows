@@ -90,6 +90,9 @@ jobs:
             echo "SONAR_TOKEN=${{ secrets.sonarCloudToken }}" >> "$GITHUB_ENV"
           fi
 
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -100,10 +103,10 @@ jobs:
           java-version: 17
           distribution: 'zulu'
 
-      - name: Find .sln file
+      - name: Find solution file
         id: findSlnFile
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+          echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Enable Skyline NuGet Registries
@@ -305,12 +308,15 @@ jobs:
             echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
           fi
 
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
       - uses: actions/checkout@v6
 
-      - name: Find .sln file
+      - name: Find solution file
         id: findSlnFile
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+          echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Enable Skyline NuGet Registries
@@ -344,7 +350,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager --version 3.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Packager --version 4.*
 
       - name: Create package name
         id: packageName
@@ -421,6 +427,9 @@ jobs:
               echo "Using provided azureToken secret"
               echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
             fi
+
+        - name: Enable long paths
+          run: git config --global core.longpaths true
 
         - uses: actions/checkout@v6
 
@@ -550,6 +559,9 @@ jobs:
             echo "Using provided api-key secret"
             echo "DATAMINER_TOKEN=${{ secrets.api-key }}" >> "$GITHUB_ENV"
           fi
+
+      - name: Enable long paths
+        run: git config --global core.longpaths true
 
       - uses: actions/checkout@v6
         with:

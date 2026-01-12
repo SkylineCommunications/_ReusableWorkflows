@@ -192,6 +192,9 @@ jobs:
             echo "DATAMINER_TOKEN=${{ secrets.dataminerToken }}" >> "$GITHUB_ENV"
           fi
 
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -252,11 +255,11 @@ jobs:
             exit 1
           fi
 
-      - name: Find .sln file
+      - name: Find solution file
         id: findSlnFile
         run: |
           if [[ -z "${{ inputs.solutionFilterName }}" ]]; then
-            echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+            echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
           else
             echo solutionFilePath=$(find . -type f -name '${{ inputs.solutionFilterName }}') >> $GITHUB_OUTPUT
           fi
@@ -535,15 +538,18 @@ jobs:
             echo "DATAMINER_TOKEN=${{ secrets.dataminerToken }}" >> "$GITHUB_ENV"
           fi
 
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Find .sln file
+      - name: Find solution file
         id: findSlnFile
         run: |
           if [[ -z "${{ inputs.solutionFilterName }}" ]]; then
-            echo solutionFilePath=$(find . -type f -name '*.sln') >> $GITHUB_OUTPUT
+            echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
           else
             echo solutionFilePath=$(find . -type f -name '${{ inputs.solutionFilterName }}') >> $GITHUB_OUTPUT
           fi

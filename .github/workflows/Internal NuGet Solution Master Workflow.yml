@@ -179,6 +179,9 @@ jobs:
             echo "SONAR_TOKEN=${{ secrets.sonarCloudToken }}" >> "$GITHUB_ENV"
           fi
 
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -196,10 +199,10 @@ jobs:
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetPreBuildApplyBranchOrTag
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetValidateSkylineSpecifications
 
-      - name: Find .sln file
+      - name: Find solution file
         id: findSlnFile
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln' | sort -r | head -n 1) >> $GITHUB_OUTPUT
+          echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx' | sort -r | head -n 1) >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Validate NuGet Metadata

@@ -137,6 +137,9 @@ jobs:
         isSdk: ${{ steps.checker.outputs.isSdk }}
 
       steps:
+        - name: Enable long paths
+          run: git config --global core.longpaths true
+
         - uses: actions/checkout@v6
 
         - name: Install SDKChecker
