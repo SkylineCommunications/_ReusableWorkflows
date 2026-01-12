@@ -105,6 +105,9 @@ jobs:
               echo "DATAMINER_TOKEN=${{ secrets.api-key }}" >> "$GITHUB_ENV"
             fi
 
+        - name: Enable long paths
+          run: git config --global core.longpaths true
+
         - uses: actions/checkout@v6
 
         - name: Install .NET Tools

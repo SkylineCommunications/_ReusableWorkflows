@@ -192,6 +192,9 @@ jobs:
             echo "DATAMINER_TOKEN=${{ secrets.dataminerToken }}" >> "$GITHUB_ENV"
           fi
 
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -534,6 +537,9 @@ jobs:
             echo "Using provided dataminerToken secret"
             echo "DATAMINER_TOKEN=${{ secrets.dataminerToken }}" >> "$GITHUB_ENV"
           fi
+
+      - name: Enable long paths
+        run: git config --global core.longpaths true
 
       - uses: actions/checkout@v6
         with:

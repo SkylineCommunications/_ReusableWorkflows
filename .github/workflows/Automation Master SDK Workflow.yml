@@ -90,6 +90,9 @@ jobs:
             echo "SONAR_TOKEN=${{ secrets.sonarCloudToken }}" >> "$GITHUB_ENV"
           fi
 
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -305,6 +308,9 @@ jobs:
             echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
           fi
 
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
       - uses: actions/checkout@v6
 
       - name: Find solution file
@@ -421,6 +427,9 @@ jobs:
               echo "Using provided azureToken secret"
               echo "AZURE_TOKEN=${{ secrets.azureToken }}" >> "$GITHUB_ENV"
             fi
+
+        - name: Enable long paths
+          run: git config --global core.longpaths true
 
         - uses: actions/checkout@v6
 
@@ -550,6 +559,9 @@ jobs:
             echo "Using provided api-key secret"
             echo "DATAMINER_TOKEN=${{ secrets.api-key }}" >> "$GITHUB_ENV"
           fi
+
+      - name: Enable long paths
+        run: git config --global core.longpaths true
 
       - uses: actions/checkout@v6
         with:
