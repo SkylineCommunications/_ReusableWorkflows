@@ -509,7 +509,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 4.*
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --prerelease
 
       - name: Find solution file
         id: findSlnFile
