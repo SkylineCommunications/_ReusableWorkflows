@@ -115,7 +115,7 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install -g dotnet-sonarscanner
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 2.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 3.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.*
 
       - name: Enable Skyline NuGet Registries
@@ -509,7 +509,7 @@ jobs:
 
       - name: Install .NET Tools
         run: |
-          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 4.*
+          dotnet tool install --global Skyline.DataMiner.CICD.Tools.Packager --version 5.*
 
       - name: Find solution file
         id: findSlnFile
