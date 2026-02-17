@@ -209,6 +209,9 @@ jobs:
         with:
           packages: mono-complete
 
+      - name: installGdpLog
+        run: sudo apt install gdb
+        
       - name: Validate SonarCloud Project Name
         id: validate-sonar-name
         run: |
