@@ -209,8 +209,11 @@ jobs:
         with:
           packages: mono-complete
 
-      - name: installGdpLog
+      - name: Install GDP Logger
         run: sudo apt install gdb
+
+      - name: Install Cobertura
+        run: sudo apt-get install cobertura
         
       - name: Validate SonarCloud Project Name
         id: validate-sonar-name
