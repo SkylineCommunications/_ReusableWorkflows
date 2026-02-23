@@ -150,8 +150,6 @@ jobs:
     name: Skyline Quality Gate
     runs-on: ubuntu-latest
     needs: check_oidc
-    outputs:
-      artifact-name: ${{ steps.artifactName.outputs.name }}
     steps:
       - name: Azure Login
         uses: azure/login@v2
@@ -543,17 +541,9 @@ jobs:
               --debug "${{ inputs.debug }}"
           done
 
-      - name: Create unique artifact name
-        id: artifactName
-        shell: pwsh
-        run: |
-          $baseName = "DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned"
-          $uniqueSuffix = [guid]::NewGuid().ToString()
-          "name=$baseName - $uniqueSuffix" >> $env:GITHUB_OUTPUT
-
       - uses: actions/upload-artifact@v6
         with:
-          name: ${{ steps.artifactName.outputs.name }}
+          name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned
           path: |
             **/bin/${{ inputs.configuration }}/*.dmapp
             **/bin/${{ inputs.configuration }}/*.dmtest
@@ -629,7 +619,7 @@ jobs:
       - name: Download artifact from CI
         uses: actions/download-artifact@v7
         with:
-          name: ${{ needs.skyline_ci.outputs.artifact-name }}
+          name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solutionFilterName }}) unsigned
           path: downloaded_artifacts
 
       - name: Extract artifact contents putting them back in the bin folders.
