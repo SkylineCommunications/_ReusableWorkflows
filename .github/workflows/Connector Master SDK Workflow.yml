@@ -227,6 +227,15 @@ jobs:
         # Force to fail step after specific time.
         timeout-minutes: 5
 
+      - name: Upload Sonar report-task.txt artifact
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: sonar-report-task
+          path: .sonarqube/out/.sonar/report-task.txt
+          if-no-files-found: ignore
+          retention-days: 14
+          
       - name: Run Connector Validator - Validate
         run: |
           dataminer-validator validate protocol-solution `
@@ -287,17 +296,17 @@ jobs:
       - name: Quality Gate
         id: quality-step
         run: |
-          if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("Quality gate failed due to:")
           if "${{ steps.unit-tests.outcome }}" == "failure":
             print("- Test failures")
           if "${{ steps.validator-quality-gate.outcome }}" == "failure":
             print("- Validator issues")
-          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
-            print("- Could not retrieve SonarCloud quality gate status")
+          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" and "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" != "FAILED":
+            print("- Could not retrieve SonarCloud quality gate status, potentially due to reaching License max LoC. Ignoring SonarCloud quality gate status in this case.")
           if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("- Code analysis quality gate failed")
-          if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+          if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             exit(1)
         shell: python
         
