@@ -302,7 +302,7 @@ jobs:
             print("- Test failures")
           if "${{ steps.validator-quality-gate.outcome }}" == "failure":
             print("- Validator issues")
-          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
+          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" and "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" != "FAILED":
             print("- Could not retrieve SonarCloud quality gate status, potentially due to reaching License max LoC. Ignoring SonarCloud quality gate status in this case.")
           if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
             print("- Code analysis quality gate failed")
