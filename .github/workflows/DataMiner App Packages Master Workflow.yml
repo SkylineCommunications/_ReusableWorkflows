@@ -458,7 +458,18 @@ jobs:
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
+        continue-on-error: true
         timeout-minutes: 5
+
+      - name: SonarCloud Quality Gate
+        id: quality-step
+        run: |
+          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
+            print("Code Analysis Quality gate failed.")
+            exit(1)
+          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure":
+            print("- Could not retrieve SonarCloud quality gate status, potentially due to reaching License max LoC. Ignoring SonarCloud quality gate status in this case.")
+        shell: python
 
       - name: Create package name
         id: packageName
