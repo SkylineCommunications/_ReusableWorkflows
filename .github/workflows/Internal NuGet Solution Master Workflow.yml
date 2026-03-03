@@ -281,7 +281,8 @@ jobs:
               /d:sonar.host.url="https://sonarcloud.io" `
               /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" `
               /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx" `
-              /d:sonar.exclusions="**/*.yml,**/*.xml"
+              /d:sonar.exclusions="**/*.yml,**/*.xml" `
+              /d:sonar.branch.name="${{ github.ref_name }}"
             dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
             dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN  }}"
         continue-on-error: true
@@ -297,7 +298,8 @@ jobs:
               /d:sonar.host.url="https://sonarcloud.io" `
               /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" `
               /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx" `
-              /d:sonar.exclusions="**/*.yml,**/*.xml"
+              /d:sonar.exclusions="**/*.yml,**/*.xml" `
+              /d:sonar.branch.name="${{ github.ref_name }}"
         continue-on-error: true
 
       - name: Building
