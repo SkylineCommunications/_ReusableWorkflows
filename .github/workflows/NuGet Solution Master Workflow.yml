@@ -276,14 +276,29 @@ jobs:
             exit 1
           fi
 
+          # Check if the response contains errors
+          if echo "$sonarCloudProjectStatus" | jq -e '.errors' > /dev/null 2>&1; then
+            echo "Error: SonarCloud API returned errors. Initial analysis needed." >&2
+            echo "Returned response: $sonarCloudProjectStatus" >&2
+            echo "needsInitialAnalysis=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check if project status is NONE (needs initial analysis)
+          projectStatus=$(echo "$sonarCloudProjectStatus" | jq -r '.projectStatus.status // empty')
+          if [ "$projectStatus" = "NONE" ]; then
+            echo "Project status is NONE. Initial analysis needed."
+            echo "needsInitialAnalysis=true" >> $GITHUB_OUTPUT
+          else
+            echo "needsInitialAnalysis=false" >> $GITHUB_OUTPUT
+          fi
+
           # Output the JSON response if valid
           echo "Returned response: $sonarCloudProjectStatus"
-          echo "sonarCloudProjectStatus=$sonarCloudProjectStatus" >> $GITHUB_OUTPUT
-        continue-on-error: false
         shell: bash
 
       - name: Trigger Initial Analysis
-        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
+        if: steps.get-sonarcloud-status.outputs.needsInitialAnalysis == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
         run: |
