@@ -44,6 +44,11 @@ on:
         required: true
         type: string
 
+      enable-strong-naming:
+        required: false
+        type: boolean
+        default: false
+
     secrets:
       sonarCloudToken:
         required: false
@@ -152,6 +157,10 @@ jobs:
           # List of secret names needed for this job
           secret_names=("azure-token" "sonar-token")
 
+          if [[ "${{ inputs.enable-strong-naming }}" == "true" ]]; then
+            secret_names+=("nuget-strong-name-key")
+          fi
+
           for secret_name in "${secret_names[@]}"; do
             # Convert to uppercase and replace hyphens with underscores
             env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
@@ -204,6 +213,11 @@ jobs:
         run: |
           echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx' | sort -r | head -n 1) >> $GITHUB_OUTPUT
         shell: bash
+
+      - name: Restore strong name key
+        shell: bash
+        run: |
+          echo "${{ env.NUGET_STRONG_NAME_KEY }}" | base64 -d > strongname.snk
 
       - name: Validate NuGet Metadata
         run: NuGetValidateSkylineSpecifications --workspace ${{ github.workspace }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
@@ -301,7 +315,7 @@ jobs:
         continue-on-error: true
 
       - name: Building
-        run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false
+        run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false ${{ inputs.enable-strong-naming && '-p:SignAssembly=true -p:AssemblyOriginatorKeyFile=strongname.snk' || '' }}
 
       - uses: actions/upload-artifact@v6
         with:
