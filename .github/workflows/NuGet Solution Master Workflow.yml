@@ -230,7 +230,7 @@ jobs:
       - name: Restore strong name key
         shell: bash
         run: |
-          echo "${{ env.NUGET_STRONG_NAME_KEY }}" | base64 -d > ${{ github.workspace }}/strongname.snk
+          echo "${{ env.NUGET_STRONG_NAME_KEY }}" | base64 -d > strongname.snk
 
       - name: Validate NuGet Metadata
         run: NuGetValidateSkylineSpecifications --workspace ${{ github.workspace }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
@@ -328,7 +328,7 @@ jobs:
         continue-on-error: true
 
       - name: Building
-        run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false ${{ inputs.enable-strong-naming && '-p:SignAssembly=true -p:AssemblyOriginatorKeyFile=${{ github.workspace }}/strongname.snk' || '' }}
+        run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false ${{ inputs.enable-strong-naming && '-p:SignAssembly=true -p:AssemblyOriginatorKeyFile=${{ github.workspace }}\strongname.snk' || '' }}
 
       - uses: actions/upload-artifact@v6
         with:
