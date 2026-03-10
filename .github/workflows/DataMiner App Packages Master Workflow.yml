@@ -68,7 +68,7 @@ on:
 
 env:
   VERSION_APPPACKAGEINSTALLER: '4.0.0'
-  VERSION_SDK: '2.4.4'
+  VERSION_SDK: '2.4.6'
 
 jobs:
   check_deprecated_item:
