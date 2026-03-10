@@ -328,7 +328,7 @@ jobs:
         continue-on-error: true
 
       - name: Building
-        run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false ${{ inputs.enable-strong-naming && '-p:SignAssembly=true -p:AssemblyOriginatorKeyFile=${{ github.workspace }}\strongname.snk' || '' }}
+        run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" --configuration Release -nodeReuse:false ${{ inputs.enable-strong-naming && '-p:SignAssembly=true -p:AssemblyOriginatorKeyFile=$env:GITHUB_WORKSPACE\strongname.snk' || '' }}
 
       - uses: actions/upload-artifact@v6
         with:
