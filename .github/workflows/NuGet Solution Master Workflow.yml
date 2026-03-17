@@ -442,7 +442,7 @@ jobs:
 
       - name: Download Unsigned NuGet
         id: downloadUnsignedNuget
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: NugetPackages
           path: _NuGetResults
@@ -474,7 +474,7 @@ jobs:
     steps:
       - name: Download Signed NuGet
         id: downloadSignedNuget
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: SignedNugetPackages
           path: _SignedNuGetResults
