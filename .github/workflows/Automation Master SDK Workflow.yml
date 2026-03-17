@@ -242,7 +242,7 @@ jobs:
         
       - name: Upload Sonar report-task.txt artifact
         continue-on-error: true
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: sonar-report-task
           path: .sonarqube/out/.sonar/report-task.txt
@@ -286,7 +286,7 @@ jobs:
 
       - name: Upload SBOM file
         if: github.ref_type == 'tag'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: SBOM
           path: "${{ github.workspace }}/SBOM/*.json"
@@ -405,7 +405,7 @@ jobs:
             --name "${{ steps.packageName.outputs.name }}" \
             --debug "${{ inputs.debug }}"
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: DataMiner Installation Package
           path: "${{ github.workspace }}/${{ steps.packageName.outputs.name }}.dmapp"
@@ -513,7 +513,7 @@ jobs:
               exit 1
             }
 
-        - uses: actions/upload-artifact@v6
+        - uses: actions/upload-artifact@v7
           if: env.catalogDetails != ''
           with:
             name: Catalog Details
@@ -686,7 +686,7 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: env.catalogDetails != ''
         with:
           name: Catalog Details
