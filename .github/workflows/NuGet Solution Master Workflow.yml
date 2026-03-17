@@ -228,7 +228,7 @@ jobs:
         shell: bash
 
       - name: Restore strong name key
-        if: inputs.enable-strong-naming == 'true'
+        if: inputs.enable-strong-naming
         shell: bash
         run: |
           echo "${{ env.NUGET_STRONG_NAME_KEY }}" | base64 -d > strongname.snk
