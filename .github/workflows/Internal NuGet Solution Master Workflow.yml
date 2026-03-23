@@ -213,7 +213,7 @@ jobs:
         shell: bash
 
       - name: Validate NuGet Metadata
-        run: NuGetValidateSkylineSpecifications --workspace ${{ github.workspace }} --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
+        run: NuGetValidateSkylineSpecifications --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
 
       - name: Apply Branch and output path for pre-release NuGet
         if: github.ref_type == 'branch'
