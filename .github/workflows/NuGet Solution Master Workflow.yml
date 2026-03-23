@@ -145,7 +145,7 @@ jobs:
       quality: ${{ steps.quality-step.outputs.results }}
     steps:
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v3
         if: needs.check_oidc.outputs.use-oidc == 'true'
         with:
           client-id: ${{ needs.check_oidc.outputs.client-id }}
@@ -395,7 +395,7 @@ jobs:
     needs: [validate_skyline_quality_gate, check_oidc]
     steps:
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v3
         if: needs.check_oidc.outputs.use-oidc == 'true'
         with:
           client-id: ${{ needs.check_oidc.outputs.client-id }}
