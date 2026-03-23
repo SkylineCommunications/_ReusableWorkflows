@@ -152,7 +152,7 @@ jobs:
     needs: check_oidc
     steps:
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v3
         if: needs.check_oidc.outputs.use-oidc == 'true'
         with:
           client-id: ${{ needs.check_oidc.outputs.client-id }}
@@ -597,7 +597,7 @@ jobs:
     needs: [skyline_ci, check_oidc]
     steps:
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v3
         if: needs.check_oidc.outputs.use-oidc == 'true'
         with:
           client-id: ${{ needs.check_oidc.outputs.client-id }}
