@@ -303,10 +303,10 @@ jobs:
         run: |
           dotnet tool install dotnet-sonarscanner --global
           dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.*
-          dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetChangeVersion --global --version 2.*
+          dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetChangeVersion --global --prerelease
 
       - name: Update Skyline.DataMiner.Core.AppPackages
-        run: NuGetChangeVersion --name Skyline.DataMiner.Core.AppPackageInstaller --workspace "${{ github.workspace }}" --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}" --nugetVersion $VERSION_APPPACKAGEINSTALLER
+        run: NuGetChangeVersion --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}" --nuget-name Skyline.DataMiner.Core.AppPackageInstaller --nuget-version $VERSION_APPPACKAGEINSTALLER
 
       - name: Update Skyline.DataMiner.Sdk version in global.json (if present)
         shell: pwsh
