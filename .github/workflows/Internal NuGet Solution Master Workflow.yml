@@ -200,7 +200,7 @@ jobs:
           dotnet tool install -g dotnet-sonarscanner
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetToggleOnBuild
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetPreBuildApplyBranchOrTag
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetValidateSkylineSpecifications
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetValidateSkylineSpecifications --prerelease
 
       - name: Find solution file
         id: findSlnFile
