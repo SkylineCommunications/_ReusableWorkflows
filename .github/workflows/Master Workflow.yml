@@ -656,21 +656,26 @@ jobs:
       # ──────────────────────────────────────────────────────────────
       # D. Test & Quality Gate
       # ──────────────────────────────────────────────────────────────
-
       - name: Unit Tests (VSTest)
         id: unit-tests-vstest
         if: steps.detect-test-mode.outputs.test-runner-mode == 'vstest'
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           CONFIGURATION: ${{ inputs.configuration }}
+        shell: bash
         run: |
-          dotnet test "$SOLUTION_PATH" \
-            --no-build \
-            --configuration "$CONFIGURATION" \
-            --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-            --logger "trx;logfilename=unitTestResults.trx" \
-            --collect "XPlat Code Coverage" \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
+          while IFS= read -r project; do
+            [[ "$project" == *".Integration"* ]] && continue
+
+            dotnet test "$project" \
+              --no-build \
+              --configuration "$CONFIGURATION" \
+              --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
+              --logger "trx;logfilename=$(basename "$project" .csproj).trx" \
+              --results-directory "TestResults" \
+              --collect "XPlat Code Coverage" \
+              -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
+          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
 
       - name: Unit Tests (MTP)
         id: unit-tests-mtp
@@ -678,18 +683,57 @@ jobs:
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           CONFIGURATION: ${{ inputs.configuration }}
+        shell: bash
         run: |
-          dotnet test \
-            --solution "$SOLUTION_PATH" \
-            --no-build \
-            --configuration "$CONFIGURATION" \
-            --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-            --report-trx \
-            --report-trx-filename unitTestResults.trx \
-            --coverage \
-            --coverage-output-format xml \
-            --coverage-output coverage.xml \
-            --ignore-exit-code 8
+          while IFS= read -r project; do
+            [[ "$project" == *".Integration"* ]] && continue
+
+            dotnet test "$project" \
+              --no-build \
+              --configuration "$CONFIGURATION" \
+              --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
+              --results-directory "TestResults" \
+              --report-trx \
+              --report-trx-filename "$(basename "$project" .csproj).trx" \
+              --coverage \
+              --coverage-output-format xml \
+              --coverage-output "TestResults/$(basename "$project" .csproj).coverage.xml" \
+              --ignore-exit-code 8
+          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
+          
+      # - name: Unit Tests (VSTest)
+      #   id: unit-tests-vstest
+      #   if: steps.detect-test-mode.outputs.test-runner-mode == 'vstest'
+      #   env:
+      #     SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
+      #     CONFIGURATION: ${{ inputs.configuration }}
+      #   run: |
+      #     dotnet test "$SOLUTION_PATH" \
+      #       --no-build \
+      #       --configuration "$CONFIGURATION" \
+      #       --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
+      #       --logger "trx;logfilename=unitTestResults.trx" \
+      #       --collect "XPlat Code Coverage" \
+      #       -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
+
+      # - name: Unit Tests (MTP)
+      #   id: unit-tests-mtp
+      #   if: steps.detect-test-mode.outputs.test-runner-mode == 'mtp'
+      #   env:
+      #     SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
+      #     CONFIGURATION: ${{ inputs.configuration }}
+      #   run: |
+      #     dotnet test \
+      #       --solution "$SOLUTION_PATH" \
+      #       --no-build \
+      #       --configuration "$CONFIGURATION" \
+      #       --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
+      #       --report-trx \
+      #       --report-trx-filename unitTestResults.trx \
+      #       --coverage \
+      #       --coverage-output-format xml \
+      #       --coverage-output coverage.xml \
+      #       --ignore-exit-code 8
 
       - name: Stop Analysis
         if: github.actor != 'dependabot[bot]'
