@@ -685,12 +685,17 @@ jobs:
           CONFIGURATION: ${{ inputs.configuration }}
         shell: bash
         run: |
-          # Navigate to the solution directory
-          cd "$(dirname "$SOLUTION_PATH")"
-
           while IFS= read -r project; do
             echo $project
             [[ "$project" == *"Integration"* ]] && continue
+
+            # Skip non-test projects without invoking MSBuild
+            if ! grep -Eq \
+              'Microsoft\.NET\.Test\.Sdk|EnableMSTestRunner|EnableNUnitRunner|EnableXUnitRunner|<IsTestProject>true</IsTestProject>' \
+              "$project"; then
+              echo "Skipping non-test project: $project"
+              continue
+            fi
             dotnet test --project "$project" \
               --no-build \
               --configuration "$CONFIGURATION" \
