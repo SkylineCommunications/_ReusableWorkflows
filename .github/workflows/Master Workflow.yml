@@ -689,6 +689,7 @@ jobs:
           cd "$(dirname "$SOLUTION_PATH")"
 
           while IFS= read -r project; do
+            echo $project
             [[ "$project" == *"Integration"* ]] && continue
             dotnet test --project "$project" \
               --no-build \
