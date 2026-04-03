@@ -68,7 +68,7 @@ on:
         required: false
 
 env:
-  VERSION_SDK: '2.5.0-bravo'
+  VERSION_SDK: '0.0.800'
   VERSION_APPPACKAGEINSTALLER: '4.0.0'
 
 jobs:
@@ -685,23 +685,24 @@ jobs:
           CONFIGURATION: ${{ inputs.configuration }}
         shell: bash
         run: |
-          set -o pipefail
+          shopt -s nocasematch
 
-          solution_dir="$(dirname "$SOLUTION_PATH")"
+          while IFS= read -r project; do
+            [[ "$project" != *"tests"* || "$project" == *"integration"* ]] && continue
 
-          dotnet test \
-            --test-modules "**/bin/${CONFIGURATION}/**/*Tests.dll" \
-            --test-modules "!**/bin/${CONFIGURATION}/**/*Integration*.dll" \
-            --root-directory "$solution_dir" \
-            --no-build \
-            --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-            --results-directory "TestResults" \
-            --report-trx \
-            --report-trx-filename "UnitTests.trx" \
-            --coverage \
-            --coverage-output-format xml \
-            --coverage-output coverage.xml
-          
+            dotnet test --project "$project" \
+              --no-build \
+              --configuration "$CONFIGURATION" \
+              --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
+              --results-directory "TestResults" \
+              --report-trx \
+              --report-trx-filename "UnitTests.trx" \
+              --coverage \
+              --coverage-output-format xml \
+              --coverage-output coverage.xml \
+              --ignore-exit-code 8
+          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
+                  
       # - name: Unit Tests (VSTest)
       #   id: unit-tests-vstest
       #   if: steps.detect-test-mode.outputs.test-runner-mode == 'vstest'
