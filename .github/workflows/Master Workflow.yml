@@ -671,6 +671,7 @@ jobs:
               --no-build \
               --configuration "$CONFIGURATION" \
               --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
+              --logger "console;verbosity=detailed" \
               --logger "trx;logfilename=$(basename "$project" .csproj).trx" \
               --results-directory "TestResults" \
               --collect "XPlat Code Coverage" \
@@ -694,6 +695,7 @@ jobs:
               --no-build \
               --configuration "$CONFIGURATION" \
               --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
+              --logger "console;verbosity=detailed" \
               --results-directory "TestResults" \
               --report-trx \
               --report-trx-filename "UnitTests.trx" \
