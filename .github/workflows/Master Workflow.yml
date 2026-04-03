@@ -685,9 +685,22 @@ jobs:
           CONFIGURATION: ${{ inputs.configuration }}
         shell: bash
         run: |
+          # Navigate to the solution directory
+          cd "$(dirname "$SOLUTION_PATH")"
+
           while IFS= read -r project; do
             [[ "$project" == *"Integration"* ]] && continue
-            dotnet test --project "$project" --no-build --configuration "$CONFIGURATION" --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" --results-directory "TestResults" --report-trx --report-trx-filename "UnitTests.trx" --coverage --coverage-output-format xml --coverage-output coverage.xml --ignore-exit-code 8
+            dotnet test --project "$project" \
+              --no-build \
+              --configuration "$CONFIGURATION" \
+              --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
+              --results-directory "TestResults" \
+              --report-trx \
+              --report-trx-filename "UnitTests.trx" \
+              --coverage \
+              --coverage-output-format xml \
+              --coverage-output coverage.xml \
+              --ignore-exit-code 8
           done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
           
       # - name: Unit Tests (VSTest)
