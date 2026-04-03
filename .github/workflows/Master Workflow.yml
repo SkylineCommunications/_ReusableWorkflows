@@ -688,7 +688,7 @@ jobs:
           while IFS= read -r project; do
             [[ "$project" == *".Integration"* ]] && continue
 
-            dotnet test "$project" \
+            dotnet test --project "$project" \
               --no-build \
               --configuration "$CONFIGURATION" \
               --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
@@ -697,7 +697,7 @@ jobs:
               --report-trx-filename "$(basename "$project" .csproj).trx" \
               --coverage \
               --coverage-output-format xml \
-              --coverage-output "TestResults/$(basename "$project" .csproj).coverage.xml" \
+              --coverage-output coverage.xml \
               --ignore-exit-code 8
           done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
           
