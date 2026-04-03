@@ -685,40 +685,22 @@ jobs:
           CONFIGURATION: ${{ inputs.configuration }}
         shell: bash
         run: |
-          failed=0
+          set -o pipefail
 
-          while IFS= read -r project; do
-            echo "$project"
-            [[ "$project" == *"Integration"* ]] && continue
+          solution_dir="$(dirname "$SOLUTION_PATH")"
 
-            output=$(dotnet test --project "$project" \
-              --no-build \
-              --configuration "$CONFIGURATION" \
-              --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-              --results-directory "TestResults" \
-              --report-trx \
-              --report-trx-filename "UnitTests.trx" \
-              --coverage \
-              --coverage-output-format xml \
-              --coverage-output coverage.xml \
-              --ignore-exit-code 8 2>&1)
-
-            exit_code=$?
-
-            echo "$output"
-
-            if [ $exit_code -ne 0 ]; then
-              if echo "$output" | grep -q "Get projects properties with MSBuild didn't execute properly"; then
-                echo "Ignoring non-test project: $project"
-              else
-                echo "Real test failure in: $project"
-                failed=1
-              fi
-            fi
-
-          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
-
-          exit $failed
+          dotnet test \
+            --test-modules "**/bin/${CONFIGURATION}/**/*Tests.dll" \
+            --test-modules "!**/bin/${CONFIGURATION}/**/*Integration*.dll" \
+            --root-directory "$solution_dir" \
+            --no-build \
+            --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
+            --results-directory "TestResults" \
+            --report-trx \
+            --report-trx-filename "UnitTests.trx" \
+            --coverage \
+            --coverage-output-format xml \
+            --coverage-output coverage.xml
           
       # - name: Unit Tests (VSTest)
       #   id: unit-tests-vstest
