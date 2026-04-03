@@ -699,8 +699,7 @@ jobs:
               --coverage \
               --coverage-output-format xml \
               --coverage-output coverage.xml \
-              --ignore-exit-code 8
-            || true
+              --ignore-exit-code 8 || true
           done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
           
       # - name: Unit Tests (VSTest)
