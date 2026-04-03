@@ -409,8 +409,9 @@ jobs:
 
           $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
 
-          if (-not $jsonContent.'msbuild-sdks') {
-            $jsonContent | Add-Member -MemberType NoteProperty -Name 'msbuild-sdks' -Value @{}
+          if (-not $jsonContent.'msbuild-sdks' -or -not $jsonContent.'msbuild-sdks'.PSObject.Properties['Skyline.DataMiner.Sdk']) {
+            Write-Host "Skyline.DataMiner.Sdk not found in global.json. Skipping update."
+            return
           }
 
           $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
@@ -664,16 +665,16 @@ jobs:
           CONFIGURATION: ${{ inputs.configuration }}
         shell: bash
         run: |
+          shopt -s nocasematch
+
           while IFS= read -r project; do
-            [[ "$project" == *"Integration"* ]] && continue
+            [[ "$project" != *"tests"* || "$project" == *"integrationtests"* || "$project" == *"integration.tests"* ]] && continue
 
             dotnet test "$project" \
               --no-build \
               --configuration "$CONFIGURATION" \
               --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-              --logger "console;verbosity=detailed" \
-              --logger "trx;logfilename=$(basename "$project" .csproj).trx" \
-              --results-directory "TestResults" \
+              --logger "trx;logfilename=unitTestResults.trx" \
               --collect "XPlat Code Coverage" \
               -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
           done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
@@ -689,54 +690,19 @@ jobs:
           shopt -s nocasematch
 
           while IFS= read -r project; do
-            [[ "$project" != *"tests"* || "$project" == *"integration"* ]] && continue
+            [[ "$project" != *"tests"* || "$project" == *"integrationtests"* || "$project" == *"integration.tests"* ]] && continue
 
             dotnet test --project "$project" \
               --no-build \
               --configuration "$CONFIGURATION" \
               --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-              --results-directory "TestResults" \
               --report-trx \
-              --report-trx-filename "UnitTests.trx" \
+              --report-trx-filename unitTestResults.trx \
               --coverage \
               --coverage-output-format xml \
               --coverage-output coverage.xml \
               --ignore-exit-code 8
           done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
-                  
-      # - name: Unit Tests (VSTest)
-      #   id: unit-tests-vstest
-      #   if: steps.detect-test-mode.outputs.test-runner-mode == 'vstest'
-      #   env:
-      #     SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-      #     CONFIGURATION: ${{ inputs.configuration }}
-      #   run: |
-      #     dotnet test "$SOLUTION_PATH" \
-      #       --no-build \
-      #       --configuration "$CONFIGURATION" \
-      #       --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-      #       --logger "trx;logfilename=unitTestResults.trx" \
-      #       --collect "XPlat Code Coverage" \
-      #       -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
-
-      # - name: Unit Tests (MTP)
-      #   id: unit-tests-mtp
-      #   if: steps.detect-test-mode.outputs.test-runner-mode == 'mtp'
-      #   env:
-      #     SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-      #     CONFIGURATION: ${{ inputs.configuration }}
-      #   run: |
-      #     dotnet test \
-      #       --solution "$SOLUTION_PATH" \
-      #       --no-build \
-      #       --configuration "$CONFIGURATION" \
-      #       --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-      #       --report-trx \
-      #       --report-trx-filename unitTestResults.trx \
-      #       --coverage \
-      #       --coverage-output-format xml \
-      #       --coverage-output coverage.xml \
-      #       --ignore-exit-code 8
 
       - name: Stop Analysis
         if: github.actor != 'dependabot[bot]'
@@ -1132,17 +1098,11 @@ jobs:
             --package-location "$env:GITHUB_WORKSPACE" `
             --debug $env:DEBUG_FLAG
 
-      - name: Authenticate with GitHub CLI
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          "$env:GH_TOKEN" | gh auth login --with-token
-
       - name: Find Version Comment
         id: findVersionComment
         env:
           REF_NAME: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Checking for release notes associated with the reference: '$REF_NAME'"
 
@@ -1185,8 +1145,9 @@ jobs:
 
           $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
 
-          if (-not $jsonContent.'msbuild-sdks') {
-            $jsonContent | Add-Member -MemberType NoteProperty -Name 'msbuild-sdks' -Value @{}
+          if (-not $jsonContent.'msbuild-sdks' -or -not $jsonContent.'msbuild-sdks'.PSObject.Properties['Skyline.DataMiner.Sdk']) {
+            Write-Host "Skyline.DataMiner.Sdk not found in global.json. Skipping update."
+            return
           }
 
           $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
