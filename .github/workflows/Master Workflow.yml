@@ -68,7 +68,7 @@ on:
         required: false
 
 env:
-  VERSION_SDK: '2.5.0-bravo'
+  VERSION_SDK: '2.5.0'
   VERSION_APPPACKAGEINSTALLER: '4.0.0'
 
 jobs:
@@ -363,16 +363,14 @@ jobs:
             dotnet tool install dotnet-sonarscanner --global
           fi
 
-          # dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetValidateSkylineSpecifications --version 3.*
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetValidateSkylineSpecifications --prerelease
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetValidateSkylineSpecifications --version 3.*
 
           if [[ "$HAS_DM_PROJECTS" == "true" ]]; then
             if [[ "$GH_ACTOR" != "dependabot[bot]" ]]; then
               dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.*
             fi
 
-            # dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetChangeVersion --global --version 3.*
-            dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetChangeVersion --global --prerelease
+            dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetChangeVersion --global --version 3.*
           fi
         shell: bash
 
