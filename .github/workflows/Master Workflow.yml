@@ -677,7 +677,7 @@ jobs:
               --logger "trx;logfilename=unitTestResults.trx" \
               --collect "XPlat Code Coverage" \
               -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
-          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
+          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep -E '\.(cs|fs|vb)proj$')
 
       - name: Unit Tests (MTP)
         id: unit-tests-mtp
@@ -702,7 +702,7 @@ jobs:
               --coverage-output-format xml \
               --coverage-output coverage.xml \
               --ignore-exit-code 8
-          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep '\.csproj$')
+          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep -E '\.(cs|fs|vb)proj$')
 
       - name: Stop Analysis
         if: github.actor != 'dependabot[bot]'
