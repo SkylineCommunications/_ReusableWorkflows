@@ -113,7 +113,7 @@ jobs:
         run: |
           dotnet tool install Skyline.DataMiner.CICD.Tools.TestProjectDetector --tool-path .\.tools\TestProjectDetector 
           dotnet tool install -g dotnet-sonarscanner
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.NuGetPackageConfigDetector --version 1.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.*
 
       - name: Check NuGet packages.config usage
