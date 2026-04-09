@@ -47,7 +47,7 @@ jobs:
       quality: ${{ steps.quality-step.outputs.results }}
     steps:
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v3
         if: inputs.use-oidc == 'true'
         with:
           client-id: ${{ inputs.oidc-client-id }}
@@ -341,7 +341,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v3
         if: inputs.use-oidc == 'true'
         with:
           client-id: ${{ inputs.oidc-client-id }}
@@ -473,7 +473,7 @@ jobs:
     needs: validate_skyline_quality_gate
     steps:
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v3
         if: inputs.use-oidc == 'true'
         with:
           client-id: ${{ inputs.oidc-client-id }}
@@ -610,7 +610,7 @@ jobs:
     needs: [validate_skyline_quality_gate,artifact_creation]
     steps:
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v3
         if: inputs.use-oidc == 'true'
         with:
           client-id: ${{ inputs.oidc-client-id }}
