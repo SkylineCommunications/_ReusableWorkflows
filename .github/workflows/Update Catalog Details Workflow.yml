@@ -139,7 +139,7 @@ jobs:
               exit 1
             }
 
-        - uses: actions/upload-artifact@v6
+        - uses: actions/upload-artifact@v7
           if: env.catalogDetails != ''
           with:
             name: Catalog Details
