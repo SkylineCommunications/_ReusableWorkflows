@@ -621,7 +621,7 @@ jobs:
 
       - name: Retrieve Installation Package
         id: retrieveInstallationPackage
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: DataMiner Installation Package
           path: _DataMinerInstallationPackage
@@ -642,7 +642,7 @@ jobs:
 
       - name: Retrieve SBOM file
         id: retrieveSbomFile
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: SBOM
           path: _SBOM
