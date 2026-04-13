@@ -648,7 +648,8 @@ jobs:
             --configuration "$CONFIGURATION" \
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" \
             -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" \
-            -p:SkylineDataMinerSdkDebug="$DEBUG_FLAG"
+            -p:SkylineDataMinerSdkDebug="$DEBUG_FLAG" \
+            -p:PackageOutputPath="${GITHUB_WORKSPACE}/_NuGetOutput"
 
       # ──────────────────────────────────────────────────────────────
       # D. Test & Quality Gate
@@ -758,10 +759,12 @@ jobs:
       - name: Detect NuGet packages
         if: github.actor != 'dependabot[bot]'
         id: detect-nuget-packages
-        env:
-          CONFIGURATION: ${{ inputs.configuration }}
         run: |
-          nuget_count=$(find . -path "*/bin/$CONFIGURATION/*.nupkg" | wc -l)
+          if [ -d "_NuGetOutput" ]; then
+            nuget_count=$(find _NuGetOutput -name "*.nupkg" | wc -l)
+          else
+            nuget_count=0
+          fi
           if [ "$nuget_count" -gt 0 ]; then
             echo "Found $nuget_count NuGet package(s)"
             echo "has-nuget-packages=true" >> $GITHUB_OUTPUT
@@ -776,8 +779,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: NugetPackages
-          path: |
-            **/bin/${{ inputs.configuration }}/**/*.nupkg
+          path: _NuGetOutput/*.nupkg
 
       - name: Detect DataMiner packages
         if: github.actor != 'dependabot[bot]'
