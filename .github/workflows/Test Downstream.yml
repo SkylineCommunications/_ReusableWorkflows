@@ -99,7 +99,7 @@ jobs:
               -f 'client_payload[head_sha]=${{ steps.pr-details.outputs.head_sha }}' \
               --silent
 
-            dispatched_repos="${dispatched_repos}\n- [\`${repo}\`](https://github.com/${repo}/actions)"
+            dispatched_repos="${dispatched_repos}\n- [${repo}](https://github.com/${repo}/actions)"
           done
 
           echo -e "dispatched_repos<<EOF\n${dispatched_repos}\nEOF" >> "$GITHUB_OUTPUT"
@@ -108,16 +108,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          body="⏳ **Downstream tests triggered** from PR #${{ github.event.issue.number }} (\`${{ steps.pr-details.outputs.head_sha }}\`)
+          cat <<'COMMENT_BODY' > /tmp/pr-comment.md
+          ⏳ **Downstream tests triggered** from PR #${{ github.event.issue.number }} (`${{ steps.pr-details.outputs.head_sha }}`)
 
           Triggered repos:
           ${{ steps.dispatch.outputs.dispatched_repos }}
 
-          Polling for results..."
+          Polling for results...
+          COMMENT_BODY
 
           gh pr comment ${{ github.event.issue.number }} \
             --repo ${{ github.repository }} \
-            --body "$body"
+            --body-file /tmp/pr-comment.md
 
       - name: Poll for results
         id: poll
@@ -203,7 +205,7 @@ jobs:
           for repo in $TARGET_REPOS; do
             run_id="${run_ids[$repo]}"
             if [[ -z "$run_id" ]]; then
-              result_table="${result_table}\n| \`${repo}\` | ⚠️ No run found | - |"
+              result_table="${result_table}\n| ${repo} | ⚠️ No run found | - |"
               overall="failure"
               continue
             fi
@@ -224,7 +226,7 @@ jobs:
               overall="failure"
             fi
 
-            result_table="${result_table}\n| \`${repo}\` | ${icon} ${conclusion} | [View run](${html_url}) |"
+            result_table="${result_table}\n| ${repo} | ${icon} ${conclusion} | [View run](${html_url}) |"
           done
 
           echo -e "result_table<<EOF\n${result_table}\nEOF" >> "$GITHUB_OUTPUT"
@@ -240,15 +242,17 @@ jobs:
             header="❌ **Some downstream tests failed**"
           fi
 
-          body="${header}
+          cat <<COMMENT_BODY > /tmp/pr-results.md
+          ${header}
 
-          PR #${{ github.event.issue.number }} (\`${{ steps.pr-details.outputs.head_sha }}\`)
+          PR #${{ github.event.issue.number }} (${{ steps.pr-details.outputs.head_sha }})
 
-          ${{ steps.poll.outputs.result_table }}"
+          ${{ steps.poll.outputs.result_table }}
+          COMMENT_BODY
 
           gh pr comment ${{ github.event.issue.number }} \
             --repo ${{ github.repository }} \
-            --body "$body"
+            --body-file /tmp/pr-results.md
 
       - name: Set exit code
         if: steps.poll.outputs.overall != 'success'
