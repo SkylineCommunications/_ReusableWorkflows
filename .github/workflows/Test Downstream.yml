@@ -1,0 +1,255 @@
+name: Test Downstream
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: test-downstream
+  cancel-in-progress: true
+
+# To add a new target repo:
+#   1. Add the repo to the TARGET_REPOS list below (format: owner/repo)
+#   2. Create .github/workflows/test-downstream.yml in that repo (see receiver template)
+#   3. Merge the receiver workflow to the target repo's default branch
+
+env:
+  TARGET_REPOS: >-
+    SkylineCommunications/BOOST-DailyRegression-Connector-SDK
+
+jobs:
+  test-downstream:
+    name: Test Downstream Repos
+    if: >-
+      github.event.issue.pull_request
+      && trimStart(trimEnd(github.event.comment.body)) == '/test'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Check commenter permissions
+        id: check-permission
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          permission=$(gh api \
+            repos/${{ github.repository }}/collaborators/${{ github.event.comment.user.login }}/permission \
+            --jq '.permission')
+
+          if [[ "$permission" != "admin" && "$permission" != "write" ]]; then
+            echo "User ${{ github.event.comment.user.login }} has '$permission' permission. Write or admin required."
+            exit 1
+          fi
+
+          echo "User ${{ github.event.comment.user.login }} has '$permission' permission. Proceeding."
+
+      - name: React with eyes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api \
+            repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content='eyes' \
+            --silent
+
+      - name: Get PR details
+        id: pr-details
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pr_json=$(gh pr view ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --json headRefOid,headRefName)
+
+          head_sha=$(echo "$pr_json" | jq -r '.headRefOid')
+          head_ref=$(echo "$pr_json" | jq -r '.headRefName')
+
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+          echo "PR #${{ github.event.issue.number }}: branch=$head_ref sha=$head_sha"
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Force-push test-downstream tag
+        run: |
+          git tag -f test-downstream ${{ steps.pr-details.outputs.head_sha }}
+          git push -f origin test-downstream
+
+      - name: Dispatch to target repos
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_PAT }}
+        run: |
+          timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "dispatch_time=$timestamp" >> "$GITHUB_OUTPUT"
+
+          dispatched_repos=""
+          for repo in $TARGET_REPOS; do
+            echo "Dispatching to $repo..."
+            gh api \
+              "repos/$repo/dispatches" \
+              -f event_type='test-reusable-workflow' \
+              -f 'client_payload[pr_number]=${{ github.event.issue.number }}' \
+              -f 'client_payload[source_repo]=${{ github.repository }}' \
+              -f 'client_payload[head_sha]=${{ steps.pr-details.outputs.head_sha }}' \
+              --silent
+
+            dispatched_repos="${dispatched_repos}\n- [\`${repo}\`](https://github.com/${repo}/actions)"
+          done
+
+          echo -e "dispatched_repos<<EOF\n${dispatched_repos}\nEOF" >> "$GITHUB_OUTPUT"
+
+      - name: Comment triggered repos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          body="⏳ **Downstream tests triggered** from PR #${{ github.event.issue.number }} (\`${{ steps.pr-details.outputs.head_sha }}\`)
+
+          Triggered repos:
+          ${{ steps.dispatch.outputs.dispatched_repos }}
+
+          Polling for results..."
+
+          gh pr comment ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --body "$body"
+
+      - name: Poll for results
+        id: poll
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_PAT }}
+        run: |
+          dispatch_time="${{ steps.dispatch.outputs.dispatch_time }}"
+          max_wait=1800  # 30 minutes
+          poll_interval=30
+          initial_wait=15
+          elapsed=0
+
+          echo "Waiting ${initial_wait}s for runs to start..."
+          sleep $initial_wait
+          elapsed=$initial_wait
+
+          declare -A run_ids
+
+          # Phase 1: Find all run IDs
+          echo "Looking for triggered workflow runs..."
+          for attempt in $(seq 1 10); do
+            all_found=true
+            for repo in $TARGET_REPOS; do
+              if [[ -n "${run_ids[$repo]}" ]]; then
+                continue
+              fi
+
+              run_id=$(gh api \
+                "repos/$repo/actions/runs?event=repository_dispatch&created=>=$dispatch_time&per_page=5" \
+                --jq '.workflow_runs[0].id // empty')
+
+              if [[ -n "$run_id" ]]; then
+                echo "Found run $run_id for $repo"
+                run_ids[$repo]=$run_id
+              else
+                all_found=false
+              fi
+            done
+
+            if $all_found; then
+              break
+            fi
+
+            echo "Not all runs found yet, waiting ${poll_interval}s... (attempt $attempt)"
+            sleep $poll_interval
+            elapsed=$((elapsed + poll_interval))
+
+            if (( elapsed >= max_wait )); then
+              echo "Timeout waiting for runs to appear"
+              break
+            fi
+          done
+
+          # Phase 2: Poll until all runs complete
+          echo "Polling for completion..."
+          while (( elapsed < max_wait )); do
+            all_done=true
+            for repo in $TARGET_REPOS; do
+              run_id="${run_ids[$repo]}"
+              if [[ -z "$run_id" ]]; then
+                continue
+              fi
+
+              status=$(gh api "repos/$repo/actions/runs/$run_id" --jq '.status')
+              if [[ "$status" != "completed" ]]; then
+                all_done=false
+                echo "$repo: $status"
+              fi
+            done
+
+            if $all_done; then
+              echo "All runs completed!"
+              break
+            fi
+
+            sleep $poll_interval
+            elapsed=$((elapsed + poll_interval))
+          done
+
+          # Phase 3: Collect results
+          result_table="| Repository | Status | Link |\n|---|---|---|"
+          overall="success"
+          for repo in $TARGET_REPOS; do
+            run_id="${run_ids[$repo]}"
+            if [[ -z "$run_id" ]]; then
+              result_table="${result_table}\n| \`${repo}\` | ⚠️ No run found | - |"
+              overall="failure"
+              continue
+            fi
+
+            run_json=$(gh api "repos/$repo/actions/runs/$run_id" \
+              --jq '{conclusion: .conclusion, status: .status, html_url: .html_url}')
+
+            conclusion=$(echo "$run_json" | jq -r '.conclusion // .status')
+            html_url=$(echo "$run_json" | jq -r '.html_url')
+
+            if [[ "$conclusion" == "success" ]]; then
+              icon="✅"
+            elif [[ "$conclusion" == "cancelled" ]]; then
+              icon="⏹️"
+              overall="failure"
+            else
+              icon="❌"
+              overall="failure"
+            fi
+
+            result_table="${result_table}\n| \`${repo}\` | ${icon} ${conclusion} | [View run](${html_url}) |"
+          done
+
+          echo -e "result_table<<EOF\n${result_table}\nEOF" >> "$GITHUB_OUTPUT"
+          echo "overall=$overall" >> "$GITHUB_OUTPUT"
+
+      - name: Post results
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ steps.poll.outputs.overall }}" == "success" ]]; then
+            header="✅ **All downstream tests passed**"
+          else
+            header="❌ **Some downstream tests failed**"
+          fi
+
+          body="${header}
+
+          PR #${{ github.event.issue.number }} (\`${{ steps.pr-details.outputs.head_sha }}\`)
+
+          ${{ steps.poll.outputs.result_table }}"
+
+          gh pr comment ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --body "$body"
+
+      - name: Set exit code
+        if: steps.poll.outputs.overall != 'success'
+        run: exit 1
