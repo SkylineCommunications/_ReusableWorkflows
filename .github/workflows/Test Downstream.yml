@@ -22,7 +22,7 @@ jobs:
     name: Test Downstream Repos
     if: >-
       github.event.issue.pull_request
-      && trimStart(trimEnd(github.event.comment.body)) == '/test'
+      && github.event.comment.body == '/test'
     runs-on: ubuntu-latest
     permissions:
       contents: write
