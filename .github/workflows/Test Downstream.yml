@@ -230,7 +230,7 @@ jobs:
         run: |
           dispatch_time="${{ steps.dispatch.outputs.dispatch_time }}"
           max_wait=1800  # 30 minutes
-          poll_interval=30
+          poll_interval=300 # 5 minutes
           initial_wait=15
           elapsed=0
 
