@@ -73,8 +73,19 @@ env:
 
 jobs:
 
+  validate_trigger:
+    name: Validate Trigger
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for unsupported trigger
+        if: github.event_name == 'pull_request_target'
+        run: |
+          echo "::error::This workflow does not support the 'pull_request_target' trigger. Use 'pull_request' instead to avoid security risks."
+          exit 1
+
   check_oidc:
     name: Check OIDC
+    needs: [validate_trigger]
     runs-on: ubuntu-latest
     outputs:
       client-id: ${{ steps.set_oidc.outputs.client-id }}
@@ -115,6 +126,7 @@ jobs:
 
   discover_projects:
     name: Discover Project Types
+    needs: [validate_trigger]
     runs-on: ubuntu-latest
     outputs:
       has-dataminer-projects: ${{ steps.detect-projects.outputs.has-dataminer-projects }}
