@@ -38,8 +38,20 @@ on:
         required: false
 
 jobs:
+
+  validate_trigger:
+    name: Validate Trigger
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for unsupported trigger
+        if: github.event_name == 'pull_request_target'
+        run: |
+          echo "::error::This workflow does not support the 'pull_request_target' trigger. Use 'pull_request' instead to avoid security risks."
+          exit 1
+
   validate_skyline_quality_gate:
     name: SDK Skyline Quality Gate 
+    needs: [validate_trigger]
     runs-on: windows-latest
     env:
       detected-unit-tests: none
