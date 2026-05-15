@@ -151,28 +151,32 @@ defense.
 GitHub does **not** allow assigning the Copilot coding agent with the
 default `GITHUB_TOKEN`, because it is a GitHub App installation token
 and the `replaceActorsForAssignable` mutation is restricted to
-user-owned tokens. Without a user token, the issue is still created but
-remains unassigned (you'll see a warning in the workflow log).
+user-owned tokens. The workflow therefore needs a separate token to
+perform the assignment. Without one, the issue is still created and
+labeled — it just remains unassigned (you'll see a warning in the log).
 
-To make assignment work fleet-wide, create one **organization-level
-secret** that the reusable workflow can read via `secrets: inherit`:
+Two ways to provide that token are supported, in this order of
+preference:
 
-| Secret name              | Type                                                                              |
-| ------------------------ | --------------------------------------------------------------------------------- |
-| `COPILOT_ASSIGN_TOKEN`   | Fine-grained PAT (or OAuth token) with **Issues: Read and write** on target repos |
+1. **Azure Key Vault via OIDC (internal SkylineCommunications repos).**
+   The master workflow's `check_oidc` job already produces OIDC
+   parameters. The migration workflow uses them to `azure/login@v3` and
+   pull a secret named **`copilot-assign-token`** from the existing
+   `kv-master-cicd-secrets` Key Vault — same pattern as `azure-token`,
+   `sonar-token`, etc. in the other reusable workflows. Nothing extra
+   is required from caller repos; just keep using `secrets: inherit`
+   when calling the master workflow.
 
-Steps:
+2. **`copilot_assign_token` workflow secret (external callers, or
+   override).** If the caller passes a `copilot_assign_token` secret, it
+   takes precedence over the Key Vault value. Useful for repos outside
+   the SkylineCommunications organization (no OIDC) or for testing with
+   a personal PAT. The PAT must be user-owned and have
+   **Issues: Read and write** on the target repo.
 
-1. Create a fine-grained PAT owned by a service user (not a personal
-   account) with **Issues: Read and write** for the connector repos.
-2. Add it as an organization secret named `COPILOT_ASSIGN_TOKEN` and
-   make it available to the connector repositories.
-3. Ensure the leaf wrapper workflow in each connector repo uses
-   `secrets: inherit` when calling `Connector Master Workflow.yml`
-   (this is already the standard pattern).
-
-If the secret is missing, the workflow degrades gracefully — issues are
-still opened and labeled, just without the Copilot assignee.
+If neither source provides a token, the issue is created unassigned and
+a warning is emitted. Maintainers can then manually assign it to
+Copilot.
 
 ### Standalone use (optional)
 
@@ -193,12 +197,16 @@ When called standalone, omit `assume_legacy` and the workflow will run
 
 ### Inputs
 
-| Input           | Type    | Default              | Description                                                                |
-| --------------- | ------- | -------------------- | -------------------------------------------------------------------------- |
-| `assume_legacy` | boolean | `false`              | Caller asserts the solution is legacy-style; skips the SDKChecker run.     |
-| `assignee`      | string  | `copilot-swe-agent`  | Login of the Copilot coding agent (override only if needed).               |
-| `dry_run`       | boolean | `false`              | Log the planned issue without creating it.                                 |
-| `debug`         | boolean | `false`              | Verbose logging.                                                           |
+| Input                  | Type    | Default              | Description                                                                          |
+| ---------------------- | ------- | -------------------- | ------------------------------------------------------------------------------------ |
+| `assume_legacy`        | boolean | `false`              | Caller asserts the solution is legacy-style; skips the SDKChecker run.               |
+| `assignee`             | string  | `copilot-swe-agent`  | Login of the Copilot coding agent (override only if needed).                         |
+| `dry_run`              | boolean | `false`              | Log the planned issue without creating it.                                           |
+| `debug`                | boolean | `false`              | Verbose logging.                                                                     |
+| `use-oidc`             | string  | `false`              | When `'true'`, log in to Azure and pull `copilot-assign-token` from Key Vault.       |
+| `oidc-client-id`       | string  | —                    | Azure OIDC client id (passed through by the master workflow's `check_oidc` job).     |
+| `oidc-tenant-id`       | string  | —                    | Azure OIDC tenant id.                                                                |
+| `oidc-subscription-id` | string  | —                    | Azure OIDC subscription id.                                                          |
 
 ---
 

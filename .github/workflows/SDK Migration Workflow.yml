@@ -42,15 +42,31 @@ on:
         type: boolean
         default: false
 
+      # OIDC parameters (computed by the caller, typically the master
+      # workflow's check_oidc job). When use-oidc is 'true', the assignment
+      # step will log in to Azure and pull `copilot-assign-token` from
+      # Azure Key Vault `kv-master-cicd-secrets` - same pattern as the
+      # other reusable workflows in this repo.
+      oidc-client-id:
+        required: false
+        type: string
+      oidc-tenant-id:
+        required: false
+        type: string
+      oidc-subscription-id:
+        required: false
+        type: string
+      use-oidc:
+        required: false
+        type: string
+        default: 'false'
+
     secrets:
       # Optional user-owned token (fine-grained PAT or OAuth token) used
       # ONLY to assign the created issue to the Copilot coding agent.
-      # The default GITHUB_TOKEN is an App installation token and cannot
-      # perform `replaceActorsForAssignable`, so assignment to Copilot
-      # silently degrades to an unassigned issue without this secret.
-      # Recommended setup: an organization-level secret named
-      # COPILOT_ASSIGN_TOKEN with a fine-grained PAT scoped to
-      # "Issues: Read and write" on the connector repos.
+      # Inside SkylineCommunications the token is pulled from Key Vault
+      # via OIDC instead, so this secret is only relevant for external
+      # callers who don't have OIDC configured.
       copilot_assign_token:
         required: false
 
@@ -103,6 +119,7 @@ jobs:
       contents: read
       issues: write
       pull-requests: read
+      id-token: write       # required for OIDC login to Azure
     steps:
       - uses: actions/checkout@v6
 
@@ -177,7 +194,33 @@ jobs:
                entries with the same versions.
              - Preserve target framework(s) and any DataMiner-specific
                MSBuild properties (e.g. protocol name, version).
-          2. Update the `.sln` if project paths / GUIDs change.
+             - **Do NOT set `<GenerateAssemblyInfo>false</GenerateAssemblyInfo>`.**
+               The SDK must be allowed to generate the assembly-level
+               attributes (`AssemblyVersion`, `AssemblyFileVersion`,
+               `AssemblyTitle`, etc.) from the project properties.
+               Leaving the property at its default `true` is required;
+               otherwise SonarCloud will fail with a missing
+               `AssemblyVersion` attribute after `AssemblyInfo.cs` is
+               deleted. If the legacy project explicitly set this to
+               `false`, drop the line entirely - do not carry it over.
+             - When removing `AssemblyInfo.cs`, migrate any meaningful
+               values it contained (e.g. `AssemblyVersion`,
+               `AssemblyFileVersion`, `AssemblyTitle`, `AssemblyCompany`,
+               `AssemblyProduct`) into the corresponding MSBuild
+               properties (`<Version>`, `<FileVersion>`,
+               `<AssemblyTitle>`, `<Company>`, `<Product>`) in the
+               csproj so the generated attributes match the originals.
+          2. Convert the solution file from the classic `.sln` format to
+             the new XML-based `.slnx` format:
+             - Use `dotnet sln <Solution>.sln migrate` (available in
+               .NET SDK 9.0.200+) to generate the `.slnx`. Do not write
+               the XML by hand.
+             - Delete the old `.sln` after verifying the `.slnx` opens
+               correctly and contains the same projects.
+             - Update any references to the `.sln` filename (CI scripts,
+               docs, `Directory.Build.*`) so they point at the new
+               `.slnx` file. The DataMiner connector CI workflows accept
+               either format - no changes needed there.
           3. Delete obsolete files (`packages.config`, legacy
              `AssemblyInfo.cs` if redundant, `app.config` if unused).
           4. Run locally to verify:
@@ -192,16 +235,22 @@ jobs:
              issues only if the fix is mechanical and obvious.
           5. Open a pull request:
              - Branch name: `chore/sdk-migration`
-             - Title: `chore: migrate to SDK-style csproj`
+             - Title: `chore: migrate to SDK-style csproj and slnx`
              - Label: `sdk-migration`
              - Description: list each project converted, summarize
-               removed files, and paste the validator summary
-               (Critical / Major / Minor / Warning counts).
+               removed files, note the `.sln` → `.slnx` switch, and
+               paste the validator summary (Critical / Major / Minor /
+               Warning counts).
 
           ### Acceptance criteria
 
           - [ ] Every `.csproj` is SDK-style.
+          - [ ] The solution has been converted from `.sln` to `.slnx`
+                (via `dotnet sln migrate`) and the old `.sln` is removed.
           - [ ] `dotnet build` succeeds.
+          - [ ] `<GenerateAssemblyInfo>` is **not** set to `false` (the
+                SDK must generate `AssemblyVersion` etc. so SonarCloud
+                does not flag a missing `AssemblyVersion` attribute).
           - [ ] `dataminer-validator validate` reports 0 Critical /
                 0 Major issues.
           - [ ] The `Connector Master Workflow` run on the PR takes the
@@ -249,7 +298,7 @@ jobs:
           # token, because GitHub does not allow assigning the Copilot
           # coding agent with App installation tokens (the default).
           issue_url=$(gh issue create \
-            --title "chore: migrate to SDK-style csproj" \
+            --title "chore: migrate to SDK-style csproj and slnx" \
             --body-file issue-body.md \
             --label "sdk-migration")
 
@@ -258,20 +307,57 @@ jobs:
           echo "number=$issue_number" >> "$GITHUB_OUTPUT"
           echo "url=$issue_url" >> "$GITHUB_OUTPUT"
 
+      - name: Azure Login (for Key Vault token retrieval)
+        if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true && inputs.use-oidc == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ inputs.oidc-client-id }}
+          tenant-id: ${{ inputs.oidc-tenant-id }}
+          subscription-id: ${{ inputs.oidc-subscription-id }}
+
+      - name: Retrieve Copilot assignment token from Key Vault
+        if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true && inputs.use-oidc == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Fetching copilot-assign-token from Azure Key Vault..."
+          secret_value=$(az keyvault secret show \
+            --vault-name kv-master-cicd-secrets \
+            --name copilot-assign-token \
+            --query value -o tsv)
+          echo "::add-mask::$secret_value"
+          echo "COPILOT_ASSIGN_TOKEN=$secret_value" >> "$GITHUB_ENV"
+
+      - name: Resolve assignment token (allow secret to override)
+        if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true
+        shell: bash
+        env:
+          USER_PROVIDED: ${{ secrets.copilot_assign_token }}
+        run: |
+          # If the caller explicitly passed a copilot_assign_token secret,
+          # prefer that (covers external users without OIDC, or org
+          # members who want to use their own PAT).
+          if [ -n "$USER_PROVIDED" ]; then
+            echo "::add-mask::$USER_PROVIDED"
+            echo "COPILOT_ASSIGN_TOKEN=$USER_PROVIDED" >> "$GITHUB_ENV"
+            echo "Using copilot_assign_token from caller-provided secret."
+          elif [ -n "${COPILOT_ASSIGN_TOKEN:-}" ]; then
+            echo "Using copilot-assign-token from Azure Key Vault."
+          else
+            echo "::warning::No Copilot assignment token available (no OIDC, no copilot_assign_token secret). The issue will be created unassigned."
+          fi
+
       - name: Assign issue to Copilot coding agent
         if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true
         env:
-          # Prefer the user-owned token if provided; otherwise the default
-          # token is used and the assignment is expected to fail with a
-          # warning (issue remains unassigned but tracked).
-          GH_TOKEN: ${{ secrets.copilot_assign_token || github.token }}
+          GH_TOKEN: ${{ env.COPILOT_ASSIGN_TOKEN || github.token }}
           ASSIGNEE: ${{ inputs.assignee }}
           ISSUE_NUMBER: ${{ steps.create.outputs.number }}
         run: |
           set -euo pipefail
 
-          if [ -z "${{ secrets.copilot_assign_token }}" ]; then
-            echo "::warning::No 'copilot_assign_token' secret provided. The default GITHUB_TOKEN cannot assign the Copilot coding agent. The issue was created unassigned. See README for setup."
+          if [ -z "${COPILOT_ASSIGN_TOKEN:-}" ]; then
+            echo "Skipping assignment - no user-owned token available."
             exit 0
           fi
 
