@@ -325,4 +325,4 @@ jobs:
 | `dry_run`                 | boolean | `false`  | Log the planned diff without opening a PR.                                        |
 | `debug`                   | boolean | `false`  | Verbose logging in the rewrite script.                                            |
 | `use-oidc`                | string  | `false`  | When `'true'`, log in to Azure and pull the migration token from Key Vault.       |
-| `oidc-client-id` / `tenant-id` / `subscription-id` | string | — | Azure OIDC parameters (auto-defaulted for `SkylineCommunications`). |
+| `oidc-client-id` / `oidc-tenant-id` / `oidc-subscription-id` | string | — | Azure OIDC parameters (auto-defaulted for `SkylineCommunications`). |
