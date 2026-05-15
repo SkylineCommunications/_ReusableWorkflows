@@ -19,14 +19,8 @@ name: Wrapper Migration Workflow
 # Token caveat: the default `GITHUB_TOKEN` cannot push changes that
 # touch files under `.github/workflows/*` - GitHub refuses unless the
 # token has the `workflows` scope. The workflow therefore needs a
-# user-owned token. Resolution order:
-#   1. caller-provided `wrapper_migration_token` secret
-#   2. `reusable-workflows-token` from `kv-master-cicd-secrets` via OIDC
-#      (internal SkylineCommunications repos). The PAT must carry
-#      `contents: write`, `pull-requests: write`, and `workflows` scope
-#      on target repos; without `workflows`, git push refuses any edit
-#      under `.github/workflows/`.
-# When neither is available the job emits a warning and exits without
+# user-owned token. Retrieves via OIDC from Azure Key Vault.
+# When the token is not available the job emits a warning and exits without
 # pushing - the rewrite is logged so maintainers can apply it manually.
 
 on:
@@ -63,14 +57,6 @@ on:
         required: false
         type: string
         default: 'false'
-
-    secrets:
-      # Optional caller-provided user token (PAT or fine-grained token)
-      # with `contents: write`, `pull-requests: write`, and `workflows`
-      # scope on the target repo. Required for external callers without
-      # OIDC access to the Skyline Key Vault.
-      wrapper_migration_token:
-        required: false
 
 permissions: {}
 
@@ -464,22 +450,6 @@ jobs:
           else
             echo "::add-mask::$secret_value"
             echo "WRAPPER_MIGRATION_TOKEN=$secret_value" >> "$GITHUB_ENV"
-          fi
-
-      - name: Resolve migration token (caller secret overrides Key Vault)
-        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run != true
-        shell: bash
-        env:
-          USER_PROVIDED: ${{ secrets.wrapper_migration_token }}
-        run: |
-          if [ -n "$USER_PROVIDED" ]; then
-            echo "::add-mask::$USER_PROVIDED"
-            echo "WRAPPER_MIGRATION_TOKEN=$USER_PROVIDED" >> "$GITHUB_ENV"
-            echo "Using wrapper_migration_token from caller-provided secret."
-          elif [ -n "${WRAPPER_MIGRATION_TOKEN:-}" ]; then
-            echo "Using migration token retrieved from Azure Key Vault."
-          else
-            echo "::warning::No migration token available (no OIDC, no wrapper_migration_token secret). The rewrite was computed but cannot be pushed as a PR because the default GITHUB_TOKEN lacks the 'workflows' scope. The diff is in the job log."
           fi
 
       - name: Create migration PR (dry run)
