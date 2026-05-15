@@ -1,0 +1,794 @@
+name: Wrapper Migration Workflow
+
+# Reusable workflow that rewrites a caller repo's wrapper workflow
+# file(s) from one of the legacy "redirecting" master workflows
+# (NuGet Solution, Internal NuGet Solution, DataMiner App Packages)
+# to call `Master Workflow.yml` directly, and opens a PR with the
+# change.
+#
+# It is invoked by each legacy wrapper master workflow so that any
+# repo still using the old wrapper organically discovers a migration
+# PR the next time CI runs. The rewrite is purely mechanical
+# (input/secret renames) so the workflow performs it directly.
+#
+# Idempotency: skip if an open PR with the `wrapper-migration` label
+# or a branch named `chore/wrapper-migration-<kind>` already exists.
+#
+# Token caveat: the default `GITHUB_TOKEN` cannot push changes that
+# touch files under `.github/workflows/*` - GitHub refuses unless the
+# token has the `workflows` scope. The workflow therefore needs a
+# user-owned token. Retrieves via OIDC from Azure Key Vault.
+# When the token is not available the job emits a warning and exits without
+# pushing - the rewrite is logged so maintainers can apply it manually.
+
+on:
+  workflow_call:
+    inputs:
+      # Which legacy wrapper is calling us. Drives the rename map.
+      wrapper-kind:
+        required: true
+        type: string   # nuget | internal-nuget | app-packages
+
+      dry_run:
+        required: false
+        type: boolean
+        default: false
+
+      debug:
+        required: false
+        type: boolean
+        default: false
+
+      # OIDC parameters (typically forwarded from the caller's
+      # `check_oidc` job). When `use-oidc == 'true'` the workflow logs
+      # in to Azure and pulls the migration token from Key Vault.
+      oidc-client-id:
+        required: false
+        type: string
+      oidc-tenant-id:
+        required: false
+        type: string
+      oidc-subscription-id:
+        required: false
+        type: string
+      use-oidc:
+        required: false
+        type: string
+        default: 'false'
+
+permissions: {}
+
+jobs:
+
+  validate_trigger:
+    name: Validate Trigger
+    runs-on: ubuntu-latest
+    steps:
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@AI
+
+  resolve_oidc:
+    name: Resolve OIDC
+    needs: [validate_trigger]
+    runs-on: ubuntu-latest
+    outputs:
+      client-id: ${{ steps.set.outputs.client-id }}
+      tenant-id: ${{ steps.set.outputs.tenant-id }}
+      subscription-id: ${{ steps.set.outputs.subscription-id }}
+      use-oidc: ${{ steps.set.outputs.use-oidc }}
+    steps:
+      - name: Set Azure OIDC parameters
+        id: set
+        env:
+          IN_CLIENT: ${{ inputs.oidc-client-id }}
+          IN_TENANT: ${{ inputs.oidc-tenant-id }}
+          IN_SUB: ${{ inputs.oidc-subscription-id }}
+          IN_USE: ${{ inputs.use-oidc }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          # Same defaults Master Workflow.yml uses, so internal Skyline
+          # callers don't have to wire `check_oidc` into the three
+          # legacy wrapper workflows themselves.
+          if [[ "$IN_USE" == "true" && -n "$IN_CLIENT" ]]; then
+            {
+              echo "client-id=$IN_CLIENT"
+              echo "tenant-id=$IN_TENANT"
+              echo "subscription-id=$IN_SUB"
+              echo "use-oidc=true"
+            } >> "$GITHUB_OUTPUT"
+          elif [[ "$OWNER" == "SkylineCommunications" ]]; then
+            {
+              echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53"
+              echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40"
+              echo "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220"
+              echo "use-oidc=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "use-oidc=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  migrate:
+    name: Migrate wrapper to Master Workflow
+    needs: [validate_trigger, resolve_oidc]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      id-token: write       # required for OIDC login to Azure
+      issues: write
+    steps:
+      - name: Validate input
+        env:
+          KIND: ${{ inputs.wrapper-kind }}
+        run: |
+          case "$KIND" in
+            nuget|internal-nuget|app-packages) ;;
+            *)
+              echo "::error::Unknown wrapper-kind '$KIND'. Expected one of: nuget, internal-nuget, app-packages."
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout caller repository
+        uses: actions/checkout@v6
+        with:
+          path: caller
+
+      - name: Write rewrite script
+        # The script is inlined here (rather than fetched from a side
+        # checkout of _ReusableWorkflows) because resolving the "right"
+        # ref of this repo from inside a reusable-workflow call is
+        # unreliable.
+        run: |
+          mkdir -p "$RUNNER_TEMP/wrapper-migration"
+          cat > "$RUNNER_TEMP/wrapper-migration/rewrite.py" <<'PYEOF'
+          """Rewrite a caller repo's wrapper workflow YAML files so that jobs
+          which currently call one of the legacy *redirecting* master workflows
+          (NuGet Solution, Internal NuGet Solution, DataMiner App Packages)
+          call ``Master Workflow.yml`` directly, with the input / secret names
+          that the master workflow actually expects.
+
+          Implementation note: this is a *text-surgical* rewrite. A previous
+          version used ``ruamel.yaml`` round-trip mode but, even with
+          ``preserve_quotes`` enabled, ruamel reformats list indentation,
+          quote styles, blank lines, multi-line string folding, etc., which
+          polluted the generated PR with hundreds of whitespace-only changes.
+          The rewrite here is purely mechanical (rename a few keys under
+          ``with:`` / ``secrets:``, rewrite one ``uses:`` line, optionally
+          insert ``nuget-push-source``), so we operate on the raw lines and
+          touch nothing else. Comments, quoting, indentation width and line
+          endings of every other line are preserved byte-for-byte.
+          """
+
+          from __future__ import annotations
+
+          import argparse
+          import re
+          import sys
+          from pathlib import Path
+          from urllib.parse import unquote
+
+          KINDS = {
+              "nuget": {
+                  "legacy_file": "NuGet Solution Master Workflow.yml",
+                  "with_renames": {
+                      "sonarCloudProjectName": "sonarcloud-project-name",
+                      "solutionName": "solution-filter-name",
+                  },
+                  "with_drops": [
+                      "referenceName", "runNumber", "referenceType",
+                      "repository", "owner",
+                  ],
+                  "with_extra": {
+                      "nuget-push-source": "https://api.nuget.org/v3/index.json",
+                  },
+                  "secret_renames": {
+                      "nugetApiKey": "NUGET_API_KEY",
+                      "sonarCloudToken": "SONAR_TOKEN",
+                      "azureToken": "AZURE_TOKEN",
+                  },
+                  "secret_drops": ["pfx", "pfxPassword"],
+              },
+              "internal-nuget": {
+                  "legacy_file": "Internal NuGet Solution Master Workflow.yml",
+                  "with_renames": {
+                      "sonarCloudProjectName": "sonarcloud-project-name",
+                      "solutionFilterName": "solution-filter-name",
+                  },
+                  "with_drops": [
+                      "referenceName", "runNumber", "referenceType",
+                      "repository", "owner",
+                  ],
+                  "with_extra": {},
+                  "secret_renames": {
+                      "nugetApiKey": "NUGET_API_KEY",
+                      "sonarCloudToken": "SONAR_TOKEN",
+                      "azureToken": "AZURE_TOKEN",
+                  },
+                  "secret_drops": [],
+              },
+              "app-packages": {
+                  "legacy_file": "DataMiner App Packages Master Workflow.yml",
+                  "with_renames": {
+                      "sonarCloudProjectName": "sonarcloud-project-name",
+                      "solutionFilterName": "solution-filter-name",
+                      "overrideCatalogIdentifiers": "override-catalog-identifiers",
+                  },
+                  "with_drops": [
+                      "referenceName", "runNumber", "referenceType",
+                      "repository", "owner",
+                  ],
+                  "with_extra": {},
+                  "secret_renames": {
+                      "sonarCloudToken": "SONAR_TOKEN",
+                      "azureToken": "AZURE_TOKEN",
+                      "dataminerToken": "DATAMINER_TOKEN",
+                      "overrideCatalogDownloadToken": "OVERRIDE_CATALOG_DOWNLOAD_TOKEN",
+                  },
+                  "secret_drops": [],
+              },
+          }
+
+
+          def uses_matches_legacy(uses_value, legacy_file):
+              if not isinstance(uses_value, str):
+                  return False
+              decoded = unquote(uses_value)
+              return (
+                  "_ReusableWorkflows/.github/workflows/" in decoded
+                  and legacy_file in decoded
+              )
+
+
+          def rewrite_ref_in_uses(uses_value):
+              decoded = unquote(uses_value)
+              m = re.match(
+                  r"^(?P<prefix>[^/]+/_ReusableWorkflows)/\.github/workflows/"
+                  r".+?(?P<ref>@[^@]+)?$",
+                  decoded,
+              )
+              if not m:
+                  return decoded
+              ref = m.group("ref") or "@main"
+              return f"{m.group('prefix')}/.github/workflows/Master Workflow.yml{ref}"
+
+
+          def _indent_of(line):
+              return len(line) - len(line.lstrip(" "))
+
+
+          def _is_blank_or_comment(line):
+              s = line.lstrip(" ")
+              return s == "" or s == "\n" or s == "\r\n" or s.startswith("#")
+
+
+          def _eol(line):
+              if line.endswith("\r\n"):
+                  return "\r\n"
+              if line.endswith("\n"):
+                  return "\n"
+              return ""
+
+
+          def _find_block_end(lines, start, body_indent):
+              """Exclusive end index of a block whose body lines are indented >=
+              ``body_indent``. Blank/comment lines are considered part of the
+              block."""
+              i = start
+              last_content = start
+              while i < len(lines):
+                  line = lines[i]
+                  if _is_blank_or_comment(line):
+                      i += 1
+                      continue
+                  if _indent_of(line) < body_indent:
+                      return last_content + 1 if last_content >= start else start
+                  last_content = i
+                  i += 1
+              return len(lines)
+
+
+          # A key entry inside a `with:` / `secrets:` mapping. We require the
+          # exact body indent so we don't accidentally match nested keys of a
+          # multi-line value.
+          def _key_re(body_indent):
+              return re.compile(
+                  rf"^( {{{body_indent}}})([A-Za-z_][\w-]*):(\s*)(.*?)(\r?\n?)$"
+              )
+
+
+          def _format_scalar(value):
+              if isinstance(value, bool):
+                  return "true" if value else "false"
+              if isinstance(value, (int, float)):
+                  return str(value)
+              s = str(value)
+              # Quote anything that could be misinterpreted by YAML; URLs in
+              # particular start with a scheme that contains ``:``.
+              specials = set(':#{}[],&*!|>\'"%@`')
+              if any(c in specials for c in s) or s.strip() != s or s == "":
+                  return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+              return s
+
+
+          def _process_named_block(
+              lines, body_start, body_end, block_name,
+              block_indent, body_indent,
+              renames, drops, extras, default_eol,
+          ):
+              """Rename / drop keys inside the named block, and optionally add
+              missing extras. Returns the (possibly shifted) job body end index
+              and whether any change was made."""
+              block_header_re = re.compile(
+                  rf"^( {{{block_indent}}}){re.escape(block_name)}:\s*(\r?\n)?$"
+              )
+              block_idx = None
+              for j in range(body_start, body_end):
+                  if block_header_re.match(lines[j]):
+                      block_idx = j
+                      break
+
+              changed = False
+
+              if block_idx is None:
+                  if not extras:
+                      return body_end, False
+                  # Create the block right before the next top-level job key, i.e.
+                  # at the end of the current job's body.
+                  eol = default_eol
+                  new_lines = [" " * block_indent + f"{block_name}:{eol}"]
+                  for k, v in extras.items():
+                      new_lines.append(" " * body_indent + f"{k}: {_format_scalar(v)}{eol}")
+                  lines[body_end:body_end] = new_lines
+                  return body_end + len(new_lines), True
+
+              # Walk the block body and apply renames / drops to entries whose
+              # key sits at exactly ``body_indent``.
+              key_re = _key_re(body_indent)
+              j = block_idx + 1
+              block_body_end = _find_block_end(lines, j, body_indent)
+              while j < block_body_end:
+                  line = lines[j]
+                  if _is_blank_or_comment(line):
+                      j += 1
+                      continue
+                  m = key_re.match(line)
+                  if not m:
+                      j += 1
+                      continue
+                  key = m.group(2)
+                  # Determine entry span: this line plus any following lines
+                  # that are blank or indented deeper than ``body_indent``.
+                  entry_end = j + 1
+                  while entry_end < block_body_end:
+                      l2 = lines[entry_end]
+                      if _is_blank_or_comment(l2):
+                          entry_end += 1
+                          continue
+                      if _indent_of(l2) <= body_indent:
+                          break
+                      entry_end += 1
+
+                  if key in drops:
+                      del lines[j:entry_end]
+                      removed = entry_end - j
+                      block_body_end -= removed
+                      body_end -= removed
+                      changed = True
+                      continue
+
+                  if key in renames:
+                      new_key = renames[key]
+                      indent_part, _, sep, rest, line_eol = m.groups()
+                      # Rebuild only the key portion; keep separator + value
+                      # + EOL byte-for-byte.
+                      lines[j] = f"{indent_part}{new_key}:{sep}{rest}{line_eol}"
+                      changed = True
+
+                  j = entry_end
+
+              # Add any missing extras at the end of the block.
+              if extras:
+                  existing = set()
+                  for j in range(block_idx + 1, block_body_end):
+                      m = key_re.match(lines[j])
+                      if m:
+                          existing.add(m.group(2))
+                  to_add = [(k, v) for k, v in extras.items() if k not in existing]
+                  if to_add:
+                      eol = _eol(lines[block_idx]) or default_eol
+                      # Insert after the last non-blank line of the block.
+                      insert_at = block_body_end
+                      while insert_at > block_idx + 1 and _is_blank_or_comment(lines[insert_at - 1]):
+                          insert_at -= 1
+                      new_lines = [
+                          " " * body_indent + f"{k}: {_format_scalar(v)}{eol}"
+                          for k, v in to_add
+                      ]
+                      lines[insert_at:insert_at] = new_lines
+                      block_body_end += len(new_lines)
+                      body_end += len(new_lines)
+                      changed = True
+
+              # If we drained the block dry, remove the header (and trailing
+              # blank lines that belonged to it).
+              has_any = False
+              for j in range(block_idx + 1, block_body_end):
+                  if key_re.match(lines[j]):
+                      has_any = True
+                      break
+              if not has_any:
+                  # Remove from block_idx up to block_body_end, but keep blank
+                  # separators outside the block intact.
+                  remove_to = block_body_end
+                  while remove_to > block_idx + 1 and _is_blank_or_comment(lines[remove_to - 1]):
+                      remove_to -= 1
+                  # Also swallow the block header itself.
+                  del lines[block_idx:remove_to]
+                  body_end -= (remove_to - block_idx)
+                  changed = True
+
+              return body_end, changed
+
+
+          def _process_job(lines, body_start, body_end, job_indent, cfg,
+                           drop_skyline_secrets, default_eol, debug, job_name):
+              body_indent = job_indent + 2  # `uses:`, `with:`, `secrets:`
+              child_indent = body_indent + 2  # entries inside with/secrets
+
+              uses_re = re.compile(
+                  rf"^( {{{body_indent}}})uses:(\s+)(.*?)(\r?\n?)$"
+              )
+              uses_line_idx = None
+              uses_match = None
+              for j in range(body_start, body_end):
+                  m = uses_re.match(lines[j])
+                  if m:
+                      raw = m.group(3).strip()
+                      # Strip surrounding quotes for the legacy-match check
+                      # only; the line itself is rewritten preserving the
+                      # original quote style.
+                      bare = raw
+                      if (bare.startswith('"') and bare.endswith('"')) or (
+                          bare.startswith("'") and bare.endswith("'")
+                      ):
+                          bare = bare[1:-1]
+                      if uses_matches_legacy(bare, cfg["legacy_file"]):
+                          uses_line_idx = j
+                          uses_match = m
+                      break  # only one `uses:` per job
+
+              if uses_line_idx is None:
+                  return body_end, False
+
+              indent_part, sep, raw_val, line_eol = uses_match.groups()
+              quote = ""
+              val = raw_val.strip()
+              if val.startswith('"') and val.endswith('"'):
+                  quote = '"'
+                  val = val[1:-1]
+              elif val.startswith("'") and val.endswith("'"):
+                  quote = "'"
+                  val = val[1:-1]
+              new_val = rewrite_ref_in_uses(val)
+              lines[uses_line_idx] = (
+                  f"{indent_part}uses:{sep}{quote}{new_val}{quote}{line_eol}"
+              )
+
+              # `with:` block
+              body_end, _ = _process_named_block(
+                  lines, body_start, body_end, "with",
+                  body_indent, child_indent,
+                  cfg["with_renames"], cfg["with_drops"], cfg["with_extra"],
+                  default_eol,
+              )
+
+              # `secrets:` block. Drop SkylineCommunications-managed secrets
+              # *after* renames are applied, because those drops target the
+              # already-renamed (SHOUTING_CASE) keys.
+              secret_drops = list(cfg["secret_drops"])
+              body_end, _ = _process_named_block(
+                  lines, body_start, body_end, "secrets",
+                  body_indent, child_indent,
+                  cfg["secret_renames"], secret_drops, {},
+                  default_eol,
+              )
+              if drop_skyline_secrets:
+                  body_end, _ = _process_named_block(
+                      lines, body_start, body_end, "secrets",
+                      body_indent, child_indent,
+                      {}, ["SONAR_TOKEN", "AZURE_TOKEN"], {},
+                      default_eol,
+                  )
+
+              if debug:
+                  print(f"  -> job '{job_name}': rewrote uses to {new_val}",
+                        file=sys.stderr)
+              return body_end, True
+
+
+          def process_file(path, cfg, *, debug=False, drop_skyline_secrets=False):
+              text = path.read_text(encoding="utf-8")
+              if "_ReusableWorkflows" not in text:
+                  return False
+              if cfg["legacy_file"] not in unquote(text):
+                  return False
+
+              lines = text.splitlines(keepends=True)
+              # Detect dominant EOL for any inserted lines.
+              crlf = sum(1 for l in lines if l.endswith("\r\n"))
+              lf = sum(1 for l in lines if l.endswith("\n")) - crlf
+              default_eol = "\r\n" if crlf > lf else "\n"
+
+              # Locate `jobs:` at column 0.
+              jobs_re = re.compile(r"^jobs:\s*(\r?\n)?$")
+              jobs_start = None
+              for i, l in enumerate(lines):
+                  if jobs_re.match(l):
+                      jobs_start = i + 1
+                      break
+              if jobs_start is None:
+                  return False
+
+              # Each job header is `  <name>:` at indent 2. Job body lines are
+              # indented >= 4.
+              job_header_re = re.compile(r"^( {2})([^\s#][^\s:]*):\s*(\r?\n)?$")
+
+              changed_any = False
+              i = jobs_start
+              while i < len(lines):
+                  line = lines[i]
+                  if _is_blank_or_comment(line):
+                      i += 1
+                      continue
+                  if _indent_of(line) == 0:
+                      break  # next top-level key (e.g. another root mapping)
+                  m = job_header_re.match(line)
+                  if not m:
+                      i += 1
+                      continue
+                  job_name = m.group(2)
+                  body_start = i + 1
+                  body_end = _find_block_end(lines, body_start, 4)
+                  new_end, changed = _process_job(
+                      lines, body_start, body_end, 2, cfg,
+                      drop_skyline_secrets, default_eol, debug, job_name,
+                  )
+                  if changed:
+                      changed_any = True
+                  i = new_end
+
+              if changed_any:
+                  with path.open("w", encoding="utf-8", newline="") as f:
+                      f.writelines(lines)
+              return changed_any
+
+
+          def main(argv=None):
+              ap = argparse.ArgumentParser()
+              ap.add_argument("--kind", required=True, choices=sorted(KINDS))
+              ap.add_argument("--workflows-dir", default=".github/workflows")
+              ap.add_argument("--debug", action="store_true")
+              ap.add_argument("--drop-skyline-secrets", action="store_true")
+              args = ap.parse_args(argv)
+
+              cfg = KINDS[args.kind]
+              wf_dir = Path(args.workflows_dir)
+              if not wf_dir.is_dir():
+                  print(f"No {wf_dir} directory - nothing to do.")
+                  return 0
+
+              touched = []
+              for p in sorted([*wf_dir.glob("*.yml"), *wf_dir.glob("*.yaml")]):
+                  try:
+                      if process_file(p, cfg, debug=args.debug,
+                                      drop_skyline_secrets=args.drop_skyline_secrets):
+                          touched.append(str(p))
+                  except Exception as e:
+                      print(f"::warning::Could not process {p}: {e}")
+
+              if touched:
+                  print("Migrated workflow files:")
+                  for p in touched:
+                      print(f"  - {p}")
+              else:
+                  print(f"No workflow file references '{cfg['legacy_file']}'.")
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          PYEOF
+
+      - name: Check for existing migration PR
+        id: existing
+        working-directory: caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KIND: ${{ inputs.wrapper-kind }}
+        run: |
+          set -euo pipefail
+          branch="chore/wrapper-migration-${KIND}"
+          existing_pr=$(gh pr list \
+            --state open \
+            --label "wrapper-migration" \
+            --json number \
+            --jq 'length')
+          branch_pr=$(gh pr list \
+            --state open \
+            --head "$branch" \
+            --json number \
+            --jq 'length')
+          if [ "$existing_pr" != "0" ] || [ "$branch_pr" != "0" ]; then
+            echo "An open wrapper-migration PR already exists - skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure wrapper-migration label exists
+        if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true
+        working-directory: caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "wrapper-migration" \
+            --description "Migrate caller from legacy redirecting master workflow to Master Workflow.yml" \
+            --color "1f6feb" \
+            2>/dev/null || true
+
+      - name: Run rewrite script
+        if: steps.existing.outputs.skip != 'true'
+        env:
+          KIND: ${{ inputs.wrapper-kind }}
+          DEBUG: ${{ inputs.debug }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          args=( --kind "$KIND" --workflows-dir caller/.github/workflows )
+          if [ "$DEBUG" = "true" ]; then
+            args+=( --debug )
+          fi
+          # Master Workflow already pulls SONAR_TOKEN and AZURE_TOKEN
+          # from Azure Key Vault for SkylineCommunications-owned repos,
+          # so dropping them from the caller's `secrets:` block keeps
+          # the migrated wrapper tidy.
+          if [ "$OWNER" = "SkylineCommunications" ]; then
+            args+=( --drop-skyline-secrets )
+          fi
+          python3 "$RUNNER_TEMP/wrapper-migration/rewrite.py" "${args[@]}"
+
+      - name: Detect changes
+        if: steps.existing.outputs.skip != 'true'
+        id: diff
+        working-directory: caller
+        env:
+          KIND: ${{ inputs.wrapper-kind }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/workflows; then
+            echo "No wrapper workflow file referenced the legacy '$KIND' master workflow - nothing to migrate."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "----- diff -----"
+            git --no-pager diff -- .github/workflows
+            echo "----------------"
+          fi
+
+      - name: Azure Login (for Key Vault token retrieval)
+        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && needs.resolve_oidc.outputs.use-oidc == 'true' && inputs.dry_run != true
+        uses: azure/login@v3
+        with:
+          client-id: ${{ needs.resolve_oidc.outputs.client-id }}
+          tenant-id: ${{ needs.resolve_oidc.outputs.tenant-id }}
+          subscription-id: ${{ needs.resolve_oidc.outputs.subscription-id }}
+
+      - name: Retrieve migration token from Key Vault
+        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && needs.resolve_oidc.outputs.use-oidc == 'true' && inputs.dry_run != true
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The PAT must carry `contents: write`, `pull-requests: write`,
+          # and the `workflows` scope - without `workflows`, git push
+          # refuses any edit under `.github/workflows/` and peter-evans
+          # surfaces a misleading 403.
+          echo "Fetching reusable-workflows-token from Azure Key Vault..."
+          secret_value=$(az keyvault secret show \
+            --vault-name kv-master-cicd-secrets \
+            --name reusable-workflows-token \
+            --query value -o tsv 2>/dev/null || true)
+          if [ -z "$secret_value" ]; then
+            echo "::warning::No 'reusable-workflows-token' secret in Azure Key Vault 'kv-master-cicd-secrets'. Add a user-owned PAT (or fine-grained token) with 'contents: write', 'pull-requests: write', and 'workflows' scope on target repos to enable automated wrapper-migration PRs. The rewrite diff is in the job log so it can be applied manually."
+          else
+            echo "::add-mask::$secret_value"
+            echo "WRAPPER_MIGRATION_TOKEN=$secret_value" >> "$GITHUB_ENV"
+          fi
+
+      - name: Create migration PR (dry run)
+        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run == true
+        run: |
+          echo "[dry-run] Would open PR on branch '${{ steps.existing.outputs.branch }}' with the diff above."
+
+      - name: Create migration PR
+        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run != true && env.WRAPPER_MIGRATION_TOKEN != ''
+        uses: peter-evans/create-pull-request@v7
+        with:
+          path: caller
+          token: ${{ env.WRAPPER_MIGRATION_TOKEN }}
+          branch: ${{ steps.existing.outputs.branch }}
+          base: ${{ github.event.repository.default_branch }}
+          commit-message: |
+            chore: migrate wrapper workflow to call Master Workflow.yml directly
+
+            The '${{ inputs.wrapper-kind }}' legacy master workflow is a
+            thin wrapper around Master Workflow.yml. Removing it shortens
+            the call chain by one job, exposes the full set of
+            Master Workflow inputs (e.g. runs-on), and lets us evolve
+            inputs without breaking callers.
+
+            Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+          title: "chore: migrate wrapper to call Master Workflow.yml directly"
+          labels: wrapper-migration
+          delete-branch: true
+          body: |
+            This PR was opened automatically by the
+            **Wrapper Migration Workflow** in
+            `SkylineCommunications/_ReusableWorkflows`.
+
+            ### What changed
+
+            The wrapper workflow file(s) in `.github/workflows/` were
+            updated to call
+            `SkylineCommunications/_ReusableWorkflows/.github/workflows/Master Workflow.yml`
+            directly instead of the legacy
+            **${{ inputs.wrapper-kind }}** master wrapper. Input and
+            secret names were renamed to the kebab-case / SHOUTING_CASE
+            names that `Master Workflow.yml` expects, and any obsolete
+            passthrough inputs (`referenceName`, `runNumber`,
+            `referenceType`, `repository`, `owner`, …) were dropped.
+
+            ### Why
+
+            The legacy `NuGet Solution`, `Internal NuGet Solution` and
+            `DataMiner App Packages` master workflows are thin wrappers
+            that internally call `Master Workflow.yml`. Removing the
+            indirection:
+
+            - shortens the CI call chain by one job;
+            - exposes the full set of `Master Workflow.yml` inputs
+              (e.g. `runs-on`) without us having to forward each one
+              through every wrapper;
+            - lets us evolve the master inputs without breaking
+              callers.
+
+            ### Review checklist
+
+            - [ ] The rewrite preserves all `with:` values that were
+                  previously passed through (only the keys were
+                  renamed).
+            - [ ] All `secrets:` mappings are intact.
+            - [ ] If your wrapper job had extra steps or conditions
+                  around the legacy `uses:` call, verify they still
+                  make sense pointing at the master workflow.
+            - [ ] CI on this PR is green.
+
+            *Idempotent: re-running the legacy wrapper while this PR
+            is open will not create another one.*
+
+      - name: Summary
+        if: always()
+        env:
+          KIND: ${{ inputs.wrapper-kind }}
+          SKIP: ${{ steps.existing.outputs.skip }}
+          CHANGED: ${{ steps.diff.outputs.changed }}
+          HAVE_TOKEN: ${{ env.WRAPPER_MIGRATION_TOKEN != '' }}
+        run: |
+          {
+            echo "## Wrapper Migration result"
+            echo
+            echo "- kind: \`$KIND\`"
+            echo "- skipped (existing PR): \`${SKIP:-false}\`"
+            echo "- rewrite produced changes: \`${CHANGED:-false}\`"
+            echo "- migration token available: \`${HAVE_TOKEN}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

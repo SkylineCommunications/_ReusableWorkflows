@@ -1,0 +1,72 @@
+name: Validate inputs
+description: >
+  Validates that required SonarCloud and DataMiner inputs / secrets are
+  present, and produces clear error messages with clickable URLs
+  pointing the developer at the right settings page. Intended to be
+  used early in a job, before any expensive build steps.
+
+inputs:
+  sonarcloud-project-name:
+    description: Value of the `sonarcloud-project-name` workflow input. Required when `check-sonar` is `true`.
+    required: false
+    default: ""
+  sonarcloud-token:
+    description: SonarCloud token. Required when `check-sonar` is `true`.
+    required: false
+    default: ""
+  dataminer-token:
+    description: DataMiner catalog token. Required when `check-dataminer` is `true`.
+    required: false
+    default: ""
+  repository:
+    description: '`github.repository`. Used in the error message URLs.'
+    required: true
+  run-number:
+    description: '`github.run_number`. Used in the publish-step example.'
+    required: true
+  has-dataminer-projects:
+    description: Whether the solution contains DataMiner projects. Controls the extra publish hint.
+    required: false
+    default: "false"
+  check-sonar:
+    description: When `true`, validates `sonarcloud-project-name` and `sonarcloud-token`.
+    required: false
+    default: "true"
+  check-dataminer:
+    description: When `true`, validates `dataminer-token` (typically only on tag pushes for DataMiner solutions).
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Validate SonarCloud Project Name
+      if: inputs.check-sonar == 'true'
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
+        HAS_DM_PROJECTS: ${{ inputs.has-dataminer-projects }}
+        REPO: ${{ inputs.repository }}
+        RUN_NUMBER: ${{ inputs.run-number }}
+      run: bash ./validate-sonar-name.sh
+
+    - name: Validate SonarCloud Secret Token
+      if: inputs.check-sonar == 'true'
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        SONAR_TOKEN: ${{ inputs.sonarcloud-token }}
+        HAS_DM_PROJECTS: ${{ inputs.has-dataminer-projects }}
+        REPO: ${{ inputs.repository }}
+        RUN_NUMBER: ${{ inputs.run-number }}
+      run: bash ./validate-sonar-token.sh
+
+    - name: Validate DataMiner Secret Token
+      if: inputs.check-dataminer == 'true'
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        DATAMINER_TOKEN: ${{ inputs.dataminer-token }}
+        REPO: ${{ inputs.repository }}
+      run: bash ./validate-dataminer-token.sh

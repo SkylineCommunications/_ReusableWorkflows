@@ -1,0 +1,39 @@
+name: SonarCloud status
+description: >
+  Queries the SonarCloud project status API and reports whether an
+  initial analysis is needed. Validates that the token is usable and
+  produces a clear error pointing at the right settings page when it
+  is not.
+
+inputs:
+  project-key:
+    description: SonarCloud project key.
+    required: true
+  branch:
+    description: Branch name to check status for.
+    required: true
+  token:
+    description: SonarCloud token. Passed as the basic-auth username.
+    required: true
+  repository:
+    description: '`github.repository` — used in the error message URL.'
+    required: true
+
+outputs:
+  needs-initial-analysis:
+    description: '`true` when SonarCloud reports no analysis yet, `false` otherwise.'
+    value: ${{ steps.status.outputs.needsInitialAnalysis }}
+
+runs:
+  using: composite
+  steps:
+    - name: Get SonarCloud Status
+      id: status
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        SONAR_PROJECT_NAME: ${{ inputs.project-key }}
+        SONAR_TOKEN: ${{ inputs.token }}
+        BRANCH_NAME: ${{ inputs.branch }}
+        REPO: ${{ inputs.repository }}
+      run: bash ./get-status.sh
