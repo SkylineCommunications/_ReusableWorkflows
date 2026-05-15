@@ -42,6 +42,18 @@ on:
         type: boolean
         default: false
 
+    secrets:
+      # Optional user-owned token (fine-grained PAT or OAuth token) used
+      # ONLY to assign the created issue to the Copilot coding agent.
+      # The default GITHUB_TOKEN is an App installation token and cannot
+      # perform `replaceActorsForAssignable`, so assignment to Copilot
+      # silently degrades to an unassigned issue without this secret.
+      # Recommended setup: an organization-level secret named
+      # COPILOT_ASSIGN_TOKEN with a fine-grained PAT scoped to
+      # "Issues: Read and write" on the connector repos.
+      copilot_assign_token:
+        required: false
+
 permissions: {}
 
 jobs:
@@ -226,23 +238,43 @@ jobs:
 
       - name: Create migration issue
         if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true
+        id: create
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          # Assignment to the Copilot coding agent: best-effort. If the
-          # assignee cannot be resolved on this repo (e.g. Copilot coding
-          # agent not enabled), fall back to creating the issue without
-          # an assignee so the work item is at least tracked.
-          if ! gh issue create \
-                --title "chore: migrate to SDK-style csproj" \
-                --body-file issue-body.md \
-                --label "sdk-migration" \
-                --assignee "${{ inputs.assignee }}"; then
-            echo "::warning::Could not assign issue to '${{ inputs.assignee }}'. Creating unassigned."
-            gh issue create \
-              --title "chore: migrate to SDK-style csproj" \
-              --body-file issue-body.md \
-              --label "sdk-migration"
+          # Always create the issue first with the default GITHUB_TOKEN.
+          # Assignment is handled in a separate step using a user-owned
+          # token, because GitHub does not allow assigning the Copilot
+          # coding agent with App installation tokens (the default).
+          issue_url=$(gh issue create \
+            --title "chore: migrate to SDK-style csproj" \
+            --body-file issue-body.md \
+            --label "sdk-migration")
+
+          echo "Created issue: $issue_url"
+          issue_number="${issue_url##*/}"
+          echo "number=$issue_number" >> "$GITHUB_OUTPUT"
+          echo "url=$issue_url" >> "$GITHUB_OUTPUT"
+
+      - name: Assign issue to Copilot coding agent
+        if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true
+        env:
+          # Prefer the user-owned token if provided; otherwise the default
+          # token is used and the assignment is expected to fail with a
+          # warning (issue remains unassigned but tracked).
+          GH_TOKEN: ${{ secrets.copilot_assign_token || github.token }}
+          ASSIGNEE: ${{ inputs.assignee }}
+          ISSUE_NUMBER: ${{ steps.create.outputs.number }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${{ secrets.copilot_assign_token }}" ]; then
+            echo "::warning::No 'copilot_assign_token' secret provided. The default GITHUB_TOKEN cannot assign the Copilot coding agent. The issue was created unassigned. See README for setup."
+            exit 0
+          fi
+
+          if ! gh issue edit "$ISSUE_NUMBER" --add-assignee "$ASSIGNEE"; then
+            echo "::warning::Could not assign issue #$ISSUE_NUMBER to '$ASSIGNEE'. The issue remains unassigned but tracked."
           fi

@@ -142,9 +142,37 @@ defense.
   that protects human PRs.
 - **Least privilege.** Job-scoped `permissions:` (`contents: read`,
   `issues: write`, `pull-requests: read`).
-- **Falls back gracefully.** If the Copilot coding agent isn't enabled on
-  the repo, the issue is still created (unassigned) so the work is
-  tracked.
+- **Falls back gracefully.** If the Copilot coding agent assignment
+  fails (e.g. no user token, agent not enabled on the repo), the issue
+  is still created (unassigned) so the work is tracked.
+
+### Required setup — Copilot assignment token
+
+GitHub does **not** allow assigning the Copilot coding agent with the
+default `GITHUB_TOKEN`, because it is a GitHub App installation token
+and the `replaceActorsForAssignable` mutation is restricted to
+user-owned tokens. Without a user token, the issue is still created but
+remains unassigned (you'll see a warning in the workflow log).
+
+To make assignment work fleet-wide, create one **organization-level
+secret** that the reusable workflow can read via `secrets: inherit`:
+
+| Secret name              | Type                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| `COPILOT_ASSIGN_TOKEN`   | Fine-grained PAT (or OAuth token) with **Issues: Read and write** on target repos |
+
+Steps:
+
+1. Create a fine-grained PAT owned by a service user (not a personal
+   account) with **Issues: Read and write** for the connector repos.
+2. Add it as an organization secret named `COPILOT_ASSIGN_TOKEN` and
+   make it available to the connector repositories.
+3. Ensure the leaf wrapper workflow in each connector repo uses
+   `secrets: inherit` when calling `Connector Master Workflow.yml`
+   (this is already the standard pattern).
+
+If the secret is missing, the workflow degrades gracefully — issues are
+still opened and labeled, just without the Copilot assignee.
 
 ### Standalone use (optional)
 

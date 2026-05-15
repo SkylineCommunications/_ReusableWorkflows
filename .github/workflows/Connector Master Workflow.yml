@@ -202,6 +202,7 @@ jobs:
     with:
       assume_legacy: true
       debug: ${{ inputs.debug }}
+    secrets: inherit
 
   CI_SDK:
     uses: ./.github/workflows/Connector Master SDK Workflow.yml
