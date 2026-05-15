@@ -1,0 +1,571 @@
+name: Wrapper Migration Workflow
+
+# Reusable workflow that rewrites a caller repo's wrapper workflow
+# file(s) from one of the legacy "redirecting" master workflows
+# (NuGet Solution, Internal NuGet Solution, DataMiner App Packages)
+# to call `Master Workflow.yml` directly, and opens a PR with the
+# change.
+#
+# It is invoked by each legacy wrapper master workflow so that any
+# repo still using the old wrapper organically discovers a migration
+# PR the next time CI runs - similar in spirit to
+# `SDK Migration Workflow.yml`, but the rewrite is purely mechanical
+# (input/secret renames) so the workflow performs it directly instead
+# of delegating to the Copilot coding agent.
+#
+# Idempotency: skip if an open PR with the `wrapper-migration` label
+# or a branch named `chore/wrapper-migration-<kind>` already exists.
+#
+# Token caveat: the default `GITHUB_TOKEN` cannot push changes that
+# touch files under `.github/workflows/*` - GitHub refuses unless the
+# token has the `workflows` scope. The workflow therefore needs a
+# user-owned token. Resolution order:
+#   1. caller-provided `wrapper_migration_token` secret
+#   2. `reusable-workflows-token` from `kv-master-cicd-secrets` via OIDC
+#      (internal SkylineCommunications repos). The PAT must carry
+#      `contents: write`, `pull-requests: write`, and `workflows` scope
+#      on target repos; without `workflows`, git push refuses any edit
+#      under `.github/workflows/`.
+# When neither is available the job emits a warning and exits without
+# pushing - the rewrite is logged so maintainers can apply it manually.
+
+on:
+  workflow_call:
+    inputs:
+      # Which legacy wrapper is calling us. Drives the rename map.
+      wrapper-kind:
+        required: true
+        type: string   # nuget | internal-nuget | app-packages
+
+      dry_run:
+        required: false
+        type: boolean
+        default: false
+
+      debug:
+        required: false
+        type: boolean
+        default: false
+
+      # OIDC parameters (typically forwarded from the caller's
+      # `check_oidc` job). When `use-oidc == 'true'` the workflow logs
+      # in to Azure and pulls the migration token from Key Vault.
+      oidc-client-id:
+        required: false
+        type: string
+      oidc-tenant-id:
+        required: false
+        type: string
+      oidc-subscription-id:
+        required: false
+        type: string
+      use-oidc:
+        required: false
+        type: string
+        default: 'false'
+
+    secrets:
+      # Optional caller-provided user token (PAT or fine-grained token)
+      # with `contents: write`, `pull-requests: write`, and `workflows`
+      # scope on the target repo. Required for external callers without
+      # OIDC access to the Skyline Key Vault.
+      wrapper_migration_token:
+        required: false
+
+permissions: {}
+
+jobs:
+  resolve_oidc:
+    name: Resolve OIDC
+    runs-on: ubuntu-latest
+    outputs:
+      client-id: ${{ steps.set.outputs.client-id }}
+      tenant-id: ${{ steps.set.outputs.tenant-id }}
+      subscription-id: ${{ steps.set.outputs.subscription-id }}
+      use-oidc: ${{ steps.set.outputs.use-oidc }}
+    steps:
+      - name: Set Azure OIDC parameters
+        id: set
+        env:
+          IN_CLIENT: ${{ inputs.oidc-client-id }}
+          IN_TENANT: ${{ inputs.oidc-tenant-id }}
+          IN_SUB: ${{ inputs.oidc-subscription-id }}
+          IN_USE: ${{ inputs.use-oidc }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          # Same defaults Master Workflow.yml uses, so internal Skyline
+          # callers don't have to wire `check_oidc` into the three
+          # legacy wrapper workflows themselves.
+          if [[ "$IN_USE" == "true" && -n "$IN_CLIENT" ]]; then
+            {
+              echo "client-id=$IN_CLIENT"
+              echo "tenant-id=$IN_TENANT"
+              echo "subscription-id=$IN_SUB"
+              echo "use-oidc=true"
+            } >> "$GITHUB_OUTPUT"
+          elif [[ "$OWNER" == "SkylineCommunications" ]]; then
+            {
+              echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53"
+              echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40"
+              echo "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220"
+              echo "use-oidc=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "use-oidc=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  migrate:
+    name: Migrate wrapper to Master Workflow
+    needs: [resolve_oidc]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      id-token: write       # required for OIDC login to Azure
+    steps:
+      - name: Validate input
+        env:
+          KIND: ${{ inputs.wrapper-kind }}
+        run: |
+          case "$KIND" in
+            nuget|internal-nuget|app-packages) ;;
+            *)
+              echo "::error::Unknown wrapper-kind '$KIND'. Expected one of: nuget, internal-nuget, app-packages."
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout caller repository
+        uses: actions/checkout@v6
+        with:
+          path: caller
+
+      - name: Write rewrite script
+        # The script is inlined here (rather than fetched from a side
+        # checkout of _ReusableWorkflows) because resolving the "right"
+        # ref of this repo from inside a reusable-workflow call is
+        # unreliable.
+        run: |
+          mkdir -p "$RUNNER_TEMP/wrapper-migration"
+          cat > "$RUNNER_TEMP/wrapper-migration/rewrite.py" <<'PYEOF'
+          """Rewrite a caller repo's wrapper workflow YAML files so that jobs
+          which currently call one of the legacy *redirecting* master workflows
+          (NuGet Solution, Internal NuGet Solution, DataMiner App Packages)
+          call ``Master Workflow.yml`` directly, with the input / secret names
+          that the master workflow actually expects.
+
+          We use ``ruamel.yaml`` in round-trip mode so existing comments and
+          (most) formatting in the caller's workflow are preserved. The rewrite
+          is intentionally scoped per-job: only jobs whose ``uses:`` references
+          the legacy file for the given kind are touched, so workflows that
+          mix multiple wrappers in one file (rare but possible) stay correct.
+          """
+
+          from __future__ import annotations
+
+          import argparse
+          import re
+          import sys
+          from pathlib import Path
+          from urllib.parse import unquote
+
+          from ruamel.yaml import YAML
+
+          KINDS = {
+              "nuget": {
+                  "legacy_file": "NuGet Solution Master Workflow.yml",
+                  "with_renames": {
+                      "sonarCloudProjectName": "sonarcloud-project-name",
+                      "solutionName": "solution-filter-name",
+                  },
+                  "with_drops": [
+                      "referenceName", "runNumber", "referenceType",
+                      "repository", "owner",
+                  ],
+                  "with_extra": {
+                      "nuget-push-source": "https://api.nuget.org/v3/index.json",
+                  },
+                  "secret_renames": {
+                      "nugetApiKey": "NUGET_API_KEY",
+                      "sonarCloudToken": "SONAR_TOKEN",
+                      "azureToken": "AZURE_TOKEN",
+                  },
+                  "secret_drops": ["pfx", "pfxPassword"],
+              },
+              "internal-nuget": {
+                  "legacy_file": "Internal NuGet Solution Master Workflow.yml",
+                  "with_renames": {
+                      "sonarCloudProjectName": "sonarcloud-project-name",
+                      "solutionFilterName": "solution-filter-name",
+                  },
+                  "with_drops": [
+                      "referenceName", "runNumber", "referenceType",
+                      "repository", "owner",
+                  ],
+                  "with_extra": {},
+                  "secret_renames": {
+                      "nugetApiKey": "NUGET_API_KEY",
+                      "sonarCloudToken": "SONAR_TOKEN",
+                      "azureToken": "AZURE_TOKEN",
+                  },
+                  "secret_drops": [],
+              },
+              "app-packages": {
+                  "legacy_file": "DataMiner App Packages Master Workflow.yml",
+                  "with_renames": {
+                      "sonarCloudProjectName": "sonarcloud-project-name",
+                      "solutionFilterName": "solution-filter-name",
+                      "overrideCatalogIdentifiers": "override-catalog-identifiers",
+                  },
+                  "with_drops": [
+                      "referenceName", "runNumber", "referenceType",
+                      "repository", "owner",
+                  ],
+                  "with_extra": {},
+                  "secret_renames": {
+                      "sonarCloudToken": "SONAR_TOKEN",
+                      "azureToken": "AZURE_TOKEN",
+                      "dataminerToken": "DATAMINER_TOKEN",
+                      "overrideCatalogDownloadToken": "OVERRIDE_CATALOG_DOWNLOAD_TOKEN",
+                  },
+                  "secret_drops": [],
+              },
+          }
+
+
+          def uses_matches_legacy(uses_value, legacy_file):
+              if not isinstance(uses_value, str):
+                  return False
+              decoded = unquote(uses_value)
+              return (
+                  "_ReusableWorkflows/.github/workflows/" in decoded
+                  and legacy_file in decoded
+              )
+
+
+          def rewrite_ref_in_uses(uses_value):
+              decoded = unquote(uses_value)
+              m = re.match(
+                  r"^(?P<prefix>[^/]+/_ReusableWorkflows)/\.github/workflows/"
+                  r".+?(?P<ref>@[^@]+)?$",
+                  decoded,
+              )
+              if not m:
+                  return decoded
+              ref = m.group("ref") or "@main"
+              return f"{m.group('prefix')}/.github/workflows/Master Workflow.yml{ref}"
+
+
+          def migrate_job(job, kind_cfg, *, debug=False, drop_skyline_secrets=False):
+              uses = job.get("uses")
+              if not uses_matches_legacy(uses, kind_cfg["legacy_file"]):
+                  return False
+
+              job["uses"] = rewrite_ref_in_uses(uses)
+
+              if "with" in job and job["with"] is not None:
+                  for old, new in kind_cfg["with_renames"].items():
+                      if old in job["with"]:
+                          job["with"][new] = job["with"].pop(old)
+                  for k in kind_cfg["with_drops"]:
+                      job["with"].pop(k, None)
+                  for k, v in kind_cfg["with_extra"].items():
+                      if k not in job["with"]:
+                          job["with"][k] = v
+              elif kind_cfg["with_extra"]:
+                  job["with"] = dict(kind_cfg["with_extra"])
+
+              if "secrets" in job and isinstance(job["secrets"], dict):
+                  for old, new in kind_cfg["secret_renames"].items():
+                      if old in job["secrets"]:
+                          job["secrets"][new] = job["secrets"].pop(old)
+                  for k in kind_cfg["secret_drops"]:
+                      job["secrets"].pop(k, None)
+                  if drop_skyline_secrets:
+                      for k in ("SONAR_TOKEN", "AZURE_TOKEN"):
+                          job["secrets"].pop(k, None)
+                  if not job["secrets"]:
+                      del job["secrets"]
+
+              if debug:
+                  print(f"  -> rewrote uses to: {job['uses']}", file=sys.stderr)
+              return True
+
+
+          def process_file(path, kind_cfg, *, debug=False, drop_skyline_secrets=False):
+              text = path.read_text(encoding="utf-8")
+              if "_ReusableWorkflows" not in text:
+                  return False
+              if kind_cfg["legacy_file"] not in unquote(text):
+                  return False
+
+              yaml = YAML()
+              yaml.preserve_quotes = True
+              yaml.width = 4096
+              data = yaml.load(text)
+              if not isinstance(data, dict) or "jobs" not in data:
+                  return False
+
+              changed_any = False
+              for job_name, job in (data["jobs"] or {}).items():
+                  if not isinstance(job, dict):
+                      continue
+                  if migrate_job(job, kind_cfg, debug=debug, drop_skyline_secrets=drop_skyline_secrets):
+                      changed_any = True
+                      if debug:
+                          print(f"[{path}] migrated job '{job_name}'", file=sys.stderr)
+
+              if changed_any:
+                  with path.open("w", encoding="utf-8") as f:
+                      yaml.dump(data, f)
+              return changed_any
+
+
+          def main(argv=None):
+              ap = argparse.ArgumentParser()
+              ap.add_argument("--kind", required=True, choices=sorted(KINDS))
+              ap.add_argument("--workflows-dir", default=".github/workflows")
+              ap.add_argument("--debug", action="store_true")
+              ap.add_argument("--drop-skyline-secrets", action="store_true")
+              args = ap.parse_args(argv)
+
+              cfg = KINDS[args.kind]
+              wf_dir = Path(args.workflows_dir)
+              if not wf_dir.is_dir():
+                  print(f"No {wf_dir} directory - nothing to do.")
+                  return 0
+
+              touched = []
+              for p in sorted([*wf_dir.glob("*.yml"), *wf_dir.glob("*.yaml")]):
+                  try:
+                      if process_file(p, cfg, debug=args.debug, drop_skyline_secrets=args.drop_skyline_secrets):
+                          touched.append(str(p))
+                  except Exception as e:
+                      print(f"::warning::Could not process {p}: {e}")
+
+              if touched:
+                  print("Migrated workflow files:")
+                  for p in touched:
+                      print(f"  - {p}")
+              else:
+                  print(f"No workflow file references '{cfg['legacy_file']}'.")
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          PYEOF
+
+      - name: Check for existing migration PR
+        id: existing
+        working-directory: caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KIND: ${{ inputs.wrapper-kind }}
+        run: |
+          set -euo pipefail
+          branch="chore/wrapper-migration-${KIND}"
+          existing_pr=$(gh pr list \
+            --state open \
+            --label "wrapper-migration" \
+            --json number \
+            --jq 'length')
+          branch_pr=$(gh pr list \
+            --state open \
+            --head "$branch" \
+            --json number \
+            --jq 'length')
+          if [ "$existing_pr" != "0" ] || [ "$branch_pr" != "0" ]; then
+            echo "An open wrapper-migration PR already exists - skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure wrapper-migration label exists
+        if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true
+        working-directory: caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "wrapper-migration" \
+            --description "Migrate caller from legacy redirecting master workflow to Master Workflow.yml" \
+            --color "1f6feb" \
+            2>/dev/null || true
+
+      - name: Install ruamel.yaml
+        if: steps.existing.outputs.skip != 'true'
+        run: python3 -m pip install --quiet 'ruamel.yaml==0.18.*'
+
+      - name: Run rewrite script
+        if: steps.existing.outputs.skip != 'true'
+        env:
+          KIND: ${{ inputs.wrapper-kind }}
+          DEBUG: ${{ inputs.debug }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          args=( --kind "$KIND" --workflows-dir caller/.github/workflows )
+          if [ "$DEBUG" = "true" ]; then
+            args+=( --debug )
+          fi
+          # Master Workflow already pulls SONAR_TOKEN and AZURE_TOKEN
+          # from Azure Key Vault for SkylineCommunications-owned repos,
+          # so dropping them from the caller's `secrets:` block keeps
+          # the migrated wrapper tidy.
+          if [ "$OWNER" = "SkylineCommunications" ]; then
+            args+=( --drop-skyline-secrets )
+          fi
+          python3 "$RUNNER_TEMP/wrapper-migration/rewrite.py" "${args[@]}"
+
+      - name: Detect changes
+        if: steps.existing.outputs.skip != 'true'
+        id: diff
+        working-directory: caller
+        env:
+          KIND: ${{ inputs.wrapper-kind }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/workflows; then
+            echo "No wrapper workflow file referenced the legacy '$KIND' master workflow - nothing to migrate."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "----- diff -----"
+            git --no-pager diff -- .github/workflows
+            echo "----------------"
+          fi
+
+      - name: Azure Login (for Key Vault token retrieval)
+        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && needs.resolve_oidc.outputs.use-oidc == 'true' && inputs.dry_run != true
+        uses: azure/login@v3
+        with:
+          client-id: ${{ needs.resolve_oidc.outputs.client-id }}
+          tenant-id: ${{ needs.resolve_oidc.outputs.tenant-id }}
+          subscription-id: ${{ needs.resolve_oidc.outputs.subscription-id }}
+
+      - name: Retrieve migration token from Key Vault
+        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && needs.resolve_oidc.outputs.use-oidc == 'true' && inputs.dry_run != true
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The PAT must carry `contents: write`, `pull-requests: write`,
+          # and the `workflows` scope - without `workflows`, git push
+          # refuses any edit under `.github/workflows/` and peter-evans
+          # surfaces a misleading 403.
+          echo "Fetching reusable-workflows-token from Azure Key Vault..."
+          secret_value=$(az keyvault secret show \
+            --vault-name kv-master-cicd-secrets \
+            --name reusable-workflows-token \
+            --query value -o tsv 2>/dev/null || true)
+          if [ -z "$secret_value" ]; then
+            echo "::warning::No 'reusable-workflows-token' secret in Azure Key Vault 'kv-master-cicd-secrets'. Add a user-owned PAT (or fine-grained token) with 'contents: write', 'pull-requests: write', and 'workflows' scope on target repos to enable automated wrapper-migration PRs. The rewrite diff is in the job log so it can be applied manually."
+          else
+            echo "::add-mask::$secret_value"
+            echo "WRAPPER_MIGRATION_TOKEN=$secret_value" >> "$GITHUB_ENV"
+          fi
+
+      - name: Resolve migration token (caller secret overrides Key Vault)
+        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run != true
+        shell: bash
+        env:
+          USER_PROVIDED: ${{ secrets.wrapper_migration_token }}
+        run: |
+          if [ -n "$USER_PROVIDED" ]; then
+            echo "::add-mask::$USER_PROVIDED"
+            echo "WRAPPER_MIGRATION_TOKEN=$USER_PROVIDED" >> "$GITHUB_ENV"
+            echo "Using wrapper_migration_token from caller-provided secret."
+          elif [ -n "${WRAPPER_MIGRATION_TOKEN:-}" ]; then
+            echo "Using migration token retrieved from Azure Key Vault."
+          else
+            echo "::warning::No migration token available (no OIDC, no wrapper_migration_token secret). The rewrite was computed but cannot be pushed as a PR because the default GITHUB_TOKEN lacks the 'workflows' scope. The diff is in the job log."
+          fi
+
+      - name: Create migration PR (dry run)
+        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run == true
+        run: |
+          echo "[dry-run] Would open PR on branch '${{ steps.existing.outputs.branch }}' with the diff above."
+
+      - name: Create migration PR
+        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run != true && env.WRAPPER_MIGRATION_TOKEN != ''
+        uses: peter-evans/create-pull-request@v7
+        with:
+          path: caller
+          token: ${{ env.WRAPPER_MIGRATION_TOKEN }}
+          branch: ${{ steps.existing.outputs.branch }}
+          base: ${{ github.event.repository.default_branch }}
+          commit-message: |
+            chore: migrate wrapper workflow to call Master Workflow.yml directly
+
+            The '${{ inputs.wrapper-kind }}' legacy master workflow is a
+            thin wrapper around Master Workflow.yml. Removing it shortens
+            the call chain by one job, exposes the full set of
+            Master Workflow inputs (e.g. runs-on), and lets us evolve
+            inputs without breaking callers.
+
+            Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+          title: "chore: migrate wrapper to call Master Workflow.yml directly"
+          labels: wrapper-migration
+          delete-branch: true
+          body: |
+            This PR was opened automatically by the
+            **Wrapper Migration Workflow** in
+            `SkylineCommunications/_ReusableWorkflows`.
+
+            ### What changed
+
+            The wrapper workflow file(s) in `.github/workflows/` were
+            updated to call
+            `SkylineCommunications/_ReusableWorkflows/.github/workflows/Master Workflow.yml`
+            directly instead of the legacy
+            **${{ inputs.wrapper-kind }}** master wrapper. Input and
+            secret names were renamed to the kebab-case / SHOUTING_CASE
+            names that `Master Workflow.yml` expects, and any obsolete
+            passthrough inputs (`referenceName`, `runNumber`,
+            `referenceType`, `repository`, `owner`, …) were dropped.
+
+            ### Why
+
+            The legacy `NuGet Solution`, `Internal NuGet Solution` and
+            `DataMiner App Packages` master workflows are thin wrappers
+            that internally call `Master Workflow.yml`. Removing the
+            indirection:
+
+            - shortens the CI call chain by one job;
+            - exposes the full set of `Master Workflow.yml` inputs
+              (e.g. `runs-on`) without us having to forward each one
+              through every wrapper;
+            - lets us evolve the master inputs without breaking
+              callers.
+
+            ### Review checklist
+
+            - [ ] The rewrite preserves all `with:` values that were
+                  previously passed through (only the keys were
+                  renamed).
+            - [ ] All `secrets:` mappings are intact.
+            - [ ] If your wrapper job had extra steps or conditions
+                  around the legacy `uses:` call, verify they still
+                  make sense pointing at the master workflow.
+            - [ ] CI on this PR is green.
+
+            *Idempotent: re-running the legacy wrapper while this PR
+            is open will not create another one.*
+
+      - name: Summary
+        if: always()
+        env:
+          KIND: ${{ inputs.wrapper-kind }}
+          SKIP: ${{ steps.existing.outputs.skip }}
+          CHANGED: ${{ steps.diff.outputs.changed }}
+          HAVE_TOKEN: ${{ env.WRAPPER_MIGRATION_TOKEN != '' }}
+        run: |
+          {
+            echo "## Wrapper Migration result"
+            echo
+            echo "- kind: \`$KIND\`"
+            echo "- skipped (existing PR): \`${SKIP:-false}\`"
+            echo "- rewrite produced changes: \`${CHANGED:-false}\`"
+            echo "- migration token available: \`${HAVE_TOKEN}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

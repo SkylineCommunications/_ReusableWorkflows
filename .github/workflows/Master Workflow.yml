@@ -386,25 +386,9 @@ jobs:
           fi
         shell: bash
 
-      - name: Validate NuGet projects
-        if: github.actor != 'dependabot[bot]'
-        env:
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-          REPO_OWNER: ${{ github.repository_owner }}
-        run: |
-          $minimal = "$env:REPO_OWNER" -ne "SkylineCommunications"
-          NuGetValidateSkylineSpecifications --solution-filepath "$env:SOLUTION_PATH" --minimal $minimal
-        shell: pwsh
-
       # ──────────────────────────────────────────────────────────────
       # A. DataMiner-specific setup
       # ──────────────────────────────────────────────────────────────
-
-      - name: Update Skyline.DataMiner.Core.AppPackageInstaller
-        if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        env:
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-        run: NuGetChangeVersion --solution-filepath "$SOLUTION_PATH" --nuget-name Skyline.DataMiner.Core.AppPackageInstaller --nuget-version $VERSION_APPPACKAGEINSTALLER
 
       - name: Update Skyline.DataMiner.Sdk version in global.json (if present)
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
@@ -432,6 +416,22 @@ jobs:
 
           Write-Host "Updated global.json:"
           Write-Host $updatedJson
+
+      - name: Update Skyline.DataMiner.Core.AppPackageInstaller
+        if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
+        env:
+          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
+        run: NuGetChangeVersion --solution-filepath "$SOLUTION_PATH" --nuget-name Skyline.DataMiner.Core.AppPackageInstaller --nuget-version $VERSION_APPPACKAGEINSTALLER
+
+      - name: Validate NuGet projects
+        if: github.actor != 'dependabot[bot]'
+        env:
+          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          $minimal = "$env:REPO_OWNER" -ne "SkylineCommunications"
+          NuGetValidateSkylineSpecifications --solution-filepath "$env:SOLUTION_PATH" --minimal $minimal
+        shell: pwsh
 
       - name: Update Catalog Identifiers
         if: inputs.override-catalog-identifiers != ''

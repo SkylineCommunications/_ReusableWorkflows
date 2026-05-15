@@ -183,6 +183,31 @@ jobs:
       debug: ${{ inputs.debug }}
     secrets: inherit
 
+  Request_SDK_Migration:
+    name: Request SDK migration
+    uses: ./.github/workflows/SDK Migration Workflow.yml
+    needs: [check_solution_type, check_oidc]
+    # Trigger the agentic migration when the legacy path is taken, so
+    # developers organically discover the migration PR while working on
+    # old repos. Gating:
+    #   - Only when the solution is legacy-style.
+    #   - Only on push to the repo's default branch (avoids creating an
+    #     issue from every PR run or every feature-branch push). The
+    #     reusable workflow is also idempotent (skips if an open
+    #     migration issue or PR already exists).
+    if: |
+      needs.check_solution_type.outputs.isSdk == 'false'
+      && github.event_name == 'push'
+      && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    with:
+      assume_legacy: true
+      debug: ${{ inputs.debug }}
+      oidc-client-id: ${{ needs.check_oidc.outputs.client-id }}
+      oidc-tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+      oidc-subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+      use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+    secrets: inherit
+
   CI_SDK:
     uses: ./.github/workflows/Connector Master SDK Workflow.yml
     needs: [check_solution_type, check_oidc]
