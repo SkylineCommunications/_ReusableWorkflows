@@ -6,9 +6,11 @@ name: SDK Migration Workflow
 # opens a PR that goes through the regular Connector Master Workflow
 # (which will now take the SDK path) for full validation.
 #
-# Intended trigger in the caller repo: `schedule:` (e.g. weekly) or
-# `workflow_dispatch:`. Do NOT call this from a push/PR trigger - that
-# would create duplicate issues on every push.
+# Intended direct triggers in the caller repo are `schedule:` (e.g. weekly)
+# or `workflow_dispatch:`. Invocation from `Connector Master Workflow.yml`
+# on default-branch pushes is also supported. Avoid wiring this to broad
+# push/PR triggers that run on every change, as that can create duplicate
+# issues.
 #
 # Required permissions on the caller's job:
 #   contents:      read
