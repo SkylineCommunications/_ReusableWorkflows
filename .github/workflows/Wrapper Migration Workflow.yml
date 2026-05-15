@@ -61,8 +61,20 @@ on:
 permissions: {}
 
 jobs:
+
+  validate_trigger:
+    name: Validate Trigger
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for unsupported trigger
+        if: github.event_name == 'pull_request_target'
+        run: |
+          echo "::error::This workflow does not support the 'pull_request_target' trigger. Use 'pull_request' instead to avoid security risks."
+          exit 1
+
   resolve_oidc:
     name: Resolve OIDC
+    needs: [validate_trigger]
     runs-on: ubuntu-latest
     outputs:
       client-id: ${{ steps.set.outputs.client-id }}
@@ -102,7 +114,7 @@ jobs:
 
   migrate:
     name: Migrate wrapper to Master Workflow
-    needs: [resolve_oidc]
+    needs: [validate_trigger, resolve_oidc]
     runs-on: ubuntu-latest
     permissions:
       contents: read

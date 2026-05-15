@@ -68,8 +68,20 @@ on:
 permissions: {}
 
 jobs:
+
+  validate_trigger:
+    name: Validate Trigger
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for unsupported trigger
+        if: github.event_name == 'pull_request_target'
+        run: |
+          echo "::error::This workflow does not support the 'pull_request_target' trigger. Use 'pull_request' instead to avoid security risks."
+          exit 1
+
   detect_legacy:
     name: Detect legacy csproj
+    needs: [validate_trigger]
     if: inputs.assume_legacy != true
     runs-on: ubuntu-latest
     outputs:
@@ -104,10 +116,11 @@ jobs:
 
   request_migration:
     name: Request SDK migration
-    needs: detect_legacy
+    needs: [validate_trigger, detect_legacy]
     # Run when either the caller asserted legacy, or detection confirmed it.
     if: |
       always()
+      && needs.validate_trigger.result == 'success'
       && (inputs.assume_legacy == true || needs.detect_legacy.outputs.isLegacy == 'true')
     runs-on: ubuntu-latest
     permissions:
