@@ -213,14 +213,30 @@ jobs:
           2. Convert the solution file from the classic `.sln` format to
              the new XML-based `.slnx` format:
              - Use `dotnet sln <Solution>.sln migrate` (available in
-               .NET SDK 9.0.200+) to generate the `.slnx`. Do not write
-               the XML by hand.
+               .NET SDK 9.0.200+) to generate the `.slnx`. **Do not
+               write or edit the XML by hand** - the format has strict
+               rules that are easy to violate (see below).
              - Delete the old `.sln` after verifying the `.slnx` opens
                correctly and contains the same projects.
              - Update any references to the `.sln` filename (CI scripts,
                docs, `Directory.Build.*`) so they point at the new
                `.slnx` file. The DataMiner connector CI workflows accept
                either format - no changes needed there.
+             - **slnx format rules** (must hold in the final file):
+               - Every solution folder `Path` attribute must start AND
+                 end with `/` (e.g. `Path="/Dlls/"`, not `Path="Dlls"`
+                 or `Path="/Dlls"`). A common failure is
+                 `MSB4025: Solution folder path 'X' must start and end
+                 with '/'`. If you see this, fix the folder paths and
+                 re-verify; do not work around it by hand-editing.
+               - Solution folder entries use `<Folder Path="/Name/" />`,
+                 not `<Folder Name="Name" />`.
+             - **Verify the `.slnx` is well-formed BEFORE opening the
+               PR** by running:
+                 `dotnet sln <Solution>.slnx list`
+               If that command fails, the `.slnx` is broken - re-run
+               `dotnet sln migrate` from the original `.sln` (or restore
+               it from git) instead of trying to patch the XML.
           3. Delete obsolete files (`packages.config`, legacy
              `AssemblyInfo.cs` if redundant, `app.config` if unused).
           4. Run locally to verify:
@@ -247,6 +263,9 @@ jobs:
           - [ ] Every `.csproj` is SDK-style.
           - [ ] The solution has been converted from `.sln` to `.slnx`
                 (via `dotnet sln migrate`) and the old `.sln` is removed.
+          - [ ] `dotnet sln <Solution>.slnx list` succeeds (proves the
+                `.slnx` is well-formed; in particular, all solution
+                folder paths start and end with `/`).
           - [ ] `dotnet build` succeeds.
           - [ ] `<GenerateAssemblyInfo>` is **not** set to `false` (the
                 SDK must generate `AssemblyVersion` etc. so SonarCloud
