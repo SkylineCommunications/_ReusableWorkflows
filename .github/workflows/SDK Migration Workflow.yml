@@ -1,0 +1,248 @@
+name: SDK Migration Workflow
+
+# Reusable workflow that detects legacy-style DataMiner connector solutions
+# and opens a GitHub Issue assigned to the GitHub Copilot coding agent to
+# perform the migration to SDK-style csproj. Copilot then iterates and
+# opens a PR that goes through the regular Connector Master Workflow
+# (which will now take the SDK path) for full validation.
+#
+# Intended trigger in the caller repo: `schedule:` (e.g. weekly) or
+# `workflow_dispatch:`. Do NOT call this from a push/PR trigger - that
+# would create duplicate issues on every push.
+#
+# Required permissions on the caller's job:
+#   contents:      read
+#   issues:        write
+#   pull-requests: read
+
+on:
+  workflow_call:
+    inputs:
+      # When true, the caller asserts that the solution is already known
+      # to be legacy-style (e.g. the master workflow's check_solution_type
+      # job determined isSdk=false). Skips the redundant SDKChecker run.
+      assume_legacy:
+        required: false
+        type: boolean
+        default: false
+      # Optional override of the agent's assignee login. Defaults to the
+      # GitHub Copilot coding agent bot.
+      assignee:
+        required: false
+        type: string
+        default: copilot-swe-agent
+      # When true, the workflow logs what it would do but does not create
+      # an issue. Useful for piloting on a few repos.
+      dry_run:
+        required: false
+        type: boolean
+        default: false
+      debug:
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  detect_legacy:
+    name: Detect legacy csproj
+    if: inputs.assume_legacy != true
+    runs-on: ubuntu-latest
+    outputs:
+      isLegacy: ${{ steps.checker.outputs.isLegacy }}
+    permissions:
+      contents: read
+    steps:
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@v6
+
+      - name: Install SDKChecker
+        run: dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global --version 2.*
+
+      - name: Run SDKChecker
+        id: checker
+        run: |
+          # SDKChecker prints nothing when the solution is already SDK-style.
+          # Any non-empty output means at least one project is still legacy.
+          output="$(SDKChecker --workspace "${{ github.workspace }}" \
+                              --repositoryName "${{ github.repositoryUrl }}" \
+                              --repositoryBranch "${{ github.ref_name }}")"
+          if [ -z "$output" ]; then
+            echo "isLegacy=false" >> "$GITHUB_OUTPUT"
+            echo "Solution is already SDK-style - nothing to do."
+          else
+            echo "isLegacy=true" >> "$GITHUB_OUTPUT"
+            echo "Legacy csproj detected:"
+            echo "$output"
+          fi
+
+  request_migration:
+    name: Request SDK migration
+    needs: detect_legacy
+    # Run when either the caller asserted legacy, or detection confirmed it.
+    if: |
+      always()
+      && (inputs.assume_legacy == true || needs.detect_legacy.outputs.isLegacy == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check for existing migration issue or PR
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Look for an open issue or PR with the migration label/title so
+          # we never create duplicates. Idempotency is critical at fleet
+          # scale - re-running this workflow weekly must be safe.
+          existing_issue=$(gh issue list \
+            --state open \
+            --label "sdk-migration" \
+            --json number,title \
+            --jq 'length')
+
+          existing_pr=$(gh pr list \
+            --state open \
+            --label "sdk-migration" \
+            --json number,title \
+            --jq 'length')
+
+          # Also catch PRs from the conventional branch name even without label
+          branch_pr=$(gh pr list \
+            --state open \
+            --head "chore/sdk-migration" \
+            --json number \
+            --jq 'length')
+
+          if [ "$existing_issue" != "0" ] || [ "$existing_pr" != "0" ] || [ "$branch_pr" != "0" ]; then
+            echo "An open SDK migration issue or PR already exists - skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure sdk-migration label exists
+        if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "sdk-migration" \
+            --description "Tracks migration from legacy to SDK-style csproj" \
+            --color "1f6feb" \
+            2>/dev/null || true
+
+      - name: Write issue body
+        if: steps.existing.outputs.skip != 'true'
+        id: body
+        run: |
+          cat > issue-body.md <<'EOF'
+          ## Task: Migrate this connector solution to SDK-style csproj
+
+          This repository still uses the **legacy** csproj format. As a
+          result, CI uses the `Connector Master Legacy Workflow.yml`
+          pipeline. We are standardizing on the **SDK-style** csproj so
+          that all connectors share the modern `Connector Master SDK
+          Workflow.yml` path (validator, Sonar, packaging).
+
+          ### What to do
+
+          1. Convert every `.csproj` in the solution from legacy format to
+             SDK-style (`<Project Sdk="Microsoft.NET.Sdk">`), following
+             Skyline conventions for DataMiner connectors:
+             - Use `Skyline.DataMiner.Sdk` where appropriate.
+             - Remove items that are now implicit (default `Compile`
+               globs, `AssemblyInfo.cs` content, etc.).
+             - Preserve all `PackageReference` / `ProjectReference`
+               entries with the same versions.
+             - Preserve target framework(s) and any DataMiner-specific
+               MSBuild properties (e.g. protocol name, version).
+          2. Update the `.sln` if project paths / GUIDs change.
+          3. Delete obsolete files (`packages.config`, legacy
+             `AssemblyInfo.cs` if redundant, `app.config` if unused).
+          4. Run locally to verify:
+             - `dotnet restore`
+             - `dotnet build`
+             - `dataminer-validator validate protocol-solution \
+                 --solution-path . \
+                 --output-directory . \
+                 --output-file-name validateResults`
+             Iterate until the validator reports **0 Critical** and
+             **0 Major** issues. Resolve newly surfaced minor/warning
+             issues only if the fix is mechanical and obvious.
+          5. Open a pull request:
+             - Branch name: `chore/sdk-migration`
+             - Title: `chore: migrate to SDK-style csproj`
+             - Label: `sdk-migration`
+             - Description: list each project converted, summarize
+               removed files, and paste the validator summary
+               (Critical / Major / Minor / Warning counts).
+
+          ### Acceptance criteria
+
+          - [ ] Every `.csproj` is SDK-style.
+          - [ ] `dotnet build` succeeds.
+          - [ ] `dataminer-validator validate` reports 0 Critical /
+                0 Major issues.
+          - [ ] The `Connector Master Workflow` run on the PR takes the
+                **SDK** path (i.e. `CI_SDK` runs, `CI_Legacy` is skipped).
+          - [ ] No functional changes to protocol behavior - this is a
+                pure project-format migration.
+
+          ### Out of scope
+
+          - Refactoring QAction logic.
+          - Bumping connector version beyond what the migration requires.
+          - Changing protocol.xml content other than what the SDK
+            structure mandates.
+
+          ---
+
+          *This issue was opened automatically by the
+          `SDK Migration Workflow` reusable workflow. Once a PR is opened
+          and merged, this issue can be closed.*
+          EOF
+
+          if [ "${{ inputs.debug }}" = "true" ]; then
+            echo "----- issue-body.md -----"
+            cat issue-body.md
+            echo "-------------------------"
+          fi
+
+      - name: Create migration issue (dry run)
+        if: steps.existing.outputs.skip != 'true' && inputs.dry_run == true
+        run: |
+          echo "[dry-run] Would create issue 'Migrate to SDK-style csproj' assigned to '${{ inputs.assignee }}'."
+          echo "[dry-run] Body:"
+          cat issue-body.md
+
+      - name: Create migration issue
+        if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Assignment to the Copilot coding agent: best-effort. If the
+          # assignee cannot be resolved on this repo (e.g. Copilot coding
+          # agent not enabled), fall back to creating the issue without
+          # an assignee so the work item is at least tracked.
+          if ! gh issue create \
+                --title "chore: migrate to SDK-style csproj" \
+                --body-file issue-body.md \
+                --label "sdk-migration" \
+                --assignee "${{ inputs.assignee }}"; then
+            echo "::warning::Could not assign issue to '${{ inputs.assignee }}'. Creating unassigned."
+            gh issue create \
+              --title "chore: migrate to SDK-style csproj" \
+              --body-file issue-body.md \
+              --label "sdk-migration"
+          fi
