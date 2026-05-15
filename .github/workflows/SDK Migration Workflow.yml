@@ -239,24 +239,48 @@ jobs:
                it from git) instead of trying to patch the XML.
           3. Delete obsolete files (`packages.config`, legacy
              `AssemblyInfo.cs` if redundant, `app.config` if unused).
-          4. Run locally to verify:
-             - `dotnet restore`
-             - `dotnet build`
-             - `dataminer-validator validate protocol-solution \
-                 --solution-path . \
-                 --output-directory . \
-                 --output-file-name validateResults`
+          4. **Mandatory pre-PR validation gate.** Before opening the
+             pull request you MUST run the DataMiner connector
+             validator and confirm it passes. Skipping this step is
+             not acceptable - the PR will be rejected.
+
+             Steps:
+             ```bash
+             # Install the validator if it is not already on PATH
+             dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 3.*
+
+             dotnet restore
+             dotnet build
+
+             dataminer-validator validate protocol-solution \
+               --solution-path . \
+               --output-directory . \
+               --output-file-name validateResults
+             ```
+
+             Then inspect `validateResults.json`:
+             ```bash
+             jq '{Critical: .CriticalIssueCount, Major: .MajorIssueCount, Minor: .MinorIssueCount, Warning: .WarningIssueCount}' validateResults.json
+             ```
+
              Iterate until the validator reports **0 Critical** and
              **0 Major** issues. Resolve newly surfaced minor/warning
              issues only if the fix is mechanical and obvious.
+
+             You MUST paste the four counts (Critical / Major / Minor /
+             Warning) into the PR description as proof this step was
+             performed. A PR without these numbers is incomplete.
           5. Open a pull request:
              - Branch name: `chore/sdk-migration`
              - Title: `chore: migrate to SDK-style csproj and slnx`
              - Label: `sdk-migration`
-             - Description: list each project converted, summarize
-               removed files, note the `.sln` → `.slnx` switch, and
-               paste the validator summary (Critical / Major / Minor /
-               Warning counts).
+             - Description MUST contain:
+               - The list of each `.csproj` converted.
+               - Summary of removed files.
+               - Note on the `.sln` → `.slnx` switch.
+               - **Validator summary table** with the Critical / Major /
+                 Minor / Warning counts from step 4. Without this the PR
+                 is considered incomplete.
 
           ### Acceptance criteria
 
@@ -270,8 +294,11 @@ jobs:
           - [ ] `<GenerateAssemblyInfo>` is **not** set to `false` (the
                 SDK must generate `AssemblyVersion` etc. so SonarCloud
                 does not flag a missing `AssemblyVersion` attribute).
-          - [ ] `dataminer-validator validate` reports 0 Critical /
-                0 Major issues.
+          - [ ] `dataminer-validator validate protocol-solution` was
+                executed locally and reported **0 Critical / 0 Major**
+                issues. The four issue counts (Critical / Major / Minor
+                / Warning) are pasted in the PR description. **This is
+                non-negotiable; do not open the PR without it.**
           - [ ] The `Connector Master Workflow` run on the PR takes the
                 **SDK** path (i.e. `CI_SDK` runs, `CI_Legacy` is skipped).
           - [ ] No functional changes to protocol behavior - this is a
