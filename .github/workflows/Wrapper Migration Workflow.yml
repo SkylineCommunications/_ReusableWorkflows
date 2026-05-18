@@ -120,6 +120,7 @@ jobs:
       contents: read
       pull-requests: read
       id-token: write       # required for OIDC login to Azure
+      issues: write
     steps:
       - name: Validate input
         env:

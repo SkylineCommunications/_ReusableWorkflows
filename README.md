@@ -7,88 +7,22 @@ across the fleet and can be evolved in a single place.
 
 ## Master workflows
 
-| Workflow                                                  | Purpose                                                        |
-| --------------------------------------------------------- | -------------------------------------------------------------- |
-| `Connector Master Workflow.yml`                           | CI/CD for DataMiner connector solutions (SDK and Legacy).      |
-| `Connector Master SDK Workflow.yml`                       | SDK-style connector pipeline (validator, Sonar, packaging).    |
-| `Connector Master Legacy Workflow.yml`                    | Legacy connector pipeline.                                     |
-| `Automation Master Workflow.yml`                          | CI/CD for Automation scripts (SDK and Legacy).                 |
-| `Automation Master SDK Workflow.yml` / `Legacy`           | SDK / Legacy automation pipelines.                             |
-| `NuGet Solution Master Workflow.yml`                      | Build & publish public NuGet packages.                         |
-| `Internal NuGet Solution Master Workflow.yml`             | Build & publish internal NuGet packages.                       |
-| `SRM Function Master Workflow.yml`                        | CI/CD for SRM functions.                                       |
-| `DataMiner App Packages Master Workflow.yml`              | Build & publish DataMiner application packages.                |
-| `Update Catalog Details Workflow.yml`                     | Update Catalog metadata on release.                            |
-| `Test Downstream.yml`                                     | Verifies downstream repos still build against changes here.    |
-| `SDK Migration Workflow.yml`                              | Detects legacy csproj and asks Copilot to open a migration PR. |
-| `Wrapper Migration Workflow.yml`                          | Opens a PR migrating callers off legacy redirecting wrappers.  |
-| `Master Workflow.yml`                                     | Top-level dispatcher.                                          |
-
----
-
-## AI Review (advisory) — opt-in
-
-The `Connector Master Workflow.yml` can post an **AI-generated, advisory
-summary** of the DataMiner connector validator output as a comment on the
-pull request. It is implemented as a separate reusable workflow
-(`AI Review Workflow.yml`) and uses [GitHub Models] via
-`actions/ai-inference@v2`, so no extra API key is required.
-
-[GitHub Models]: https://docs.github.com/en/github-models
-
-### What it does
-
-1. Downloads the `validatorResults` artifact produced by the connector
-   pipeline (`validateResults.json` + `compareResults.json`).
-2. Compresses the JSON (top issues only, useful fields only) into a prompt.
-3. Asks a model to produce a short Markdown review grouped by severity,
-   with file:line and concrete fixes, and a dedicated **Breaking changes**
-   section for compare-validator findings.
-4. Posts the review as a PR comment and writes it to the job step summary.
-
-### Guarantees
-
-- **Advisory only.** The job has `continue-on-error: true` and runs *after*
-  the existing quality gate. It can never block a merge.
-- **Opt-in per repo.** Disabled by default; nothing changes for existing
-  callers.
-- **Least privilege.** The AI job declares its own minimal `permissions:`
-  (`contents: read`, `pull-requests: write`, `models: read`,
-  `actions: read`) instead of inheriting the workflow-level `write-all`.
-- **PR-scoped.** Only runs on `pull_request` events.
-
-### How to opt in
-
-In your repo's wrapper workflow, set `enable_ai_review: true` when calling
-the connector master workflow:
-
-```yaml
-jobs:
-  CI:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master Workflow.yml@main
-    with:
-      sonarCloudProjectName: my-sonar-project
-      enable_ai_review: true            # turn on the AI review
-      # ai_review_model: openai/gpt-4o-mini   # optional override
-    secrets: inherit
-```
-
-### Inputs
-
-| Input              | Type    | Default               | Description                                  |
-| ------------------ | ------- | --------------------- | -------------------------------------------- |
-| `enable_ai_review` | boolean | `false`               | Enable the advisory AI review job.           |
-| `ai_review_model`  | string  | `openai/gpt-4o-mini`  | GitHub Models model id used for the review.  |
-
-### Scope
-
-The AI Review is currently only wired into the **Connector** master
-workflow, because the connector pipeline is the only one that produces
-validator output. Other masters (Automation, NuGet, SRM Function, App
-Packages) do not have an equivalent validator, so the AI review is not
-applicable there. Future AI-assisted workflows for those pipelines (e.g.
-test-failure triage, release-notes generation) will be added as separate
-reusable workflows when needed.
+| Workflow                                                  | Purpose                                                                       |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `Master Workflow.yml`                                     | Core CI/CD engine — build, validate, package, publish.                        |
+| `Connector Master Workflow.yml`                           | CI/CD for DataMiner connector solutions (SDK and Legacy).                     |
+| `Connector Master SDK Workflow.yml`                       | SDK-style connector pipeline (validator, Sonar, packaging).                   |
+| `Connector Master Legacy Workflow.yml`                    | Legacy connector pipeline.                                                    |
+| `Automation Master Workflow.yml`                          | CI/CD for Automation scripts (SDK and Legacy).                                |
+| `Automation Master SDK Workflow.yml` / `Legacy`           | SDK / Legacy automation pipelines.                                            |
+| `SRM Function Master Workflow.yml`                        | CI/CD for SRM functions.                                                      |
+| `NuGet Solution Master Workflow.yml`                      | *(deprecated)* Thin redirect to `Master Workflow.yml` for public NuGet.       |
+| `Internal NuGet Solution Master Workflow.yml`             | *(deprecated)* Thin redirect to `Master Workflow.yml` for internal NuGet.     |
+| `DataMiner App Packages Master Workflow.yml`              | *(deprecated)* Thin redirect to `Master Workflow.yml` for app packages.       |
+| `Update Catalog Details Workflow.yml`                     | Update Catalog metadata on release.                                           |
+| `Test Downstream.yml`                                     | Verifies downstream repos still build against changes here.                   |
+| `SDK Migration Workflow.yml`                              | Detects legacy csproj and asks Copilot to open a migration PR.                |
+| `Wrapper Migration Workflow.yml`                          | Opens a PR migrating callers off the deprecated redirecting wrappers.         |
 
 ---
 
@@ -239,12 +173,26 @@ The three legacy wrappers are thin redirects that internally just call
 - `DataMiner App Packages Master Workflow.yml`
 
 Each of those wrappers now also calls `Wrapper Migration Workflow.yml`
-on every invocation so that any repo still using the wrapper
-organically discovers a migration PR the next time CI runs. The
-rewrite is mechanical (rename `with:` / `secrets:` keys, swap the
-`uses:` reference, drop obsolete passthrough inputs like
-`referenceName`/`runNumber`/...), so the workflow performs it
-directly instead of delegating to the Copilot coding agent.
+on non-PR invocations (branch/tag push, `workflow_dispatch`, schedule)
+so that any repo still using the wrapper organically discovers a
+migration PR the next time CI runs on a push. The rewrite is mechanical
+(rename `with:` / `secrets:` keys, swap the `uses:` reference, drop
+obsolete passthrough inputs like `referenceName`/`runNumber`/...), so
+the workflow performs it directly instead of delegating to the Copilot
+coding agent.
+
+### Trigger gating
+
+The `request_wrapper_migration` job in each legacy wrapper only fires
+when:
+
+```yaml
+if: github.event_name != 'pull_request'
+```
+
+This avoids opening duplicate migration PRs on every PR run and keeps
+the migration limited to branch/tag pushes and manual dispatches. The
+migration workflow is also idempotent as a second line of defense.
 
 ### What it does
 
@@ -286,22 +234,24 @@ from Azure Key Vault via OIDC for Skyline repos. Other secrets
 The default `GITHUB_TOKEN` **cannot** push commits that modify files
 under `.github/workflows/`; GitHub rejects the push unless the token
 carries the `workflows` scope. The migration workflow therefore needs a
-user-owned token. Resolution order:
+user-owned token.
 
-1. **Caller-provided `wrapper_migration_token` secret.** If present,
-   takes precedence. Useful for external callers without OIDC access
-   to the Skyline Key Vault.
-2. **Azure Key Vault via OIDC (internal Skyline repos).** The workflow
-   logs in to Azure and reads `reusable-workflows-token` from
-   `kv-master-cicd-secrets`. The secret must be a user-owned PAT (or
-   fine-grained token) with `contents: write`, `pull-requests: write`,
-   `issues: write`, and **`workflows`** scope on target repos.
-   The same token is used by `SDK Migration Workflow.yml` to assign
-   the Copilot coding agent to migration issues.
+The token is retrieved from **Azure Key Vault via OIDC**. The workflow
+logs in to Azure and reads `reusable-workflows-token` from
+`kv-master-cicd-secrets`. The secret must be a user-owned PAT (or
+fine-grained token) with `contents: write`, `pull-requests: write`,
+`issues: write`, and **`workflows`** scope on target repos.
+The same token is used by `SDK Migration Workflow.yml` to assign
+the Copilot coding agent to migration issues.
 
-If neither source provides a token, the rewrite is computed and the
-diff is printed in the job log but no PR is opened (a warning is
-emitted). Maintainers can apply the change manually.
+For repos in the `SkylineCommunications` organization the OIDC
+parameters are auto-defaulted, so no extra setup is required from
+caller repos beyond `secrets: inherit`. External callers must
+configure their own OIDC + Key Vault setup to provide the token.
+
+If no token is available, the rewrite is computed and the diff is
+printed in the job log but no PR is opened (a warning is emitted).
+Maintainers can apply the change manually.
 
 ### Standalone use (optional)
 

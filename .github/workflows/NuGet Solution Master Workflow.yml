@@ -133,6 +133,7 @@ jobs:
     # We ask the caller repo to migrate off this wrapper and call the
     # master workflow directly. Idempotent and gated by the migration
     # workflow itself - safe to run on every invocation.
+    if: github.event_name != 'pull_request'
     name: Request wrapper migration
     uses: ./.github/workflows/Wrapper Migration Workflow.yml
     with:
