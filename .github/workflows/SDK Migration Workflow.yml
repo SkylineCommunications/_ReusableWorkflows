@@ -375,12 +375,19 @@ jobs:
         run: |
           set -euo pipefail
           echo "Fetching reusable-workflows-token from Azure Key Vault..."
-          secret_value=$(az keyvault secret show \
+          if secret_value=$(az keyvault secret show \
             --vault-name kv-master-cicd-secrets \
             --name reusable-workflows-token \
-            --query value -o tsv)
-          echo "::add-mask::$secret_value"
-          echo "COPILOT_ASSIGN_TOKEN=$secret_value" >> "$GITHUB_ENV"
+            --query value -o tsv 2>/dev/null); then
+            if [ -n "$secret_value" ]; then
+              echo "::add-mask::$secret_value"
+              echo "COPILOT_ASSIGN_TOKEN=$secret_value" >> "$GITHUB_ENV"
+            else
+              echo "::warning::Azure Key Vault returned an empty value for 'reusable-workflows-token'. The issue will be created unassigned."
+            fi
+          else
+            echo "::warning::Could not retrieve 'reusable-workflows-token' from Azure Key Vault. The issue will be created unassigned."
+          fi
 
       - name: Resolve assignment token
         if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true
