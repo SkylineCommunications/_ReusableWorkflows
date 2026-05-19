@@ -171,10 +171,45 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Force-push test-downstream tag
+      - name: Build self-consistent test commit and force-push tag
         if: steps.targets.outputs.has_targets == 'true'
+        env:
+          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
         run: |
-          git tag -f test-downstream ${{ steps.pr-details.outputs.head_sha }}
+          set -euo pipefail
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+
+          # Start from the PR head so the downstream sees the PR's
+          # version of every reusable workflow and composite action.
+          git checkout -B test-downstream-tmp "$HEAD_SHA"
+
+          # Rewrite every cross-repo composite-action ref so that it
+          # resolves to the same tagged commit we are about to push.
+          # Without this, the master workflow files from the PR would
+          # still load composite actions from @main / @{branch}, hiding any
+          # regression introduced by the PR.
+          python - <<'PY'
+          import re, pathlib
+          pat = re.compile(
+              r'(SkylineCommunications/_ReusableWorkflows/\.github/actions/[A-Za-z0-9._-]+)@[A-Za-z0-9._/-]+'
+          )
+          targets = list(pathlib.Path('.github/workflows').glob('*.yml')) \
+                  + list(pathlib.Path('.github/actions').glob('*/action.yml'))
+          for p in targets:
+              s = p.read_text(encoding='utf-8')
+              new = pat.sub(r'\1@test-downstream', s)
+              if new != s:
+                  p.write_text(new, encoding='utf-8')
+                  print(f'rewrote {p}')
+          PY
+
+          if ! git diff --quiet; then
+            git add .github/workflows .github/actions
+            git commit -m "test-downstream: pin composite actions to @test-downstream"
+          fi
+
+          git tag -f test-downstream
           git push -f origin test-downstream
 
       - name: Dispatch to target repos
