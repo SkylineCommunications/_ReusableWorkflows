@@ -43,27 +43,30 @@ runs:
     - name: Validate SonarCloud Project Name
       if: inputs.check-sonar == 'true'
       shell: bash
+      working-directory: ${{ github.action_path }}
       env:
         SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
         HAS_DM_PROJECTS: ${{ inputs.has-dataminer-projects }}
         REPO: ${{ inputs.repository }}
         RUN_NUMBER: ${{ inputs.run-number }}
-      run: ${{ github.action_path }}/validate-sonar-name.sh
+      run: bash ./validate-sonar-name.sh
 
     - name: Validate SonarCloud Secret Token
       if: inputs.check-sonar == 'true'
       shell: bash
+      working-directory: ${{ github.action_path }}
       env:
         SONAR_TOKEN: ${{ inputs.sonarcloud-token }}
         HAS_DM_PROJECTS: ${{ inputs.has-dataminer-projects }}
         REPO: ${{ inputs.repository }}
         RUN_NUMBER: ${{ inputs.run-number }}
-      run: ${{ github.action_path }}/validate-sonar-token.sh
+      run: bash ./validate-sonar-token.sh
 
     - name: Validate DataMiner Secret Token
       if: inputs.check-dataminer == 'true'
       shell: bash
+      working-directory: ${{ github.action_path }}
       env:
         DATAMINER_TOKEN: ${{ inputs.dataminer-token }}
         REPO: ${{ inputs.repository }}
-      run: ${{ github.action_path }}/validate-dataminer-token.sh
+      run: bash ./validate-dataminer-token.sh
