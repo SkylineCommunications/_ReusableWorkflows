@@ -170,6 +170,10 @@ jobs:
         if: steps.targets.outputs.has_targets == 'true'
         with:
           fetch-depth: 0
+          # Use a PAT with `workflow` scope so we can push changes
+          # under .github/workflows/. GITHUB_TOKEN cannot do this even
+          # with `contents: write` — GitHub explicitly blocks it.
+          token: ${{ secrets.DOWNSTREAM_PAT }}
 
       - name: Build self-consistent test commit and force-push tag
         if: steps.targets.outputs.has_targets == 'true'
