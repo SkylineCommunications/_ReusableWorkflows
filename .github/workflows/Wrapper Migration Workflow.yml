@@ -626,17 +626,6 @@ jobs:
           fi
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
-      - name: Ensure wrapper-migration label exists
-        if: steps.existing.outputs.skip != 'true' && inputs.dry_run != true
-        working-directory: caller
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh label create "wrapper-migration" \
-            --description "Migrate caller from legacy redirecting master workflow to Master Workflow.yml" \
-            --color "1f6feb" \
-            2>/dev/null || true
-
       - name: Run rewrite script
         if: steps.existing.outputs.skip != 'true'
         env:
@@ -704,6 +693,23 @@ jobs:
             echo "::add-mask::$secret_value"
             echo "WRAPPER_MIGRATION_TOKEN=$secret_value" >> "$GITHUB_ENV"
           fi
+
+      - name: Ensure wrapper-migration label exists on caller repo
+        # peter-evans/create-pull-request applies labels via the issues
+        # API. If the label does not yet exist on the caller repo, it
+        # tries to create it, which under fine-grained PATs frequently
+        # 403s even with `issues: write` granted. Create the label up
+        # front using the same PAT to make the labelling step a pure
+        # add-existing-label call.
+        if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run != true && env.WRAPPER_MIGRATION_TOKEN != ''
+        working-directory: caller
+        env:
+          GH_TOKEN: ${{ env.WRAPPER_MIGRATION_TOKEN }}
+        run: |
+          gh label create "wrapper-migration" \
+            --description "Migrate caller from legacy redirecting master workflow to Master Workflow.yml" \
+            --color "1f6feb" \
+            2>/dev/null || true
 
       - name: Create migration PR (dry run)
         if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run == true
