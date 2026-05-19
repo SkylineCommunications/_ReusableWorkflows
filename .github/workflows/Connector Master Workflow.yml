@@ -61,7 +61,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@AI
 
   check_deprecated_item:
     name: Check deprecated items
@@ -114,7 +114,7 @@ jobs:
       use-oidc: ${{ steps.resolve.outputs.use-oidc }}
     steps:
       - id: resolve
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@AI
         with:
           client-id: ${{ inputs.oidc-client-id }}
           tenant-id: ${{ inputs.oidc-tenant-id }}

@@ -77,7 +77,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@AI
 
   check_oidc:
     name: Check OIDC
@@ -90,7 +90,7 @@ jobs:
       use-oidc: ${{ steps.resolve.outputs.use-oidc }}
     steps:
       - id: resolve
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@AI
         with:
           client-id: ${{ inputs.oidc-client-id }}
           tenant-id: ${{ inputs.oidc-tenant-id }}
@@ -172,7 +172,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@AI
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -185,7 +185,7 @@ jobs:
             DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
 
       - name: Validate inputs
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@AI
         with:
           sonarcloud-project-name: ${{ inputs.sonarcloud-project-name }}
           sonarcloud-token: ${{ env.SONAR_TOKEN }}
@@ -210,7 +210,7 @@ jobs:
           packages: mono-complete
       
       - name: Setup NuGet sources
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@AI
         with:
           repository-owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -284,19 +284,19 @@ jobs:
         shell: pwsh
 
       - name: Apply catalog identifiers
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@AI
         with:
           mappings: ${{ inputs.override-catalog-identifiers }}
 
       - name: Apply source_code_url to manifest
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@AI
         with:
           repository: ${{ github.repository }}
 
       - name: Detect test runner mode
         id: detect-test-mode
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@AI
 
       # ──────────────────────────────────────────────────────────────
       # B. SonarCloud analysis (skipped for Dependabot)
@@ -312,7 +312,7 @@ jobs:
       - name: Get SonarCloud Status
         if: github.actor != 'dependabot[bot]'
         id: get-sonarcloud-status
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@AI
         with:
           project-key: ${{ inputs.sonarcloud-project-name }}
           branch: ${{ github.ref_name }}
@@ -607,7 +607,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load signing secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@AI
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -672,7 +672,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load NuGet push secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@AI
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -742,7 +742,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load catalog upload secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@AI
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
