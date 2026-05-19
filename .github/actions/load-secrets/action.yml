@@ -35,14 +35,16 @@ runs:
     - name: Retrieve secrets from Azure Key Vault
       if: inputs.use-oidc == 'true' && inputs.secret-names != ''
       shell: bash
+      working-directory: ${{ github.action_path }}
       env:
         VAULT_NAME: ${{ inputs.vault-name }}
         SECRET_NAMES: ${{ inputs.secret-names }}
-      run: ${{ github.action_path }}/load-from-keyvault.sh
+      run: ./load-from-keyvault.sh
 
     - name: Apply caller-provided overrides
       if: inputs.overrides != ''
       shell: bash
+      working-directory: ${{ github.action_path }}
       env:
         OVERRIDES: ${{ inputs.overrides }}
-      run: ${{ github.action_path }}/apply-overrides.sh
+      run: ./apply-overrides.sh
