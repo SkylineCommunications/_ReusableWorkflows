@@ -68,7 +68,6 @@ on:
         required: false
 
 env:
-  VERSION_SDK: '2.5.2'
   VERSION_APPPACKAGEINSTALLER: '4.0.0'
 
 jobs:
@@ -240,32 +239,9 @@ jobs:
       # A. DataMiner-specific setup
       # ──────────────────────────────────────────────────────────────
 
-      - name: Update Skyline.DataMiner.Sdk version in global.json (if present)
+      - name: Update msbuild-sdks in global.json
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        shell: pwsh
-        run: |
-          $globalJsonPath = Join-Path $env:GITHUB_WORKSPACE "global.json"
-
-          if (-Not (Test-Path $globalJsonPath)) {
-            Write-Host "No global.json found. Skipping update."
-            return
-          }
-
-          $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
-
-          if (-not $jsonContent.'msbuild-sdks' -or -not $jsonContent.'msbuild-sdks'.PSObject.Properties['Skyline.DataMiner.Sdk']) {
-            Write-Host "Skyline.DataMiner.Sdk not found in global.json. Skipping update."
-            return
-          }
-
-          $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
-
-          $updatedJson = $jsonContent | ConvertTo-Json -Depth 10
-
-          $updatedJson | Set-Content $globalJsonPath -Encoding UTF8
-
-          Write-Host "Updated global.json:"
-          Write-Host $updatedJson
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@AI
 
       - name: Update Skyline.DataMiner.Core.AppPackageInstaller
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
@@ -849,31 +825,8 @@ jobs:
           fi
         shell: bash
 
-      - name: Update Skyline.DataMiner.Sdk version in global.json (if present)
-        shell: pwsh
-        run: |
-          $globalJsonPath = Join-Path $env:GITHUB_WORKSPACE "global.json"
-
-          if (-Not (Test-Path $globalJsonPath)) {
-            Write-Host "No global.json found. Skipping update."
-            return
-          }
-
-          $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
-
-          if (-not $jsonContent.'msbuild-sdks' -or -not $jsonContent.'msbuild-sdks'.PSObject.Properties['Skyline.DataMiner.Sdk']) {
-            Write-Host "Skyline.DataMiner.Sdk not found in global.json. Skipping update."
-            return
-          }
-
-          $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
-
-          $updatedJson = $jsonContent | ConvertTo-Json -Depth 10
-
-          $updatedJson | Set-Content $globalJsonPath -Encoding UTF8
-
-          Write-Host "Updated global.json:"
-          Write-Host $updatedJson
+      - name: Update msbuild-sdks in global.json
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@AI
 
       - name: Publish To Catalog
         shell: pwsh
