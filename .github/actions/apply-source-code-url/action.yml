@@ -1,0 +1,19 @@
+name: Apply source_code_url to manifest
+description: >
+  For every `manifest.yml` under a `CatalogInformation/` directory,
+  fills in an empty `source_code_url:` field with the GitHub URL of
+  the current repository.
+
+inputs:
+  repository:
+    description: '`github.repository`. Inserted as `https://github.com/<repository>`.'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Apply SourceCode Url To Manifest
+      shell: pwsh
+      env:
+        REPO: ${{ inputs.repository }}
+      run: ${{ github.action_path }}/apply-source-code-url.ps1

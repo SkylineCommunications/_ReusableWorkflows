@@ -1,0 +1,282 @@
+name: Test composite actions
+
+# Self-contained smoke tests for the composite actions in .github/actions/.
+# Runs every composite that can be exercised without external secrets and
+# asserts on its outputs / side effects. Composites that require live Azure
+# Key Vault or live SonarCloud are covered by the downstream integration
+# workflows, not here.
+
+on:
+  push:
+    paths:
+      - '.github/actions/**'
+      - '.github/workflows/Test composite actions.yml'
+  pull_request:
+    paths:
+      - '.github/actions/**'
+      - '.github/workflows/Test composite actions.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+
+  guard-trigger:
+    name: guard-trigger
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Invoke composite
+        uses: ./.github/actions/guard-trigger
+      - name: Confirm pass
+        run: echo "guard-trigger passed on event '${{ github.event_name }}'"
+
+  resolve-oidc:
+    name: resolve-oidc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Explicit inputs
+        id: explicit
+        uses: ./.github/actions/resolve-oidc
+        with:
+          client-id: 11111111-1111-1111-1111-111111111111
+          tenant-id: 22222222-2222-2222-2222-222222222222
+          subscription-id: 33333333-3333-3333-3333-333333333333
+          repository-owner: NotSkyline
+
+      - name: Assert explicit inputs were honored
+        env:
+          USE_OIDC: ${{ steps.explicit.outputs.use-oidc }}
+          CLIENT_ID: ${{ steps.explicit.outputs.client-id }}
+        run: |
+          test "$USE_OIDC" = "true"
+          test "$CLIENT_ID" = "11111111-1111-1111-1111-111111111111"
+
+      - name: Skyline defaults
+        id: skyline
+        uses: ./.github/actions/resolve-oidc
+        with:
+          repository-owner: SkylineCommunications
+
+      - name: Assert Skyline defaults
+        env:
+          USE_OIDC: ${{ steps.skyline.outputs.use-oidc }}
+          CLIENT_ID: ${{ steps.skyline.outputs.client-id }}
+        run: |
+          test "$USE_OIDC" = "true"
+          test "$CLIENT_ID" = "c50da9cc-ba14-4138-8595-a62d97ab0e53"
+
+      - name: External owner, no inputs
+        id: external
+        uses: ./.github/actions/resolve-oidc
+        with:
+          repository-owner: SomeOtherOrg
+
+      - name: Assert OIDC disabled
+        env:
+          USE_OIDC: ${{ steps.external.outputs.use-oidc }}
+        run: test "$USE_OIDC" = "false"
+
+  load-secrets-overrides:
+    name: load-secrets (overrides only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Invoke composite with overrides only
+        uses: ./.github/actions/load-secrets
+        with:
+          use-oidc: 'false'
+          overrides: |
+            TEST_FOO=hello
+            TEST_BAR=
+            TEST_BAZ=world
+
+      - name: Assert overrides
+        run: |
+          test "$TEST_FOO" = "hello"
+          test "$TEST_BAZ" = "world"
+          # Empty override must be skipped.
+          test -z "${TEST_BAR:-}"
+
+  setup-nuget-sources:
+    name: setup-nuget-sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Invoke composite (no Skyline feeds, no azure token)
+        uses: ./.github/actions/setup-nuget-sources
+        with:
+          repository-owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          include-skyline: 'false'
+
+      - name: Assert GitHub source registered
+        run: dotnet nuget list source | grep -q PrivateGitHubNugets
+
+      - name: Re-invoke (idempotency check)
+        uses: ./.github/actions/setup-nuget-sources
+        with:
+          repository-owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          include-skyline: 'false'
+
+      - name: Assert still exactly one entry
+        run: |
+          count=$(dotnet nuget list source | grep -c PrivateGitHubNugets)
+          test "$count" -eq 1
+
+  validate-inputs:
+    name: validate-inputs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: All inputs set (should pass)
+        uses: ./.github/actions/validate-inputs
+        with:
+          sonarcloud-project-name: my-project
+          sonarcloud-token: sk_fake_token
+          dataminer-token: dm_fake_token
+          repository: ${{ github.repository }}
+          run-number: ${{ github.run_number }}
+          check-sonar: 'true'
+          check-dataminer: 'true'
+
+      - name: Missing sonar name (should fail) — captured
+        id: missing-name
+        continue-on-error: true
+        uses: ./.github/actions/validate-inputs
+        with:
+          sonarcloud-token: sk_fake_token
+          repository: ${{ github.repository }}
+          run-number: ${{ github.run_number }}
+          check-sonar: 'true'
+
+      - name: Assert failure was detected
+        run: |
+          if [[ "${{ steps.missing-name.outcome }}" != "failure" ]]; then
+            echo "Expected validate-inputs to fail when sonar name is missing"
+            exit 1
+          fi
+
+  apply-catalog-identifiers:
+    name: apply-catalog-identifiers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Stage fake manifest
+        run: |
+          mkdir -p Test/CatalogInformation
+          cat > Test/CatalogInformation/manifest.yml <<'EOF'
+          id: 00000000-0000-0000-0000-000000000000
+          name: Test
+          EOF
+
+      - name: Invoke composite
+        uses: ./.github/actions/apply-catalog-identifiers
+        with:
+          mappings: Test/CatalogInformation/manifest.yml=12345678-1234-1234-1234-123456789abc
+
+      - name: Assert id rewritten
+        run: |
+          grep -q '^id: 12345678-1234-1234-1234-123456789abc$' Test/CatalogInformation/manifest.yml
+
+      - name: Invoke with empty mappings (no-op)
+        uses: ./.github/actions/apply-catalog-identifiers
+        with:
+          mappings: ''
+
+  apply-source-code-url:
+    name: apply-source-code-url
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Stage fake manifest with empty source_code_url
+        run: |
+          mkdir -p TestSrc/CatalogInformation
+          cat > TestSrc/CatalogInformation/manifest.yml <<'EOF'
+          id: 00000000-0000-0000-0000-000000000000
+          source_code_url:
+          name: Test
+          EOF
+
+      - name: Invoke composite
+        uses: ./.github/actions/apply-source-code-url
+        with:
+          repository: ${{ github.repository }}
+
+      - name: Assert source_code_url filled in
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          grep -q "source_code_url: 'https://github.com/$REPO'" TestSrc/CatalogInformation/manifest.yml
+
+  detect-test-runner:
+    name: detect-test-runner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: No global.json (default vstest)
+        id: default
+        uses: ./.github/actions/detect-test-runner
+
+      - name: Assert vstest
+        env:
+          MODE: ${{ steps.default.outputs.mode }}
+        run: test "$MODE" = "vstest"
+
+      - name: Stage global.json with MTP
+        run: |
+          cat > global.json <<'EOF'
+          {
+            "test": { "runner": "Microsoft.Testing.Platform" }
+          }
+          EOF
+
+      - name: Detect MTP
+        id: mtp
+        uses: ./.github/actions/detect-test-runner
+
+      - name: Assert mtp
+        env:
+          MODE: ${{ steps.mtp.outputs.mode }}
+        run: test "$MODE" = "mtp"
+
+  sonarcloud-status:
+    # Excluded from automatic runs: requires a live SonarCloud token. Run
+    # manually via workflow_dispatch when SONAR_TOKEN + SONAR_NAME are set.
+    name: sonarcloud-status (manual only)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check prerequisites
+        id: prereq
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_NAME: ${{ vars.SONAR_NAME }}
+        run: |
+          if [[ -z "$SONAR_TOKEN" || -z "$SONAR_NAME" ]]; then
+            echo "Skipping: SONAR_TOKEN secret or SONAR_NAME variable is not configured."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Invoke composite
+        if: steps.prereq.outputs.skip != 'true'
+        uses: ./.github/actions/sonarcloud-status
+        with:
+          project-key: ${{ vars.SONAR_NAME }}
+          branch: ${{ github.ref_name }}
+          token: ${{ secrets.SONAR_TOKEN }}
+          repository: ${{ github.repository }}

@@ -73,11 +73,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - name: Check for unsupported trigger
-        if: github.event_name == 'pull_request_target'
-        run: |
-          echo "::error::This workflow does not support the 'pull_request_target' trigger. Use 'pull_request' instead to avoid security risks."
-          exit 1
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 
   detect_legacy:
     name: Detect legacy csproj
@@ -189,6 +185,8 @@ jobs:
           pipeline. We are standardizing on the **SDK-style** csproj so
           that all connectors share the modern `Connector Master SDK
           Workflow.yml` path (validator, Sonar, packaging).
+
+          Use the following agent to make changes to the connector in this repo: dataminer-ecs-orchestrator
 
           ### What to do
 
@@ -325,6 +323,14 @@ jobs:
           `SDK Migration Workflow` reusable workflow. Once a PR is opened
           and merged, this issue can be closed.*
           EOF
+
+          # The `dataminer-ecs-orchestrator` agent is only available to
+          # members of the SkylineCommunications organization. Strip the
+          # hint line when this workflow runs in any other org so we don't
+          # point external users at an agent they cannot invoke.
+          if [ "${{ github.repository_owner }}" != "SkylineCommunications" ]; then
+            sed -i '/dataminer-ecs-orchestrator/d' issue-body.md
+          fi
 
           if [ "${{ inputs.debug }}" = "true" ]; then
             echo "----- issue-body.md -----"

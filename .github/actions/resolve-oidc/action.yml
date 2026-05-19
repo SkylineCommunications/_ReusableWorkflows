@@ -1,0 +1,73 @@
+name: Resolve OIDC parameters
+description: >
+  Determines the Azure OIDC client id, tenant id, and subscription id
+  to use for `azure/login`. Returns the caller-provided values when
+  given, falls back to the SkylineCommunications defaults when running
+  inside that organization, and otherwise signals that OIDC must not
+  be attempted.
+
+inputs:
+  client-id:
+    description: Caller-provided Azure OIDC client id. Leave empty to fall back to defaults.
+    required: false
+    default: ""
+  tenant-id:
+    description: Caller-provided Azure OIDC tenant id.
+    required: false
+    default: ""
+  subscription-id:
+    description: Caller-provided Azure OIDC subscription id.
+    required: false
+    default: ""
+  repository-owner:
+    description: The repository owner (`github.repository_owner`). Used to enable Skyline defaults.
+    required: true
+
+outputs:
+  client-id:
+    description: Resolved Azure OIDC client id.
+    value: ${{ steps.set_oidc.outputs.client-id }}
+  tenant-id:
+    description: Resolved Azure OIDC tenant id.
+    value: ${{ steps.set_oidc.outputs.tenant-id }}
+  subscription-id:
+    description: Resolved Azure OIDC subscription id.
+    value: ${{ steps.set_oidc.outputs.subscription-id }}
+  use-oidc:
+    description: '`true` when OIDC parameters were resolved, `false` otherwise.'
+    value: ${{ steps.set_oidc.outputs.use-oidc }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set Azure OIDC parameters
+      id: set_oidc
+      shell: bash
+      env:
+        OIDC_CLIENT_ID: ${{ inputs.client-id }}
+        OIDC_TENANT_ID: ${{ inputs.tenant-id }}
+        OIDC_SUBSCRIPTION_ID: ${{ inputs.subscription-id }}
+        REPO_OWNER: ${{ inputs.repository-owner }}
+      run: |
+        echo "Determining Azure OIDC parameters..."
+
+        if [[ -n "$OIDC_CLIENT_ID" ]]; then
+          echo "Using provided OIDC parameters"
+          {
+            echo "client-id=$OIDC_CLIENT_ID"
+            echo "tenant-id=$OIDC_TENANT_ID"
+            echo "subscription-id=$OIDC_SUBSCRIPTION_ID"
+            echo "use-oidc=true"
+          } >> "$GITHUB_OUTPUT"
+        elif [[ "$REPO_OWNER" == "SkylineCommunications" ]]; then
+          echo "Using SkylineCommunications default OIDC parameters"
+          {
+            echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53"
+            echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40"
+            echo "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220"
+            echo "use-oidc=true"
+          } >> "$GITHUB_OUTPUT"
+        else
+          echo "No OIDC parameters provided and owner does not match SkylineCommunications"
+          echo "use-oidc=false" >> "$GITHUB_OUTPUT"
+        fi

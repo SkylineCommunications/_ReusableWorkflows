@@ -1,0 +1,48 @@
+name: Load secrets
+description: >
+  Pulls a set of secrets from an Azure Key Vault, masks them, exports
+  them as environment variables in `$GITHUB_ENV`, and then applies any
+  caller-provided overrides (typically secrets passed into the
+  reusable workflow). Requires a prior `azure/login` step when
+  `use-oidc` is `true`.
+
+inputs:
+  vault-name:
+    description: Azure Key Vault name to pull secrets from.
+    required: false
+    default: kv-master-cicd-secrets
+  use-oidc:
+    description: When `true`, fetch from Key Vault. When `false`, skip the Key Vault pull and only apply overrides.
+    required: true
+  secret-names:
+    description: >
+      Newline-separated list of Key Vault secret names to pull. Each
+      name is uppercased and `-` becomes `_` to form the environment
+      variable name (`sonar-token` becomes `SONAR_TOKEN`).
+    required: false
+    default: ""
+  overrides:
+    description: >
+      Newline-separated list of `ENV_VAR=VALUE` pairs. Lines with an
+      empty value are skipped, so it is safe to pass caller secrets
+      directly even when they are not set.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Retrieve secrets from Azure Key Vault
+      if: inputs.use-oidc == 'true' && inputs.secret-names != ''
+      shell: bash
+      env:
+        VAULT_NAME: ${{ inputs.vault-name }}
+        SECRET_NAMES: ${{ inputs.secret-names }}
+      run: ${{ github.action_path }}/load-from-keyvault.sh
+
+    - name: Apply caller-provided overrides
+      if: inputs.overrides != ''
+      shell: bash
+      env:
+        OVERRIDES: ${{ inputs.overrides }}
+      run: ${{ github.action_path }}/apply-overrides.sh
