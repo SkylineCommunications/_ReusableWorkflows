@@ -250,6 +250,81 @@ jobs:
           MODE: ${{ steps.mtp.outputs.mode }}
         run: test "$MODE" = "mtp"
 
+  update-global-json-sdks:
+    name: update-global-json-sdks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # The composite hard-codes the centrally-managed DataMiner SDK
+      # version. Keep this in sync with $DATAMINER_SDK_VERSION in
+      # .github/actions/update-global-json-sdks/action.yml.
+      - name: Expected DataMiner SDK version
+        id: expected
+        shell: bash
+        run: echo "version=2.5.2" >> "$GITHUB_OUTPUT"
+
+      - name: No global.json (skip silently)
+        uses: ./.github/actions/update-global-json-sdks
+
+      - name: Stage global.json without msbuild-sdks
+        shell: bash
+        run: |
+          cat > global.json <<'EOF'
+          {
+            "sdk": { "version": "8.0.100" }
+          }
+          EOF
+
+      - name: Invoke composite (no msbuild-sdks, skip silently)
+        uses: ./.github/actions/update-global-json-sdks
+
+      - name: Assert global.json untouched
+        shell: bash
+        run: |
+          grep -q '"version": "8.0.100"' global.json
+          if grep -q 'msbuild-sdks' global.json; then
+            echo "Expected no msbuild-sdks section"
+            exit 1
+          fi
+
+      - name: Stage global.json with managed and unmanaged SDKs
+        shell: bash
+        run: |
+          cat > global.json <<'EOF'
+          {
+            "sdk": { "version": "8.0.100" },
+            "msbuild-sdks": {
+              "Skyline.DataMiner.Sdk": "0.0.1",
+              "Skyline.DataMiner.SomethingElse": "0.0.1",
+              "Microsoft.Build.NoTargets": "3.7.0"
+            }
+          }
+          EOF
+
+      - name: Invoke composite (should bump DataMiner family)
+        uses: ./.github/actions/update-global-json-sdks
+
+      - name: Assert managed keys bumped, unmanaged untouched
+        shell: bash
+        env:
+          EXPECTED: ${{ steps.expected.outputs.version }}
+        run: |
+          jq -e --arg v "$EXPECTED" '."msbuild-sdks"."Skyline.DataMiner.Sdk" == $v' global.json > /dev/null
+          jq -e --arg v "$EXPECTED" '."msbuild-sdks"."Skyline.DataMiner.SomethingElse" == $v' global.json > /dev/null
+          jq -e '."msbuild-sdks"."Microsoft.Build.NoTargets" == "3.7.0"' global.json > /dev/null
+
+      - name: Re-invoke (idempotency check)
+        uses: ./.github/actions/update-global-json-sdks
+
+      - name: Assert still in expected state
+        shell: bash
+        env:
+          EXPECTED: ${{ steps.expected.outputs.version }}
+        run: |
+          jq -e --arg v "$EXPECTED" '."msbuild-sdks"."Skyline.DataMiner.Sdk" == $v' global.json > /dev/null
+          jq -e '."msbuild-sdks"."Microsoft.Build.NoTargets" == "3.7.0"' global.json > /dev/null
+
   sonarcloud-status:
     # Excluded from automatic runs: requires a live SonarCloud token. Run
     # manually via workflow_dispatch when SONAR_TOKEN + SONAR_NAME are set.
