@@ -43,12 +43,11 @@ Mirrors [.github/actions/README.md](../actions/README.md):
 
 ## Migration workflows are part of the design
 
-When touching anything that interacts with legacy paths, remember that two migration workflows exist and will run automatically:
+When touching anything that interacts with the deprecated redirecting wrappers, remember that a migration workflow exists and will run automatically:
 
-- [`SDK Migration Workflow.yml`](../workflows/SDK%20Migration%20Workflow.yml) — opens an issue assigned to the Copilot coding agent when `Connector Master Workflow.yml` detects a legacy csproj on the default branch.
 - [`Wrapper Migration Workflow.yml`](../workflows/Wrapper%20Migration%20Workflow.yml) — opens a PR rewriting callers off the deprecated NuGet / Internal NuGet / App Packages wrappers.
 
-Do not duplicate this migration logic in other workflows; extend the existing migration workflows instead.
+Do not duplicate this migration logic in other workflows; extend the existing migration workflow instead.
 
 ## Forbidden patterns
 

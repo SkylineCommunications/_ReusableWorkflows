@@ -8,10 +8,8 @@ name: Wrapper Migration Workflow
 #
 # It is invoked by each legacy wrapper master workflow so that any
 # repo still using the old wrapper organically discovers a migration
-# PR the next time CI runs - similar in spirit to
-# `SDK Migration Workflow.yml`, but the rewrite is purely mechanical
-# (input/secret renames) so the workflow performs it directly instead
-# of delegating to the Copilot coding agent.
+# PR the next time CI runs. The rewrite is purely mechanical
+# (input/secret renames) so the workflow performs it directly.
 #
 # Idempotency: skip if an open PR with the `wrapper-migration` label
 # or a branch named `chore/wrapper-migration-<kind>` already exists.
