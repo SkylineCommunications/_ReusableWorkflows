@@ -36,4 +36,4 @@ runs:
         SONAR_TOKEN: ${{ inputs.token }}
         BRANCH_NAME: ${{ inputs.branch }}
         REPO: ${{ inputs.repository }}
-      run: ./get-status.sh
+      run: bash ./get-status.sh

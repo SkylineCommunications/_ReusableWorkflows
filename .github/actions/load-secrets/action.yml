@@ -39,7 +39,7 @@ runs:
       env:
         VAULT_NAME: ${{ inputs.vault-name }}
         SECRET_NAMES: ${{ inputs.secret-names }}
-      run: ./load-from-keyvault.sh
+      run: bash ./load-from-keyvault.sh
 
     - name: Apply caller-provided overrides
       if: inputs.overrides != ''
@@ -47,4 +47,4 @@ runs:
       working-directory: ${{ github.action_path }}
       env:
         OVERRIDES: ${{ inputs.overrides }}
-      run: ./apply-overrides.sh
+      run: bash ./apply-overrides.sh
