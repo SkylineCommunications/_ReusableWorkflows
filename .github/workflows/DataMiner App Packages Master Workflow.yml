@@ -72,7 +72,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@AI
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 
   check_deprecated_item:
     name: Check deprecated items

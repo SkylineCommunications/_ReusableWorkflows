@@ -31,7 +31,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@AI
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 
   check_oidc:
     name: Check OIDC
@@ -44,7 +44,7 @@ jobs:
       use-oidc: ${{ steps.resolve.outputs.use-oidc }}
     steps:
       - id: resolve
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@AI
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
         with:
           client-id: ${{ inputs.oidc-client-id }}
           tenant-id: ${{ inputs.oidc-tenant-id }}
@@ -65,7 +65,7 @@ jobs:
             subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
         - name: Load secrets
-          uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@AI
+          uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
           with:
             use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
             secret-names: |

@@ -43,7 +43,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@AI
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 
   validate_skyline_quality_gate:
     name: Legacy Skyline Quality Gate
@@ -63,7 +63,7 @@ jobs:
           subscription-id: ${{ inputs.oidc-subscription-id }}
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@AI
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
         with:
           use-oidc: ${{ inputs.use-oidc }}
           secret-names: |
@@ -148,7 +148,7 @@ jobs:
 
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@AI
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@main
         with:
           project-key: ${{ inputs.sonarCloudProjectName }}
           branch: ${{ github.ref_name }}
@@ -308,7 +308,7 @@ jobs:
           subscription-id: ${{ inputs.oidc-subscription-id }}
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@AI
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
         with:
           use-oidc: ${{ inputs.use-oidc }}
           secret-names: |
@@ -418,7 +418,7 @@ jobs:
           subscription-id: ${{ inputs.oidc-subscription-id }}
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@AI
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
         with:
           use-oidc: ${{ inputs.use-oidc }}
           secret-names: |
@@ -533,7 +533,7 @@ jobs:
           subscription-id: ${{ inputs.oidc-subscription-id }}
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@AI
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
         with:
           use-oidc: ${{ inputs.use-oidc }}
           secret-names: |
