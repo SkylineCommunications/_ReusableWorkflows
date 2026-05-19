@@ -717,6 +717,7 @@ jobs:
           echo "[dry-run] Would open PR on branch '${{ steps.existing.outputs.branch }}' with the diff above."
 
       - name: Create migration PR
+        id: cpr
         if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run != true && env.WRAPPER_MIGRATION_TOKEN != ''
         uses: peter-evans/create-pull-request@v7
         with:
@@ -735,7 +736,13 @@ jobs:
 
             Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
           title: "chore: migrate wrapper to call Master Workflow.yml directly"
-          labels: wrapper-migration
+          # Labels are applied in a follow-up step with `gh pr edit`.
+          # peter-evans/create-pull-request applies labels via octokit's
+          # `addLabels`, which has been observed to 403 with fine-grained
+          # PATs even when `Issues: Write` is granted on the target repo.
+          # Doing it in a separate step makes the failure (if any)
+          # explicit and easy to retry, and keeps the PR creation
+          # successful regardless.
           delete-branch: true
           body: |
             This PR was opened automatically by the
@@ -781,6 +788,18 @@ jobs:
 
             *Idempotent: re-running the legacy wrapper while this PR
             is open will not create another one.*
+
+      - name: Apply wrapper-migration label
+        if: steps.cpr.outputs.pull-request-number != ''
+        working-directory: caller
+        env:
+          GH_TOKEN: ${{ env.WRAPPER_MIGRATION_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          set -euo pipefail
+          if ! gh pr edit "$PR_NUMBER" --add-label wrapper-migration; then
+            echo "::warning::Could not apply 'wrapper-migration' label to PR #$PR_NUMBER. The migration PAT likely lacks 'Issues: Write' on this repository, or the label does not exist. Apply the label manually so the idempotency check picks it up on the next run."
+          fi
 
       - name: Summary
         if: always()
