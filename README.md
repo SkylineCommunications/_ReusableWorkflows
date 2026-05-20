@@ -22,6 +22,86 @@ across the fleet and can be evolved in a single place.
 | `Test Downstream.yml`                                     | Verifies downstream repos still build against changes here.                   |
 | `Wrapper Migration Workflow.yml`                          | Opens a PR migrating callers off the deprecated redirecting wrappers.         |
 
+## Using master workflows
+
+The entry point for most caller repositories is `Master Workflow.yml`.
+The connector and automation master workflows are dispatchers: they detect
+SDK vs. Legacy projects and then call the corresponding sub-pipeline.
+
+### Example: generic solution pipeline (`Master Workflow.yml`)
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  ci:
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Master Workflow.yml@main
+    with:
+      solution-path: src/MySolution.sln
+      sonarcloud-project-name: my-org_my-repo
+    secrets: inherit
+```
+
+### Example: with OIDC override and catalog identifier mappings
+
+```yaml
+jobs:
+  ci:
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Master Workflow.yml@main
+    with:
+      solution-path: src/MySolution.sln
+      sonarcloud-project-name: my-org_my-repo
+      oidc-client-id: ${{ vars.OIDC_CLIENT_ID }}
+      oidc-tenant-id: ${{ vars.OIDC_TENANT_ID }}
+      oidc-subscription-id: ${{ vars.OIDC_SUBSCRIPTION_ID }}
+      override-catalog-identifiers: |
+        Connector/CatalogInformation/manifest.yml=12345678-1234-1234-1234-123456789abc
+    secrets: inherit
+```
+
+### Example: connector dispatcher (`Connector Master Workflow.yml`)
+
+```yaml
+jobs:
+  ci:
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master Workflow.yml@main
+    with:
+      connector-name: My Connector
+      sonarcloud-project-name: my-org_my-connector
+    secrets: inherit
+```
+
+### Example: automation dispatcher (`Automation Master Workflow.yml`)
+
+```yaml
+jobs:
+  ci:
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master Workflow.yml@main
+    with:
+      sonarcloud-project-name: my-org_my-automation
+    secrets: inherit
+```
+
+### OIDC boundary (Skyline tenant)
+
+For Skyline-managed Azure OIDC and Key Vault access, the workflow entry point
+must be a reusable workflow in this repository (`.github/workflows/*`).
+
+- Supported: caller repo uses `SkylineCommunications/_ReusableWorkflows/.github/workflows/<workflow>.yml@<ref>`.
+- Not supported: caller repo directly uses `SkylineCommunications/_ReusableWorkflows/.github/actions/<action>@<ref>` and expects Skyline tenant OIDC to succeed.
+
+This boundary is enforced by Skyline's federated credential subject restriction
+on `job_workflow_ref` and applies specifically to Skyline's tenant setup.
+External callers using their own OIDC/federated credentials follow their own
+subject restrictions.
+
+For implementation details and action-level usage, see
+[.github/actions/README.md](.github/actions/README.md).
+
 ## Composite actions
 
 The master workflows above are built on a small set of **shared composite actions** living under [`.github/actions/`](.github/actions). They handle cross-cutting concerns (trigger guarding, OIDC resolution, Key Vault secret loading, NuGet feed setup, input validation, test-runner detection, unit-test execution, catalog manifest rewriting, central-SDK version pinning). See [.github/actions/README.md](.github/actions/README.md) for the catalog and authoring conventions.
@@ -137,10 +217,10 @@ jobs:
 
 ### Inputs
 
-| Input                     | Type    | Default  | Description                                                                       |
-| ------------------------- | ------- | -------- | --------------------------------------------------------------------------------- |
-| `wrapper-kind`            | string  | —        | One of `nuget`, `internal-nuget`, `app-packages`. Drives the rename map.          |
-| `dry_run`                 | boolean | `false`  | Log the planned diff without opening a PR.                                        |
-| `debug`                   | boolean | `false`  | Verbose logging in the rewrite script.                                            |
-| `use-oidc`                | string  | `false`  | When `'true'`, log in to Azure and pull the migration token from Key Vault.       |
+| Input | Type | Default | Description |
+| --- | --- | --- | --- |
+| `wrapper-kind` | string | — | One of `nuget`, `internal-nuget`, `app-packages`. Drives the rename map. |
+| `dry_run` | boolean | `false` | Log the planned diff without opening a PR. |
+| `debug` | boolean | `false` | Verbose logging in the rewrite script. |
+| `use-oidc` | string | `false` | When `'true'`, log in to Azure and pull the migration token from Key Vault. |
 | `oidc-client-id` / `oidc-tenant-id` / `oidc-subscription-id` | string | — | Azure OIDC parameters (auto-defaulted for `SkylineCommunications`). |
