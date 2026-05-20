@@ -24,7 +24,7 @@ across the fleet and can be evolved in a single place.
 
 ## Composite actions
 
-The master workflows above are built on a small set of **shared composite actions** living under [`.github/actions/`](.github/actions). They handle cross-cutting concerns (trigger guarding, OIDC resolution, Key Vault secret loading, NuGet feed setup, input validation, test-runner detection, catalog manifest rewriting, central-SDK version pinning). See [.github/actions/README.md](.github/actions/README.md) for the catalog and authoring conventions.
+The master workflows above are built on a small set of **shared composite actions** living under [`.github/actions/`](.github/actions). They handle cross-cutting concerns (trigger guarding, OIDC resolution, Key Vault secret loading, NuGet feed setup, input validation, test-runner detection, unit-test execution, catalog manifest rewriting, central-SDK version pinning). See [.github/actions/README.md](.github/actions/README.md) for the catalog and authoring conventions.
 
 ---
 

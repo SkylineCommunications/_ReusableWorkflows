@@ -250,6 +250,47 @@ jobs:
           MODE: ${{ steps.mtp.outputs.mode }}
         run: test "$MODE" = "mtp"
 
+  unit-tests:
+    name: run-unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Scaffold a minimal MSTest solution
+        shell: bash
+        run: |
+          mkdir sample && cd sample
+          dotnet new sln -n Sample
+          dotnet new mstest -n Sample.Tests --framework net8.0
+          dotnet sln add Sample.Tests/Sample.Tests.csproj
+          # Force a VSTest layout: strip the MTP package reference the template adds.
+          sed -i '/Microsoft\.Testing\.Platform/d' Sample.Tests/Sample.Tests.csproj
+          dotnet build --configuration Release
+
+      - name: Invoke run-unit-tests (vstest)
+        uses: ./.github/actions/run-unit-tests
+        with:
+          solution-path: ${{ github.workspace }}/sample/Sample.slnx
+          test-runner-mode: vstest
+
+      - name: Assert TRX produced
+        shell: bash
+        run: |
+          find sample -path '*/TestResults/*unitTestResults.trx' | grep -q .
+
+      - name: Invoke run-unit-tests with invalid mode (must fail)
+        id: bad-mode
+        continue-on-error: true
+        uses: ./.github/actions/run-unit-tests
+        with:
+          solution-path: ${{ github.workspace }}/sample/Sample.sln
+          test-runner-mode: bogus
+
+      - name: Assert invalid mode rejected
+        env:
+          OUTCOME: ${{ steps.bad-mode.outcome }}
+        run: test "$OUTCOME" = "failure"
+
   update-global-json-sdks:
     name: update-global-json-sdks
     runs-on: ubuntu-latest

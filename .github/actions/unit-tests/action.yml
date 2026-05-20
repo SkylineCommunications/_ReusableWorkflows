@@ -1,0 +1,33 @@
+name: Unit tests
+description: >
+  Detects the configured test runner (Microsoft.Testing.Platform vs.
+  VSTest) from `global.json` and runs the unit tests for every test
+  project in the supplied solution.
+
+inputs:
+  solution-path:
+    description: Path to the `.sln` / `.slnx` file whose projects should be tested.
+    required: true
+  configuration:
+    description: Build configuration to test against (must match the prior build).
+    required: false
+    default: 'Release'
+
+outputs:
+  test-runner-mode:
+    description: '`mtp` when MTP is configured in `global.json`, otherwise `vstest`.'
+    value: ${{ steps.detect.outputs.mode }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect test runner mode
+      id: detect
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@main
+
+    - name: Run unit tests
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/run-unit-tests@main
+      with:
+        solution-path: ${{ inputs.solution-path }}
+        configuration: ${{ inputs.configuration }}
+        test-runner-mode: ${{ steps.detect.outputs.mode }}

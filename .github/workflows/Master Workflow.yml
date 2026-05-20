@@ -270,10 +270,6 @@ jobs:
         with:
           repository: ${{ github.repository }}
 
-      - name: Detect test runner mode
-        id: detect-test-mode
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@main
-
       # ──────────────────────────────────────────────────────────────
       # B. SonarCloud analysis (skipped for Dependabot)
       # ──────────────────────────────────────────────────────────────
@@ -379,52 +375,12 @@ jobs:
       # ──────────────────────────────────────────────────────────────
       # D. Test & Quality Gate
       # ──────────────────────────────────────────────────────────────
-      - name: Unit Tests (VSTest)
-        id: unit-tests-vstest
-        if: steps.detect-test-mode.outputs.test-runner-mode == 'vstest'
-        env:
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-          CONFIGURATION: ${{ inputs.configuration }}
-        shell: bash
-        run: |
-          shopt -s nocasematch
-
-          while IFS= read -r project; do
-            [[ "$project" != *"tests"* || "$project" == *"integrationtests"* || "$project" == *"integration.tests"* ]] && continue
-
-            dotnet test "$project" \
-              --no-build \
-              --configuration "$CONFIGURATION" \
-              --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-              --logger "trx;logfilename=unitTestResults.trx" \
-              --collect "XPlat Code Coverage" \
-              -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
-          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep -E '\.(cs|fs|vb)proj$')
-
-      - name: Unit Tests (MTP)
-        id: unit-tests-mtp
-        if: steps.detect-test-mode.outputs.test-runner-mode == 'mtp'
-        env:
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-          CONFIGURATION: ${{ inputs.configuration }}
-        shell: bash
-        run: |
-          shopt -s nocasematch
-
-          while IFS= read -r project; do
-            [[ "$project" != *"tests"* || "$project" == *"integrationtests"* || "$project" == *"integration.tests"* ]] && continue
-
-            dotnet test --project "$project" \
-              --no-build \
-              --configuration "$CONFIGURATION" \
-              --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-              --report-trx \
-              --report-trx-filename unitTestResults.trx \
-              --coverage \
-              --coverage-output-format xml \
-              --coverage-output coverage.xml \
-              --ignore-exit-code 8
-          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep -E '\.(cs|fs|vb)proj$')
+      - name: Unit Tests
+        id: unit-tests
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/unit-tests@main
+        with:
+          solution-path: ${{ needs.discover_projects.outputs.solution-path }}
+          configuration: ${{ inputs.configuration }}
 
       - name: Stop Analysis
         if: github.actor != 'dependabot[bot]'
@@ -448,17 +404,14 @@ jobs:
         id: quality-step
         env:
           GH_ACTOR: ${{ github.actor }}
-          TEST_VSTEST_OUTCOME: ${{ steps.unit-tests-vstest.outcome }}
-          TEST_MTP_OUTCOME: ${{ steps.unit-tests-mtp.outcome }}
+          TEST_OUTCOME: ${{ steps.unit-tests.outcome }}
           QG_STATUS: ${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}
           QG_OUTCOME: ${{ steps.sonarcloud-quality-gate-check.outcome }}
         run: |
           import os
           is_dependabot = os.environ["GH_ACTOR"] == "dependabot[bot]"
 
-          test_outcome_vstest = os.environ["TEST_VSTEST_OUTCOME"]
-          test_outcome_mtp = os.environ["TEST_MTP_OUTCOME"]
-          test_failed = test_outcome_vstest == "failure" or test_outcome_mtp == "failure"
+          test_failed = os.environ["TEST_OUTCOME"] == "failure"
 
           if test_failed:
             print("Quality gate failed due to:")

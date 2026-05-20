@@ -1,0 +1,28 @@
+name: Run unit tests
+description: >
+  Runs unit tests for every test project in a solution, using either the
+  VSTest runner or Microsoft.Testing.Platform (MTP) based on the supplied
+  `test-runner-mode`. Integration test projects are skipped.
+
+inputs:
+  solution-path:
+    description: Path to the `.sln` / `.slnx` file whose projects should be tested.
+    required: true
+  configuration:
+    description: Build configuration to test against (must match the prior build).
+    required: false
+    default: 'Release'
+  test-runner-mode:
+    description: '`mtp` to use Microsoft.Testing.Platform, `vstest` for the default VSTest runner.'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Run unit tests
+      shell: bash
+      env:
+        SOLUTION_PATH: ${{ inputs.solution-path }}
+        CONFIGURATION: ${{ inputs.configuration }}
+        TEST_RUNNER_MODE: ${{ inputs.test-runner-mode }}
+      run: bash "${{ github.action_path }}/run-unit-tests.sh"
