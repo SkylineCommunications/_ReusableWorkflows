@@ -72,11 +72,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - name: Check for unsupported trigger
-        if: github.event_name == 'pull_request_target'
-        run: |
-          echo "::error::This workflow does not support the 'pull_request_target' trigger. Use 'pull_request' instead to avoid security risks."
-          exit 1
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 
   check_deprecated_item:
     name: Check deprecated items
@@ -138,3 +134,20 @@ jobs:
       AZURE_TOKEN: ${{ secrets.azureToken }}
       DATAMINER_TOKEN: ${{ secrets.dataminerToken }}
       OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.overrideCatalogDownloadToken }}
+
+  request_wrapper_migration:
+    # The body of this workflow is a thin redirect to Master Workflow.yml.
+    # We ask the caller repo to migrate off this wrapper and call the
+    # master workflow directly. Idempotent and gated by the migration
+    # workflow itself - safe to run on every invocation.
+    if: github.event_name != 'pull_request'
+    name: Request wrapper migration
+    uses: ./.github/workflows/Wrapper Migration Workflow.yml
+    with:
+      wrapper-kind: app-packages
+      oidc-client-id: ${{ inputs.oidc-client-id }}
+      oidc-tenant-id: ${{ inputs.oidc-tenant-id }}
+      oidc-subscription-id: ${{ inputs.oidc-subscription-id }}
+      use-oidc: ${{ inputs.oidc-client-id != '' && 'true' || 'false' }}
+      debug: ${{ inputs.debug }}
+    secrets: inherit

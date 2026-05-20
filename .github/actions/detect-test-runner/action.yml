@@ -1,0 +1,17 @@
+name: Detect test runner mode
+description: >
+  Inspects `global.json` to determine whether the solution uses
+  Microsoft.Testing.Platform (MTP) or the default VSTest runner.
+
+outputs:
+  mode:
+    description: '`mtp` when MTP is configured in global.json, otherwise `vstest`.'
+    value: ${{ steps.detect.outputs.test-runner-mode }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect test runner mode
+      id: detect
+      shell: pwsh
+      run: ${{ github.action_path }}/detect-test-runner.ps1

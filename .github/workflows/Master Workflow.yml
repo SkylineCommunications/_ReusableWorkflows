@@ -68,7 +68,6 @@ on:
         required: false
 
 env:
-  VERSION_SDK: '2.5.2'
   VERSION_APPPACKAGEINSTALLER: '4.0.0'
 
 jobs:
@@ -77,52 +76,25 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - name: Check for unsupported trigger
-        if: github.event_name == 'pull_request_target'
-        run: |
-          echo "::error::This workflow does not support the 'pull_request_target' trigger. Use 'pull_request' instead to avoid security risks."
-          exit 1
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 
   check_oidc:
     name: Check OIDC
     needs: [validate_trigger]
     runs-on: ubuntu-latest
     outputs:
-      client-id: ${{ steps.set_oidc.outputs.client-id }}
-      tenant-id: ${{ steps.set_oidc.outputs.tenant-id }}
-      subscription-id: ${{ steps.set_oidc.outputs.subscription-id }}
-      use-oidc: ${{ steps.set_oidc.outputs.use-oidc }}
+      client-id: ${{ steps.resolve.outputs.client-id }}
+      tenant-id: ${{ steps.resolve.outputs.tenant-id }}
+      subscription-id: ${{ steps.resolve.outputs.subscription-id }}
+      use-oidc: ${{ steps.resolve.outputs.use-oidc }}
     steps:
-      - name: Set Azure OIDC parameters
-        id: set_oidc
-        env:
-          OIDC_CLIENT_ID: ${{ inputs.oidc-client-id }}
-          OIDC_TENANT_ID: ${{ inputs.oidc-tenant-id }}
-          OIDC_SUBSCRIPTION_ID: ${{ inputs.oidc-subscription-id }}
-          REPO_OWNER: ${{ github.repository_owner }}
-        run: |
-          echo "Determining Azure OIDC parameters..."
-
-          if [[ -n "$OIDC_CLIENT_ID" ]]; then
-            echo "Using provided OIDC parameters"
-            {
-              echo "client-id=$OIDC_CLIENT_ID"
-              echo "tenant-id=$OIDC_TENANT_ID"
-              echo "subscription-id=$OIDC_SUBSCRIPTION_ID"
-              echo "use-oidc=true"
-            } >> "$GITHUB_OUTPUT"
-          elif [[ "$REPO_OWNER" == "SkylineCommunications" ]]; then
-            echo "Using SkylineCommunications default OIDC parameters"
-            {
-              echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53"
-              echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40"
-              echo "subscription-id=d6cbb8df-56eb-451d-9db7-67f49cba3220"
-              echo "use-oidc=true"
-            } >> "$GITHUB_OUTPUT"
-          else
-            echo "No OIDC parameters provided and owner does not match SkylineCommunications"
-            echo "use-oidc=false" >> "$GITHUB_OUTPUT"
-          fi
+      - id: resolve
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        with:
+          client-id: ${{ inputs.oidc-client-id }}
+          tenant-id: ${{ inputs.oidc-tenant-id }}
+          subscription-id: ${{ inputs.oidc-subscription-id }}
+          repository-owner: ${{ github.repository_owner }}
 
   discover_projects:
     name: Discover Project Types
@@ -198,117 +170,30 @@ jobs:
           tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
-      - name: Retrieve needed secrets from Azure Key Vault
-        if: needs.check_oidc.outputs.use-oidc == 'true'
-        shell: bash
-        env:
-          HAS_DM_PROJECTS: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
-        run: |
-          echo "Fetching secrets from Azure Key Vault..."
+      - name: Load secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+          secret-names: |
+            azure-token
+            sonar-token
+            ${{ needs.discover_projects.outputs.has-dataminer-projects == 'true' && 'dataminer-token' || '' }}
+          overrides: |
+            AZURE_TOKEN=${{ secrets.AZURE_TOKEN }}
+            SONAR_TOKEN=${{ secrets.SONAR_TOKEN }}
+            DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
 
-          # List of secret names needed for this job
-          secret_names=("azure-token" "sonar-token")
-
-          if [[ "$HAS_DM_PROJECTS" == "true" ]]; then
-            secret_names+=("dataminer-token")
-          fi
-
-          for secret_name in "${secret_names[@]}"; do
-            # Convert to uppercase and replace hyphens with underscores
-            env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-
-            # Retrieve the secret value
-            secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
-
-            # Mask the secret value
-            echo "::add-mask::$secret_value"
-
-            # Export as environment variable
-            echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
-          done
-
-      - name: Overwrite default secrets with user-defined secrets
-        shell: bash
-        env:
-          USER_AZURE_TOKEN: ${{ secrets.AZURE_TOKEN }}
-          USER_SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          USER_DATAMINER_TOKEN: ${{ secrets.DATAMINER_TOKEN }}
-        run: |
-          if [[ -n "$USER_AZURE_TOKEN" ]]; then
-            echo "Using provided AZURE_TOKEN secret"
-            echo "AZURE_TOKEN=$USER_AZURE_TOKEN" >> "$GITHUB_ENV"
-          fi
-
-          if [[ -n "$USER_SONAR_TOKEN" ]]; then
-            echo "Using provided SONAR_TOKEN secret"
-            echo "SONAR_TOKEN=$USER_SONAR_TOKEN" >> "$GITHUB_ENV"
-          fi
-
-          if [[ -n "$USER_DATAMINER_TOKEN" ]]; then
-            echo "Using provided DATAMINER_TOKEN secret"
-            echo "DATAMINER_TOKEN=$USER_DATAMINER_TOKEN" >> "$GITHUB_ENV"
-          fi
-
-      - name: Validate SonarCloud Project Name
-        id: validate-sonar-name
-        if: github.actor != 'dependabot[bot]'
-        env:
-          SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
-          HAS_DM_PROJECTS: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
-          REPO: ${{ github.repository }}
-        run: |
-          if [[ -z "$SONAR_PROJECT_NAME" ]]; then
-            echo "Error: sonarcloud-project-name is not set."
-            echo "Please create a SonarCloud project by visiting: https://sonarcloud.io/projects/create and copy the id of the project as mentioned in the sonarcloud project url."
-            repo_url="https://github.com/$REPO/settings/variables/actions"
-            echo "Then set a SONAR_NAME variable in your repository settings: $repo_url"
-            if [[ "$HAS_DM_PROJECTS" == "true" ]]; then
-              echo "Alternatively, if you do not wish to use the Skyline Quality Gate but intend to publish your results to the catalog, you may create your workflow to include the equivalent of a dotnet publish step as shown below (remove the \\):"
-              echo "    - name: Publish"
-              echo "      env:"
-              echo "        api-key: $\{{ secrets.DATAMINER_TOKEN }}"
-              echo "      run: dotnet publish -p:Version=\"0.0.$\{{ github.run_number }}\" -p:VersionComment=\"Iterative Development\" -p:CatalogPublishKeyName=api-key"
-            fi
-            exit 1
-          fi
-
-      - name: Validate SonarCloud Secret Token
-        id: validate-sonar-token
-        if: github.actor != 'dependabot[bot]'
-        env:
-          HAS_DM_PROJECTS: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
-          REPO: ${{ github.repository }}
-        run: |
-          if [[ -z "$SONAR_TOKEN" ]]; then
-            echo "Error: sonarCloudToken is not set."
-            echo "Please create a SonarCloud token by visiting: https://sonarcloud.io/account/security and copy the value of the created token."
-            repo_url="https://github.com/$REPO/settings/secrets/actions"
-            echo "Then set a SONAR_TOKEN secret in your repository settings: $repo_url"
-            if [[ "$HAS_DM_PROJECTS" == "true" ]]; then
-              echo "Alternatively, if you do not wish to use the Skyline Quality Gate but intend to publish your results to the catalog, you may create your workflow to include the equivalent of a dotnet publish step as shown below (remove the \\):"
-              echo "    - name: Publish"
-              echo "      env:"
-              echo "        api-key: $\{{ secrets.DATAMINER_TOKEN }}"
-              echo "      run: dotnet publish -p:Version=\"0.0.$\{{ github.run_number }}\" -p:VersionComment=\"Iterative Development\" -p:CatalogPublishKeyName=api-key"
-            fi
-            exit 1
-          fi
-          
-      - name: Validate DataMiner Secret Token
-        id: validate-dataminer-token
-        if: github.ref_type == 'tag' && needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        env:
-          REPO: ${{ github.repository }}
-        run: |
-          if [[ -z "$DATAMINER_TOKEN" ]]; then
-            echo "Error: dataminerToken is not set. Release not possible!"
-            echo "Please create or re-use an admin.dataminer.services token by visiting: https://admin.dataminer.services/."
-            echo "Navigate to the right organization, then go to Keys and create or find a key with the permissions Register catalog items, Download catalog versions, and Read catalog items."
-            echo "Copy the value of the token."
-            repo_url="https://github.com/$REPO/settings/secrets/actions"
-            echo "Then set a DATAMINER_TOKEN secret in your repository settings: $repo_url"
-            exit 1
-          fi
+      - name: Validate inputs
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@main
+        with:
+          sonarcloud-project-name: ${{ inputs.sonarcloud-project-name }}
+          sonarcloud-token: ${{ env.SONAR_TOKEN }}
+          dataminer-token: ${{ env.DATAMINER_TOKEN }}
+          repository: ${{ github.repository }}
+          run-number: ${{ github.run_number }}
+          has-dataminer-projects: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
+          check-sonar: ${{ github.actor != 'dependabot[bot]' }}
+          check-dataminer: ${{ github.ref_type == 'tag' && needs.discover_projects.outputs.has-dataminer-projects == 'true' }}
 
       - name: Enable long paths
         run: git config --global core.longpaths true
@@ -323,48 +208,12 @@ jobs:
         with:
           packages: mono-complete
       
-      - name: Enable GitHub NuGet Registry
-        env:
-          REPO_OWNER: ${{ github.repository_owner }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $source = @{ Name = "PrivateGitHubNugets"; URL = "https://nuget.pkg.github.com/$env:REPO_OWNER/index.json"; Username = "USERNAME"; Password = "$env:GH_TOKEN" }
-
-          Write-Host "Checking source $($source.Name)..."
-
-          if (dotnet nuget list source | Select-String -Pattern $source.Name) {
-            Write-Host "Updating existing source $($source.Name)."
-            dotnet nuget update source $source.Name --source $source.URL --username $source.Username --password $source.Password --store-password-in-clear-text
-          } else {
-            Write-Host "Adding new source $($source.Name)."
-            dotnet nuget add source $source.URL --name $source.Name --username $source.Username --password $source.Password --store-password-in-clear-text
-          }
-        shell: pwsh
-
-      - name: Enable Skyline NuGet Registries
-        if: github.repository_owner == 'SkylineCommunications'
-        run: |
-          $sources = @(
-            @{ Name = "CloudNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json"; Username = "az"; Password = "$env:AZURE_TOKEN" },
-            @{ Name = "PrivateAzureNuGets"; URL = "https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json"; Username = "az"; Password = "$env:AZURE_TOKEN" }
-          )
-
-          foreach ($source in $sources) {
-            if ($source.Password -ne "") {
-              Write-Host "Checking source $($source.Name)..."
-
-              if (dotnet nuget list source | Select-String -Pattern $source.Name) {
-                Write-Host "Updating existing source $($source.Name)."
-                dotnet nuget update source $source.Name --source $source.URL --username $source.Username --password $source.Password --store-password-in-clear-text
-              } else {
-                Write-Host "Adding new source $($source.Name)."
-                dotnet nuget add source $source.URL --name $source.Name --username $source.Username --password $source.Password --store-password-in-clear-text
-              }
-            } else {
-              Write-Host "Skipping $($source.Name) because the password is not set."
-            }
-          }
-        shell: pwsh
+      - name: Setup NuGet sources
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
+        with:
+          repository-owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          azure-token: ${{ env.AZURE_TOKEN }}
 
       - name: Install .NET tools
         env:
@@ -386,6 +235,20 @@ jobs:
           fi
         shell: bash
 
+      # ──────────────────────────────────────────────────────────────
+      # A. DataMiner-specific setup
+      # ──────────────────────────────────────────────────────────────
+
+      - name: Update msbuild-sdks in global.json
+        if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
+
+      - name: Update Skyline.DataMiner.Core.AppPackageInstaller
+        if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
+        env:
+          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
+        run: NuGetChangeVersion --solution-filepath "$SOLUTION_PATH" --nuget-name Skyline.DataMiner.Core.AppPackageInstaller --nuget-version $VERSION_APPPACKAGEINSTALLER
+
       - name: Validate NuGet projects
         if: github.actor != 'dependabot[bot]'
         env:
@@ -396,142 +259,16 @@ jobs:
           NuGetValidateSkylineSpecifications --solution-filepath "$env:SOLUTION_PATH" --minimal $minimal
         shell: pwsh
 
-      # ──────────────────────────────────────────────────────────────
-      # A. DataMiner-specific setup
-      # ──────────────────────────────────────────────────────────────
+      - name: Apply catalog identifiers
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@main
+        with:
+          mappings: ${{ inputs.override-catalog-identifiers }}
 
-      - name: Update Skyline.DataMiner.Core.AppPackageInstaller
+      - name: Apply source_code_url to manifest
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        env:
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-        run: NuGetChangeVersion --solution-filepath "$SOLUTION_PATH" --nuget-name Skyline.DataMiner.Core.AppPackageInstaller --nuget-version $VERSION_APPPACKAGEINSTALLER
-
-      - name: Update Skyline.DataMiner.Sdk version in global.json (if present)
-        if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        shell: pwsh
-        run: |
-          $globalJsonPath = Join-Path $env:GITHUB_WORKSPACE "global.json"
-
-          if (-Not (Test-Path $globalJsonPath)) {
-            Write-Host "No global.json found. Skipping update."
-            return
-          }
-
-          $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
-
-          if (-not $jsonContent.'msbuild-sdks' -or -not $jsonContent.'msbuild-sdks'.PSObject.Properties['Skyline.DataMiner.Sdk']) {
-            Write-Host "Skyline.DataMiner.Sdk not found in global.json. Skipping update."
-            return
-          }
-
-          $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
-
-          $updatedJson = $jsonContent | ConvertTo-Json -Depth 10
-
-          $updatedJson | Set-Content $globalJsonPath -Encoding UTF8
-
-          Write-Host "Updated global.json:"
-          Write-Host $updatedJson
-
-      - name: Update Catalog Identifiers
-        if: inputs.override-catalog-identifiers != ''
-        env:
-          CATALOG_IDENTIFIERS: ${{ inputs.override-catalog-identifiers }}
-        run: |
-          $rawMappings = $env:CATALOG_IDENTIFIERS
-          $mappings = $rawMappings -split '[\r\n]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
-
-          foreach ($mapping in $mappings) {
-            $splitIndex = $mapping.IndexOf('=')
-            if ($splitIndex -lt 1 -or $splitIndex -eq ($mapping.Length - 1)) {
-              Write-Error "Invalid entry '$mapping'. Expected format: <manifest.yml path>=<id>."
-              exit 1
-            }
-
-            $manifestPath = $mapping.Substring(0, $splitIndex).Trim()
-            $identifier = $mapping.Substring($splitIndex + 1).Trim()
-
-            if ($identifier -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
-              Write-Error "Identifier '$identifier' is not a valid GUID."
-              exit 1
-            }
-
-            if ([System.IO.Path]::GetFileName($manifestPath) -ne 'manifest.yml') {
-              Write-Error "Manifest path '$manifestPath' must point to 'manifest.yml'."
-              exit 1
-            }
-
-            if (-not (Test-Path -Path $manifestPath -PathType Leaf)) {
-              Write-Error "Manifest file '$manifestPath' does not exist."
-              exit 1
-            }
-
-            $content = Get-Content -Path $manifestPath -Raw
-            $hasActiveIdLine = [regex]::IsMatch($content, '(?m)^(?!\s*#)\s*id:\s*.*$')
-
-            if (-not $hasActiveIdLine) {
-              Write-Error "No active id line found in '$manifestPath'."
-              exit 1
-            }
-
-            $updatedContent = [regex]::Replace($content, '(?m)^(?!\s*#)\s*id:\s*.*$', "id: $identifier", 1)
-
-            if ($updatedContent -eq $content) {
-              Write-Host "'$manifestPath' already has id: $identifier"
-            } else {
-              Set-Content -Path $manifestPath -Value $updatedContent -NoNewline
-              Write-Host "Updated '$manifestPath' to id: $identifier"
-            }
-          }
-        shell: pwsh
-
-      - name: Apply SourceCode Url To Manifest
-        if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        env:
-          REPO: ${{ github.repository }}
-        run: |
-          $manifestFiles = Get-ChildItem -Recurse -Filter 'manifest.yml' |
-              Where-Object { $_.FullName -match '[\\/]CatalogInformation[\\/]' }
-
-          foreach ($file in $manifestFiles) {
-              $lines = Get-Content -Path $file.FullName
-              $updated = $false
-
-              for ($i = 0; $i -lt $lines.Count; $i++) {
-                  if ($lines[$i] -match '^\s*source_code_url:\s*$') {
-                      $indent = ($lines[$i] -match '^(\s*)source_code_url:')[1]
-                      $lines[$i] = "$indent" + "source_code_url: 'https://github.com/$env:REPO'"
-                      $updated = $true
-                      break
-                  }
-              }
-
-              if ($updated) {
-                  Write-Host "Updating: $($file.FullName) with 'source_code_url: https://github.com/$env:REPO'"
-                  Set-Content -Path $file.FullName -Value $lines -Encoding UTF8
-              }
-          }
-        shell: pwsh
-
-      - name: Detect test runner mode
-        id: detect-test-mode
-        shell: pwsh
-        run: |
-          $globalJsonPath = Join-Path $env:GITHUB_WORKSPACE "global.json"
-
-          if (Test-Path $globalJsonPath) {
-            $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
-            $runner = $jsonContent.test.runner
-
-            if ($runner -eq "Microsoft.Testing.Platform") {
-              Write-Host "Detected Microsoft.Testing.Platform (MTP) test runner in global.json"
-              echo "test-runner-mode=mtp" >> $env:GITHUB_OUTPUT
-              return
-            }
-          }
-
-          Write-Host "Using default VSTest test runner"
-          echo "test-runner-mode=vstest" >> $env:GITHUB_OUTPUT
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@main
+        with:
+          repository: ${{ github.repository }}
 
       # ──────────────────────────────────────────────────────────────
       # B. SonarCloud analysis (skipped for Dependabot)
@@ -547,43 +284,15 @@ jobs:
       - name: Get SonarCloud Status
         if: github.actor != 'dependabot[bot]'
         id: get-sonarcloud-status
-        env:
-          SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
-          BRANCH_NAME: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
-        run: |
-          sonarCloudProjectStatus=$(curl -s -u "$SONAR_TOKEN:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_NAME&branch=$BRANCH_NAME")
-
-          # Check if the response is empty or not valid JSON
-          if [ -z "$sonarCloudProjectStatus" ] || ! echo "$sonarCloudProjectStatus" | jq . > /dev/null 2>&1; then
-            echo "Error: The SONAR_TOKEN is invalid, expired, or the response is empty. Please check: https://sonarcloud.io/account/security and update your token: https://github.com/$REPO/settings/secrets/actions" >&2
-            echo "Returned response: $sonarCloudProjectStatus" >&2
-            exit 1
-          fi
-
-          # Check if the response contains errors
-          if echo "$sonarCloudProjectStatus" | jq -e '.errors' > /dev/null 2>&1; then
-            echo "Error: SonarCloud API returned errors. Initial analysis needed." >&2
-            echo "Returned response: $sonarCloudProjectStatus" >&2
-            echo "needsInitialAnalysis=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Check if project status is NONE (needs initial analysis)
-          projectStatus=$(echo "$sonarCloudProjectStatus" | jq -r '.projectStatus.status // empty')
-          if [ "$projectStatus" = "NONE" ]; then
-            echo "Project status is NONE. Initial analysis needed."
-            echo "needsInitialAnalysis=true" >> $GITHUB_OUTPUT
-          else
-            echo "needsInitialAnalysis=false" >> $GITHUB_OUTPUT
-          fi
-
-          # Output the JSON response if valid
-          echo "Returned response: $sonarCloudProjectStatus"
-        shell: bash
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@main
+        with:
+          project-key: ${{ inputs.sonarcloud-project-name }}
+          branch: ${{ github.ref_name }}
+          token: ${{ env.SONAR_TOKEN }}
+          repository: ${{ github.repository }}
 
       - name: Trigger Initial Analysis
-        if: github.actor != 'dependabot[bot]' && steps.get-sonarcloud-status.outputs.needsInitialAnalysis == 'true'
+        if: github.actor != 'dependabot[bot]' && steps.get-sonarcloud-status.outputs.needs-initial-analysis == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
@@ -666,52 +375,12 @@ jobs:
       # ──────────────────────────────────────────────────────────────
       # D. Test & Quality Gate
       # ──────────────────────────────────────────────────────────────
-      - name: Unit Tests (VSTest)
-        id: unit-tests-vstest
-        if: steps.detect-test-mode.outputs.test-runner-mode == 'vstest'
-        env:
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-          CONFIGURATION: ${{ inputs.configuration }}
-        shell: bash
-        run: |
-          shopt -s nocasematch
-
-          while IFS= read -r project; do
-            [[ "$project" != *"tests"* || "$project" == *"integrationtests"* || "$project" == *"integration.tests"* ]] && continue
-
-            dotnet test "$project" \
-              --no-build \
-              --configuration "$CONFIGURATION" \
-              --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-              --logger "trx;logfilename=unitTestResults.trx" \
-              --collect "XPlat Code Coverage" \
-              -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
-          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep -E '\.(cs|fs|vb)proj$')
-
-      - name: Unit Tests (MTP)
-        id: unit-tests-mtp
-        if: steps.detect-test-mode.outputs.test-runner-mode == 'mtp'
-        env:
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-          CONFIGURATION: ${{ inputs.configuration }}
-        shell: bash
-        run: |
-          shopt -s nocasematch
-
-          while IFS= read -r project; do
-            [[ "$project" != *"tests"* || "$project" == *"integrationtests"* || "$project" == *"integration.tests"* ]] && continue
-
-            dotnet test --project "$project" \
-              --no-build \
-              --configuration "$CONFIGURATION" \
-              --filter "TestCategory!=IntegrationTest&TestCategory!=IntegrationTests" \
-              --report-trx \
-              --report-trx-filename unitTestResults.trx \
-              --coverage \
-              --coverage-output-format xml \
-              --coverage-output coverage.xml \
-              --ignore-exit-code 8
-          done < <(dotnet sln "$SOLUTION_PATH" list | tail -n +3 | grep -E '\.(cs|fs|vb)proj$')
+      - name: Unit Tests
+        id: unit-tests
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/unit-tests@main
+        with:
+          solution-path: ${{ needs.discover_projects.outputs.solution-path }}
+          configuration: ${{ inputs.configuration }}
 
       - name: Stop Analysis
         if: github.actor != 'dependabot[bot]'
@@ -735,17 +404,14 @@ jobs:
         id: quality-step
         env:
           GH_ACTOR: ${{ github.actor }}
-          TEST_VSTEST_OUTCOME: ${{ steps.unit-tests-vstest.outcome }}
-          TEST_MTP_OUTCOME: ${{ steps.unit-tests-mtp.outcome }}
+          TEST_OUTCOME: ${{ steps.unit-tests.outcome }}
           QG_STATUS: ${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}
           QG_OUTCOME: ${{ steps.sonarcloud-quality-gate-check.outcome }}
         run: |
           import os
           is_dependabot = os.environ["GH_ACTOR"] == "dependabot[bot]"
 
-          test_outcome_vstest = os.environ["TEST_VSTEST_OUTCOME"]
-          test_outcome_mtp = os.environ["TEST_MTP_OUTCOME"]
-          test_failed = test_outcome_vstest == "failure" or test_outcome_mtp == "failure"
+          test_failed = os.environ["TEST_OUTCOME"] == "failure"
 
           if test_failed:
             print("Quality gate failed due to:")
@@ -869,20 +535,16 @@ jobs:
           tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
-      - name: Retrieve signing secrets from Azure Key Vault
-        if: needs.check_oidc.outputs.use-oidc == 'true'
-        shell: bash
-        run: |
-          echo "Fetching secrets from Azure Key Vault..."
-
-          secret_names=("signing-client-id" "signing-client-secret" "signing-tenant-id" "signing-key-vault-certificate" "signing-key-vault-url")
-
-          for secret_name in "${secret_names[@]}"; do
-            env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-            secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
-            echo "::add-mask::$secret_value"
-            echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
-          done
+      - name: Load signing secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+          secret-names: |
+            signing-client-id
+            signing-client-secret
+            signing-tenant-id
+            signing-key-vault-certificate
+            signing-key-vault-url
 
       - name: Download Unsigned NuGet
         uses: actions/download-artifact@v8
@@ -938,30 +600,14 @@ jobs:
           tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
-      - name: Retrieve needed secrets from Azure Key Vault
-        if: needs.check_oidc.outputs.use-oidc == 'true'
-        shell: bash
-        run: |
-          echo "Fetching secrets from Azure Key Vault..."
-
-          secret_names=("nuget-api-key-github")
-
-          for secret_name in "${secret_names[@]}"; do
-            env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-            secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
-            echo "::add-mask::$secret_value"
-            echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
-          done
-
-      - name: Overwrite default secrets with user-defined secrets
-        shell: bash
-        env:
-          USER_NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          if [[ -n "$USER_NUGET_API_KEY" ]]; then
-            echo "Using provided NUGET_API_KEY secret"
-            echo "NUGET_API_KEY_GITHUB=$USER_NUGET_API_KEY" >> "$GITHUB_ENV"
-          fi
+      - name: Load NuGet push secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+          secret-names: |
+            nuget-api-key-github
+          overrides: |
+            NUGET_API_KEY_GITHUB=${{ secrets.NUGET_API_KEY }}
 
       - name: Download Signed NuGet
         uses: actions/download-artifact@v8
@@ -1024,30 +670,19 @@ jobs:
           tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
-      - name: Retrieve needed secrets from Azure Key Vault
-        if: needs.check_oidc.outputs.use-oidc == 'true'
-        shell: bash
-        run: |
-          echo "Fetching secrets from Azure Key Vault..."
-
-          secret_names=("dataminer-token" "signing-client-id" "signing-client-secret" "signing-tenant-id" "signing-key-vault-certificate" "signing-key-vault-url")
-
-          for secret_name in "${secret_names[@]}"; do
-            env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-            secret_value=$(az keyvault secret show --vault-name kv-master-cicd-secrets --name "$secret_name" --query value -o tsv)
-            echo "::add-mask::$secret_value"
-            echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
-          done
-
-      - name: Overwrite default secrets with user-defined secrets
-        shell: bash
-        env:
-          USER_DATAMINER_TOKEN: ${{ secrets.DATAMINER_TOKEN }}
-        run: |
-          if [[ -n "$USER_DATAMINER_TOKEN" ]]; then
-            echo "Using provided DATAMINER_TOKEN secret"
-            echo "DATAMINER_TOKEN=$USER_DATAMINER_TOKEN" >> "$GITHUB_ENV"
-          fi
+      - name: Load catalog upload secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+          secret-names: |
+            dataminer-token
+            signing-client-id
+            signing-client-secret
+            signing-tenant-id
+            signing-key-vault-certificate
+            signing-key-vault-url
+          overrides: |
+            DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
 
       - name: Enable long paths
         run: git config --global core.longpaths true
@@ -1143,31 +778,8 @@ jobs:
           fi
         shell: bash
 
-      - name: Update Skyline.DataMiner.Sdk version in global.json (if present)
-        shell: pwsh
-        run: |
-          $globalJsonPath = Join-Path $env:GITHUB_WORKSPACE "global.json"
-
-          if (-Not (Test-Path $globalJsonPath)) {
-            Write-Host "No global.json found. Skipping update."
-            return
-          }
-
-          $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
-
-          if (-not $jsonContent.'msbuild-sdks' -or -not $jsonContent.'msbuild-sdks'.PSObject.Properties['Skyline.DataMiner.Sdk']) {
-            Write-Host "Skyline.DataMiner.Sdk not found in global.json. Skipping update."
-            return
-          }
-
-          $jsonContent.'msbuild-sdks'.'Skyline.DataMiner.Sdk' = $env:VERSION_SDK
-
-          $updatedJson = $jsonContent | ConvertTo-Json -Depth 10
-
-          $updatedJson | Set-Content $globalJsonPath -Encoding UTF8
-
-          Write-Host "Updated global.json:"
-          Write-Host $updatedJson
+      - name: Update msbuild-sdks in global.json
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
 
       - name: Publish To Catalog
         shell: pwsh

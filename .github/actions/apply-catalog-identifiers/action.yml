@@ -1,0 +1,25 @@
+name: Apply catalog identifiers
+description: >
+  Rewrites the `id:` field in one or more `manifest.yml` files under
+  `CatalogInformation/` directories, using a list of
+  `<manifest path>=<GUID>` mappings. Validates that each manifest
+  exists, that the identifier is a GUID, and that the manifest has an
+  active (non-commented) `id:` line.
+
+inputs:
+  mappings:
+    description: >
+      Newline-separated list of `<manifest.yml path>=<GUID>` entries.
+      When empty, the action is a no-op.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Update Catalog Identifiers
+      if: inputs.mappings != ''
+      shell: pwsh
+      env:
+        CATALOG_IDENTIFIERS: ${{ inputs.mappings }}
+      run: ${{ github.action_path }}/apply-catalog-identifiers.ps1

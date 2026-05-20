@@ -1,0 +1,16 @@
+name: Guard trigger
+description: >
+  Fails the workflow if it was invoked via the unsupported
+  `pull_request_target` trigger. Use as the first step of any
+  reusable workflow that must not run with elevated permissions on
+  untrusted pull request content.
+
+runs:
+  using: composite
+  steps:
+    - name: Check for unsupported trigger
+      if: github.event_name == 'pull_request_target'
+      shell: bash
+      run: |
+        echo "::error::This workflow does not support the 'pull_request_target' trigger. Use 'pull_request' instead to avoid security risks."
+        exit 1

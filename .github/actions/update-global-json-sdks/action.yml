@@ -1,0 +1,114 @@
+name: Update global.json SDK versions
+description: >
+  Updates `msbuild-sdks` entries in `global.json` to centrally-managed
+  versions. All managed SDKs are declared inside this action so that
+  version bumps happen in a single place.
+
+  Two categories are supported:
+
+  1. The DataMiner SDK family: every key in `msbuild-sdks` matching one
+     of the configured DataMiner patterns (e.g. `Skyline.DataMiner.*`)
+     shares the same `DATAMINER_SDK_VERSION`. New sub-SDKs released in
+     that family are picked up automatically.
+
+  2. Other centrally-managed company SDKs that don't follow the
+     DataMiner naming and may live in different repositories. Each is
+     listed explicitly with its own version.
+
+  Skips silently when `global.json` is absent or contains no
+  `msbuild-sdks` section. Keys not in any managed list are left
+  untouched.
+
+runs:
+  using: composite
+  steps:
+    - name: Update msbuild-sdks in global.json
+      shell: pwsh
+      run: |
+        # ------------------------------------------------------------
+        # Central source of truth for all managed SDK versions.
+        # Update the values below to roll out new versions across the
+        # fleet via this reusable workflow.
+        # ------------------------------------------------------------
+
+        # Shared version for the entire Skyline.DataMiner SDK family.
+        $DATAMINER_SDK_VERSION = '2.5.2'
+
+        # Regex patterns whose matching msbuild-sdks keys are bumped to
+        # $DATAMINER_SDK_VERSION. Add more patterns here when the
+        # DataMiner SDK family grows with differently-named members.
+        $dataMinerSdkPatterns = @(
+          '^Skyline\.DataMiner\..*'
+        )
+
+        # Other centrally-managed company SDKs (different naming, may
+        # live in different repositories, each with its own version).
+        # Exact-name matches here take precedence over the DataMiner
+        # pattern match below, so an SDK whose name happens to match
+        # the DataMiner family but is released independently (e.g.
+        # `Skyline.DataMiner.Sdk.WindowsInstaller`) can be pinned to
+        # its own version. Add new entries here as they appear.
+        $otherManagedSdks = @{
+          # 'Skyline.DataMiner.Sdk.WindowsInstaller' = '1.0.0'
+          # 'Company.Other.Sdk'                      = '1.0.0'
+        }
+
+        # ------------------------------------------------------------
+
+        $globalJsonPath = Join-Path $env:GITHUB_WORKSPACE "global.json"
+
+        if (-Not (Test-Path $globalJsonPath)) {
+          Write-Host "No global.json found. Skipping update."
+          return
+        }
+
+        $jsonContent = Get-Content $globalJsonPath -Raw | ConvertFrom-Json
+
+        if (-not $jsonContent.'msbuild-sdks') {
+          Write-Host "global.json has no 'msbuild-sdks' section. Skipping update."
+          return
+        }
+
+        $sdks = $jsonContent.'msbuild-sdks'
+        $changes = @()
+
+        foreach ($prop in @($sdks.PSObject.Properties)) {
+          $name     = $prop.Name
+          $oldValue = $prop.Value
+          $newValue = $null
+
+          # 1. Explicit exact-name override wins.
+          if ($otherManagedSdks.ContainsKey($name)) {
+            $newValue = $otherManagedSdks[$name]
+          }
+
+          # 2. Otherwise, fall back to the DataMiner SDK family pattern
+          #    -> shared DATAMINER_SDK_VERSION.
+          if (-not $newValue) {
+            foreach ($pattern in $dataMinerSdkPatterns) {
+              if ($name -match $pattern) {
+                $newValue = $DATAMINER_SDK_VERSION
+                break
+              }
+            }
+          }
+
+          if ($null -ne $newValue -and $oldValue -ne $newValue) {
+            $sdks.$name = $newValue
+            $changes += "  ${name}: $oldValue -> $newValue"
+          }
+        }
+
+        if ($changes.Count -eq 0) {
+          Write-Host "No msbuild-sdks entries needed updating."
+          return
+        }
+
+        $updatedJson = $jsonContent | ConvertTo-Json -Depth 10
+        $updatedJson | Set-Content $globalJsonPath -Encoding UTF8
+
+        Write-Host "Updated msbuild-sdks in global.json:"
+        $changes | ForEach-Object { Write-Host $_ }
+        Write-Host ""
+        Write-Host "New global.json:"
+        Write-Host $updatedJson

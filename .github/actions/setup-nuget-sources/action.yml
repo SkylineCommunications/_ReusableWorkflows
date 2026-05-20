@@ -1,0 +1,39 @@
+name: Setup NuGet sources
+description: >
+  Registers the NuGet sources required by Skyline reusable workflows:
+  the per-owner GitHub Packages feed, and (when running inside
+  SkylineCommunications) the Skyline Cloud and Private Azure feeds.
+  Existing sources with the same name are updated in place so the
+  step is idempotent.
+
+inputs:
+  repository-owner:
+    description: The repository owner (`github.repository_owner`).
+    required: true
+  github-token:
+    description: Token used to authenticate against the GitHub Packages feed.
+    required: true
+  azure-token:
+    description: Personal access token for the Skyline Azure DevOps NuGet feeds. Optional; Skyline feeds are skipped when empty.
+    required: false
+    default: ""
+  include-skyline:
+    description: >
+      When `true`, register the Skyline Cloud + Private Azure NuGet
+      feeds in addition to GitHub Packages. Defaults to `auto`, which
+      enables them only when `repository-owner` is
+      `SkylineCommunications`.
+    required: false
+    default: auto
+
+runs:
+  using: composite
+  steps:
+    - name: Register NuGet sources
+      shell: pwsh
+      env:
+        REPO_OWNER: ${{ inputs.repository-owner }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        AZURE_TOKEN: ${{ inputs.azure-token }}
+        INCLUDE_SKYLINE: ${{ inputs.include-skyline }}
+      run: ${{ github.action_path }}/setup-nuget-sources.ps1
