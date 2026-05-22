@@ -45,6 +45,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `detect-test-runner` | Detects MTP or VSTest mode from `global.json`. | [detect-test-runner/README.md](detect-test-runner/README.md) |
 | `run-unit-tests` | Runs unit tests for all test projects in a solution. | [run-unit-tests/README.md](run-unit-tests/README.md) |
 | `unit-tests` | Wrapper combining detect + run unit test actions. | [unit-tests/README.md](unit-tests/README.md) |
+| `quality-gate-summary` | Aggregates unit-test / SonarCloud / Validator outcomes, renders a Job Summary + sticky PR comment, and fails the job on any failed sub-gate. | [quality-gate-summary/README.md](quality-gate-summary/README.md) |
 
 ## Referencing from a reusable workflow in this repo
 

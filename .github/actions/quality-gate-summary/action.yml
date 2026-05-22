@@ -1,0 +1,77 @@
+name: Quality Gate Summary
+description: |
+  Builds a Markdown summary of CI quality sub-gates (unit tests, SonarCloud,
+  Validator), writes it to the Job Summary and a comment file, posts/updates
+  a sticky PR comment on pull_request events, and enforces a final gate that
+  fails the job when any sub-gate failed.
+
+inputs:
+  unit-tests-outcome:
+    description: "Outcome of the unit tests step (success|failure|skipped)."
+    required: true
+  sonar-outcome:
+    description: "Outcome of the SonarCloud quality gate check step. Leave empty to omit the SonarCloud sub-gate."
+    required: false
+    default: ''
+  sonar-status:
+    description: "Quality-gate-status output from sonarqube-quality-gate-action (OK|FAILED|...)."
+    required: false
+    default: ''
+  validator-outcome:
+    description: "Outcome of the Validator Quality Gate step. Leave empty to omit the Validator sub-gate."
+    required: false
+    default: ''
+  validator-state-file:
+    description: "Path to validator-gate-state.json produced by the Validator Quality Gate step. Optional."
+    required: false
+    default: ''
+  dependabot-bypass:
+    description: "When 'true' and the actor is dependabot[bot], SonarCloud failures are treated as informational and do not fail the gate."
+    required: false
+    default: 'false'
+  comment-header:
+    description: "Header id used by the sticky PR comment."
+    required: false
+    default: 'skyline-quality-gate'
+
+outputs:
+  status:
+    description: "'passed' or 'failed' depending on the aggregated sub-gate results."
+    value: ${{ steps.render.outputs.status }}
+
+runs:
+  using: composite
+  steps:
+    - name: Render Quality Gate Summary
+      id: render
+      shell: bash
+      env:
+        UNIT_TESTS_OUTCOME: ${{ inputs.unit-tests-outcome }}
+        SONAR_OUTCOME: ${{ inputs.sonar-outcome }}
+        SONAR_STATUS: ${{ inputs.sonar-status }}
+        VALIDATOR_OUTCOME: ${{ inputs.validator-outcome }}
+        VALIDATOR_STATE_FILE: ${{ inputs.validator-state-file }}
+        DEPENDABOT_BYPASS: ${{ inputs.dependabot-bypass }}
+        COMMENT_HEADER: ${{ inputs.comment-header }}
+        GH_ACTOR: ${{ github.actor }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: bash "${GITHUB_ACTION_PATH}/render.sh"
+
+    - name: Post PR Quality Gate Comment
+      # Requires the caller workflow to grant `pull-requests: write`.
+      if: github.event_name == 'pull_request'
+      uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0
+      with:
+        header: ${{ inputs.comment-header }}
+        path: ${{ steps.render.outputs.comment-file }}
+
+    - name: Enforce Quality Gate
+      shell: bash
+      env:
+        FINAL_STATUS: ${{ steps.render.outputs.status }}
+      run: |
+        if [ "$FINAL_STATUS" = "failed" ]; then
+          echo "Quality gate failed. See the Job Summary above (or the PR comment) for details."
+          exit 1
+        fi
+        echo "Quality gate passed."

@@ -92,18 +92,19 @@ jobs:
           echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Install .NET Tools
-        run: |
-          dotnet tool install -g dotnet-sonarscanner
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 3.*
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.*
-
       - name: Setup NuGet sources
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
         with:
           repository-owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           azure-token: ${{ env.AZURE_TOKEN }}
+
+      - name: Install .NET Tools
+        run: |
+          dotnet tool install -g dotnet-sonarscanner
+          #dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 3.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --prerelease
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.*
   
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
@@ -206,6 +207,8 @@ jobs:
             --solution-path "${{ github.workspace }}" `
             --output-directory "${{ github.workspace }}" `
             --output-file-name "compareResults" `
+            --previous-validate-output-file-name "previousValidateResults" `
+            --current-validate-output-file-name "currentValidateResults" `
             --debug "${{ inputs.debug }}"
         continue-on-error: true
 
@@ -218,51 +221,236 @@ jobs:
             ${{ github.workspace }}/validateResults.html
             ${{ github.workspace }}/compareResults.json
             ${{ github.workspace }}/compareResults.html
+            ${{ github.workspace }}/previousValidateResults.json
+            ${{ github.workspace }}/previousValidateResults.html
+            ${{ github.workspace }}/currentValidateResults.json
+            ${{ github.workspace }}/currentValidateResults.html
         continue-on-error: true
 
       - name: Validator Quality Gate
         id: validator-quality-gate
         run: |
-          json=$(cat "${{ github.workspace }}/validateResults.json")
-          critical=$(echo "$json" | jq -r '.CriticalIssueCount')
-          major=$(echo "$json" | jq -r '.MajorIssueCount')
+          # Allowed delta in Major/Minor counts between previous and current
+          # validate results (regular increment only). Hard-coded for now.
+          X=1
 
-          if [ "$critical" != 0 ] || [ "$major" != 0 ]; then
-            echo "Error: CriticalIssueCount or MajorIssueCount is not 0"
+          validateFile="${{ github.workspace }}/validateResults.json"
+          compareFile="${{ github.workspace }}/compareResults.json"
+          currentValidateFile="${{ github.workspace }}/currentValidateResults.json"
+          previousValidateFile="${{ github.workspace }}/previousValidateResults.json"
+          stateFile="${{ github.workspace }}/validator-gate-state.json"
+
+          # Without validateResults we have nothing to summarize at all - the
+          # validate step failed before producing results. Surface that
+          # explicitly and exit; the summary will show the entire validation
+          # as failed.
+          if [ ! -f "$validateFile" ]; then
+            missingMsg="Validate results file not found ($validateFile) - the validate step did not produce results, so the entire validation failed."
+            jq -n \
+              --arg msg "$missingMsg" \
+              '{
+                status: "failed",
+                mode: "missing-results",
+                version: "",
+                x: 0,
+                hasPrevious: false,
+                hasCurrentXml: false,
+                current: { critical: 0, major: 0, minor: 0 },
+                currentSolution: { critical: 0, major: 0, minor: 0 },
+                previous: { critical: 0, major: 0, minor: 0, version: "" },
+                compareIssueCount: 0,
+                failures: [$msg]
+              }' > "$stateFile"
+            echo "Validator Quality Gate failed:"
+            echo "- $missingMsg"
             exit 1
           fi
 
-          # Check version pattern to determine if compare validation should be skipped
-          compareJson=$(cat "${{ github.workspace }}/compareResults.json")
-          version=$(echo "$compareJson" | jq -r '.Version')
-          issueCount=$(echo "$compareJson" | jq '.Issues | length')
-          
-          # Skip compare validation if version ends with .1 (e.g., X.X.X.1)
-          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.1$ ]]; then
-            echo "Version $version ends with .1 - skipping compare validation"
-          elif [ "$issueCount" != 0 ]; then
-            echo "Compare Error: Found $issueCount issues"
+          validateJson=$(cat "$validateFile")
+          # Solution-based counts (main validate step) - used for initial-version gate and surfaced separately.
+          solCritical=$(echo "$validateJson" | jq -r '.CriticalIssueCount')
+          solMajor=$(echo "$validateJson" | jq -r '.MajorIssueCount')
+          solMinor=$(echo "$validateJson" | jq -r '.MinorIssueCount')
+
+          # XML-based current counts (from compare command) - used for compare delta rules so they
+          # are apples-to-apples with previousValidateResults (also XML-based).
+          # Only produced when a previous version exists; for initial versions we fall back to the
+          # solution-based counts above.
+          if [ -f "$currentValidateFile" ]; then
+            currentValidateJson=$(cat "$currentValidateFile")
+            curCritical=$(echo "$currentValidateJson" | jq -r '.CriticalIssueCount')
+            curMajor=$(echo "$currentValidateJson" | jq -r '.MajorIssueCount')
+            curMinor=$(echo "$currentValidateJson" | jq -r '.MinorIssueCount')
+          else
+            curCritical="$solCritical"
+            curMajor="$solMajor"
+            curMinor="$solMinor"
+          fi
+
+          # If compareResults is missing we can still show the current counts
+          # from validateResults, but we cannot evaluate the compare/version
+          # rules. Record that as a failure and continue so the summary still
+          # surfaces what we do have.
+          compareMissing="false"
+          if [ ! -f "$compareFile" ]; then
+            compareMissing="true"
+            version=""
+            compareIssueCount=0
+          else
+            compareJson=$(cat "$compareFile")
+            version=$(echo "$compareJson" | jq -r '.Version')
+            compareIssueCount=$(echo "$compareJson" | jq '.Issues | length')
+          fi
+
+          prevCritical="null"
+          prevMajor="null"
+          prevMinor="null"
+          prevVersion=""
+          if [ -f "$previousValidateFile" ]; then
+            prevJson=$(cat "$previousValidateFile")
+            prevCritical=$(echo "$prevJson" | jq -r '.CriticalIssueCount')
+            prevMajor=$(echo "$prevJson" | jq -r '.MajorIssueCount')
+            prevMinor=$(echo "$prevJson" | jq -r '.MinorIssueCount')
+            prevVersion=$(echo "$prevJson" | jq -r '.Version // ""')
+          fi
+
+          failures=()
+
+          if [ "$compareMissing" = "true" ]; then
+            mode="missing-compare"
+            failures+=("Compare results file not found ($compareFile) - the compare step did not produce results, so version-based rules could not be evaluated.")
+            # Critical must always be 0; still report it on top of the missing-compare failure.
+            if [ "$curCritical" != 0 ]; then
+              failures+=("Current critical issues: $curCritical (expected 0)")
+            fi
+          else
+            # Detect initial version: compare emits no previous when version is 1.0.0.1
+            # or X.0.0.1 without BasedOn. In both cases the previousValidateResults
+            # file will not exist. We also keep the version-pattern check as a guard.
+            isInitial="false"
+            if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.1$ ]] && [ ! -f "$previousValidateFile" ]; then
+              isInitial="true"
+            fi
+
+            if [ "$isInitial" = "true" ]; then
+            mode="initial"
+            echo "Initial version $version detected - applying 0/0/0 rule on current validate results."
+            if [ "$curCritical" != 0 ]; then failures+=("Critical issue count is expected to be 0 for the initial version. (current = $curCritical)"); fi
+            if [ "$curMajor"    != 0 ]; then failures+=("Major issue count is expected to be 0 for the initial version. (current = $curMajor)"); fi
+            if [ "$curMinor"    != 0 ]; then failures+=("Minor issue count is expected to be 0 for the initial version. (current = $curMinor)"); fi
+          else
+            mode="regular"
+            echo "Regular increment $version detected - comparing validate results."
+
+            # Helper: describe the trend of a current vs previous count.
+            trend() {
+              local cur=$1 prev=$2
+              if [ "$cur" -gt "$prev" ]; then
+                echo "increased by '$((cur - prev))'"
+              elif [ "$cur" -lt "$prev" ]; then
+                echo "decreased by '$((prev - cur))'"
+              else
+                echo "remained unchanged"
+              fi
+            }
+
+            # Critical must be 0 regardless.
+            if [ "$curCritical" != 0 ]; then
+              failures+=("Critical issue count is expected to be 0. (current=$curCritical)")
+            fi
+
+            # Compare gate (breaking-change checker) still must be clean.
+            if [ "$compareIssueCount" != 0 ]; then
+              failures+=("Compare reported $compareIssueCount breaking-change issue(s).")
+            fi
+
+            if [ ! -f "$previousValidateFile" ]; then
+              failures+=("Previous validate results file not found ($previousValidateFile) - cannot enforce delta rules.")
+            elif [ ! -f "$currentValidateFile" ]; then
+              failures+=("XML-based current validate results file not found ($currentValidateFile) - cannot enforce delta rules apples-to-apples.")
+            else
+              # Major rule: cur.Major <= max(0, prev.Major - X)
+              majorTarget=$((prevMajor - X))
+              if [ "$majorTarget" -lt 0 ]; then majorTarget=0; fi
+              if [ "$curMajor" -gt "$majorTarget" ]; then
+                failures+=("Major issue count is expected to decrease by '$X' or more. It currently $(trend "$curMajor" "$prevMajor"). (current = $curMajor, previous = $prevMajor, required <= $majorTarget)")
+              fi
+
+              # Minor rule
+              if [ "$curMajor" -gt 0 ]; then
+                if [ "$curMinor" -gt "$prevMinor" ]; then
+                  failures+=("Minor issue count is expected to remain the same or decrease while major issues are present. It currently $(trend "$curMinor" "$prevMinor"). (current = $curMinor, previous = $prevMinor, required <= $prevMinor)")
+                fi
+              else
+                minorTarget=$((prevMinor - X))
+                if [ "$minorTarget" -lt 0 ]; then minorTarget=0; fi
+                if [ "$curMinor" -gt "$minorTarget" ]; then
+                  failures+=("Minor issue count is expected to decrease by '$X' or more (no major issues). It currently $(trend "$curMinor" "$prevMinor"). (current = $curMinor, previous = $prevMinor, required <= $minorTarget)")
+                fi
+              fi
+            fi
+          fi
+          fi
+
+          # Emit machine-readable state for the summary step.
+          status="passed"
+          if [ "${#failures[@]}" -gt 0 ]; then
+            status="failed"
+          fi
+
+          jq -n \
+            --arg status "$status" \
+            --arg mode "$mode" \
+            --arg version "$version" \
+            --argjson x "$X" \
+            --argjson curCritical "$curCritical" \
+            --argjson curMajor "$curMajor" \
+            --argjson curMinor "$curMinor" \
+            --argjson solCritical "$solCritical" \
+            --argjson solMajor "$solMajor" \
+            --argjson solMinor "$solMinor" \
+            --argjson prevCritical "$prevCritical" \
+            --argjson prevMajor "$prevMajor" \
+            --argjson prevMinor "$prevMinor" \
+            --arg prevVersion "$prevVersion" \
+            --argjson compareIssueCount "$compareIssueCount" \
+            --argjson hasPrevious "$( [ -f "$previousValidateFile" ] && echo true || echo false )" \
+            --argjson hasCurrentXml "$( [ -f "$currentValidateFile" ] && echo true || echo false )" \
+            --arg failuresRaw "$(printf '%s\n' "${failures[@]}")" \
+            '{
+              status: $status,
+              mode: $mode,
+              version: $version,
+              x: $x,
+              hasPrevious: $hasPrevious,
+              hasCurrentXml: $hasCurrentXml,
+              current: { critical: $curCritical, major: $curMajor, minor: $curMinor },
+              currentSolution: { critical: $solCritical, major: $solMajor, minor: $solMinor },
+              previous: { critical: $prevCritical, major: $prevMajor, minor: $prevMinor, version: $prevVersion },
+              compareIssueCount: $compareIssueCount,
+              failures: ($failuresRaw | split("\n") | map(select(length > 0)))
+            }' > "${{ github.workspace }}/validator-gate-state.json"
+
+          if [ "$status" = "failed" ]; then
+            echo "Validator Quality Gate failed:"
+            for f in "${failures[@]}"; do echo "- $f"; done
             exit 1
           fi
+
+          echo "Validator Quality Gate passed."
         continue-on-error: true
         shell: bash
 
       - name: Quality Gate
         id: quality-step
-        run: |
-          if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            print("Quality gate failed due to:")
-          if "${{ steps.unit-tests.outcome }}" == "failure":
-            print("- Test failures")
-          if "${{ steps.validator-quality-gate.outcome }}" == "failure":
-            print("- Validator issues")
-          if "${{ steps.sonarcloud-quality-gate-check.outcome }}" == "failure" and "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" != "FAILED":
-            print("- Could not retrieve SonarCloud quality gate status, potentially due to reaching License max LoC. Ignoring SonarCloud quality gate status in this case.")
-          if "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            print("- Code analysis quality gate failed")
-          if "${{ steps.validator-quality-gate.outcome }}" == "failure" or "${{ steps.unit-tests.outcome }}" == "failure" or "${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}" == "FAILED":
-            exit(1)
-        shell: python
+        if: always()
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@ValidatorCompareValidateResults
+        with:
+          unit-tests-outcome: ${{ steps.unit-tests.outcome }}
+          sonar-outcome: ${{ steps.sonarcloud-quality-gate-check.outcome }}
+          sonar-status: ${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}
+          validator-outcome: ${{ steps.validator-quality-gate.outcome }}
+          validator-state-file: ${{ github.workspace }}/validator-gate-state.json
         
       - name: Create package name
         if: github.ref_type == 'tag'

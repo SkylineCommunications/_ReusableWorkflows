@@ -396,3 +396,133 @@ jobs:
           branch: ${{ github.ref_name }}
           token: ${{ secrets.SONAR_TOKEN }}
           repository: ${{ github.repository }}
+
+  quality-gate-summary:
+    name: quality-gate-summary
+    runs-on: ubuntu-latest
+    # The action's sticky-comment step only runs on pull_request events and
+    # needs `pull-requests: write`. We exercise the render + enforce paths
+    # here; the comment step is covered by real PRs against caller repos.
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: All pass (unit tests only)
+        id: all-pass
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          unit-tests-outcome: success
+
+      - name: Assert passed
+        env:
+          STATUS: ${{ steps.all-pass.outputs.status }}
+        run: test "$STATUS" = "passed"
+
+      - name: Unit test failure fails the gate
+        id: ut-fail
+        continue-on-error: true
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          unit-tests-outcome: failure
+
+      - name: Assert failure surfaced
+        env:
+          OUTCOME: ${{ steps.ut-fail.outcome }}
+          STATUS: ${{ steps.ut-fail.outputs.status }}
+        run: |
+          test "$OUTCOME" = "failure"
+          test "$STATUS" = "failed"
+
+      - name: Sonar FAILED fails the gate
+        id: sonar-fail
+        continue-on-error: true
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          unit-tests-outcome: success
+          sonar-outcome: success
+          sonar-status: FAILED
+
+      - name: Assert sonar failure surfaced
+        env:
+          OUTCOME: ${{ steps.sonar-fail.outcome }}
+          STATUS: ${{ steps.sonar-fail.outputs.status }}
+        run: |
+          test "$OUTCOME" = "failure"
+          test "$STATUS" = "failed"
+
+      - name: Sonar WARN does not fail the gate
+        id: sonar-warn
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          unit-tests-outcome: success
+          sonar-outcome: success
+          sonar-status: WARN
+
+      - name: Assert warn passes
+        env:
+          STATUS: ${{ steps.sonar-warn.outputs.status }}
+        run: test "$STATUS" = "passed"
+
+      # The dependabot bypass branch reads ${{ github.actor }} resolved from the
+      # workflow run context, which cannot be spoofed from a step. It is exercised
+      # by real dependabot PRs against caller repos.
+
+      - name: Stage validator state file (failed)
+        run: |
+          cat > validator-gate-state.json <<'EOF'
+          {
+            "status": "failed",
+            "mode": "pr",
+            "version": "1.2.3",
+            "hasPrevious": true,
+            "x": 1,
+            "current":  { "critical": 1, "major": 2, "minor": 3 },
+            "previous": { "critical": 0, "major": 1, "minor": 3 },
+            "compareIssueCount": 4,
+            "failures": ["New critical issue introduced", "Major regression detected"]
+          }
+          EOF
+
+      - name: Validator state-file failure fails the gate
+        id: validator-fail
+        continue-on-error: true
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          unit-tests-outcome: success
+          validator-outcome: failure
+          validator-state-file: ${{ github.workspace }}/validator-gate-state.json
+
+      - name: Assert validator failure surfaced
+        env:
+          OUTCOME: ${{ steps.validator-fail.outcome }}
+          STATUS: ${{ steps.validator-fail.outputs.status }}
+        run: |
+          test "$OUTCOME" = "failure"
+          test "$STATUS" = "failed"
+
+      - name: Stage validator state file with missing optional fields
+        run: |
+          cat > validator-gate-state.json <<'EOF'
+          {
+            "status": "passed",
+            "mode": "release",
+            "version": "1.2.3",
+            "hasPrevious": false,
+            "x": 0,
+            "current":  { "critical": 0, "major": 0, "minor": 0 },
+            "previous": { "critical": 0, "major": 0, "minor": 0 },
+            "compareIssueCount": 0
+          }
+          EOF
+
+      - name: Validator state-file pass (no .failures key) does not crash
+        id: validator-pass
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          unit-tests-outcome: success
+          validator-outcome: success
+          validator-state-file: ${{ github.workspace }}/validator-gate-state.json
+
+      - name: Assert validator pass
+        env:
+          STATUS: ${{ steps.validator-pass.outputs.status }}
+        run: test "$STATUS" = "passed"
