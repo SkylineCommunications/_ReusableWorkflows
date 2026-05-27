@@ -32,6 +32,7 @@ action still produces the Job Summary and enforces the gate.
 | `validator-state-file` | no | `''` | Absolute path to `validator-gate-state.json` produced by the Validator Quality Gate step. When provided, a detailed table (current vs previous critical/major/minor) is rendered. |
 | `dependabot-bypass` | no | `'false'` | When `'true'` and `github.actor == 'dependabot[bot]'`, a failing SonarCloud gate is reported as a warning and does **not** fail the build. |
 | `comment-header` | no | `'skyline-quality-gate'` | Header id used by the sticky PR comment (also embedded as an HTML marker in the body). |
+| `post-pr-comment` | no | `'true'` | When `'true'`, post/update a sticky PR comment on `pull_request` events. Set to `'false'` to skip (e.g. self-tests without `pull-requests: write`). |
 
 ## Outputs
 

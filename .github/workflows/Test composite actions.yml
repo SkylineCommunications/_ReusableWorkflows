@@ -410,6 +410,7 @@ jobs:
         id: all-pass
         uses: ./.github/actions/quality-gate-summary
         with:
+          post-pr-comment: 'false'
           unit-tests-outcome: success
 
       - name: Assert passed
@@ -422,6 +423,7 @@ jobs:
         continue-on-error: true
         uses: ./.github/actions/quality-gate-summary
         with:
+          post-pr-comment: 'false'
           unit-tests-outcome: failure
 
       - name: Assert failure surfaced
@@ -437,6 +439,7 @@ jobs:
         continue-on-error: true
         uses: ./.github/actions/quality-gate-summary
         with:
+          post-pr-comment: 'false'
           unit-tests-outcome: success
           sonar-outcome: success
           sonar-status: FAILED
@@ -453,6 +456,7 @@ jobs:
         id: sonar-warn
         uses: ./.github/actions/quality-gate-summary
         with:
+          post-pr-comment: 'false'
           unit-tests-outcome: success
           sonar-outcome: success
           sonar-status: WARN
@@ -487,6 +491,7 @@ jobs:
         continue-on-error: true
         uses: ./.github/actions/quality-gate-summary
         with:
+          post-pr-comment: 'false'
           unit-tests-outcome: success
           validator-outcome: failure
           validator-state-file: ${{ github.workspace }}/validator-gate-state.json
@@ -518,6 +523,7 @@ jobs:
         id: validator-pass
         uses: ./.github/actions/quality-gate-summary
         with:
+          post-pr-comment: 'false'
           unit-tests-outcome: success
           validator-outcome: success
           validator-state-file: ${{ github.workspace }}/validator-gate-state.json

@@ -33,6 +33,10 @@ inputs:
     description: "Header id used by the sticky PR comment."
     required: false
     default: 'skyline-quality-gate'
+  post-pr-comment:
+    description: "When 'true' (default), post/update the sticky PR comment on pull_request events. Set to 'false' to skip (e.g. in self-tests where pull-requests: write is not granted)."
+    required: false
+    default: 'true'
 
 outputs:
   status:
@@ -59,7 +63,7 @@ runs:
 
     - name: Post PR Quality Gate Comment
       # Requires the caller workflow to grant `pull-requests: write`.
-      if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request' && inputs.post-pr-comment == 'true'
       uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0
       with:
         header: ${{ inputs.comment-header }}
