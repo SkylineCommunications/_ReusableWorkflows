@@ -25,6 +25,14 @@ inputs:
     description: "Path to validator-gate-state.json produced by the Validator Quality Gate step. Optional."
     required: false
     default: ''
+  major-change-checker-outcome:
+    description: "Outcome of the Major Change Checker Quality Gate step. Leave empty to omit the Major Change Checker sub-gate."
+    required: false
+    default: ''
+  major-change-checker-state-file:
+    description: "Path to mcc-gate-state.json produced by the Major Change Checker Quality Gate step. Optional."
+    required: false
+    default: ''
   dependabot-bypass:
     description: "When 'true' and the actor is dependabot[bot], SonarCloud failures are treated as informational and do not fail the gate."
     required: false
@@ -55,6 +63,8 @@ runs:
         SONAR_STATUS: ${{ inputs.sonar-status }}
         VALIDATOR_OUTCOME: ${{ inputs.validator-outcome }}
         VALIDATOR_STATE_FILE: ${{ inputs.validator-state-file }}
+        MCC_OUTCOME: ${{ inputs.major-change-checker-outcome }}
+        MCC_STATE_FILE: ${{ inputs.major-change-checker-state-file }}
         DEPENDABOT_BYPASS: ${{ inputs.dependabot-bypass }}
         COMMENT_HEADER: ${{ inputs.comment-header }}
         GH_ACTOR: ${{ github.actor }}

@@ -93,7 +93,6 @@ if [ "$render_validator" = "true" ]; then
     v_prevM=$(jq -r '.previous.major // 0' "$VALIDATOR_STATE_FILE")
     v_prevMi=$(jq -r '.previous.minor // 0' "$VALIDATOR_STATE_FILE")
     v_prevVer=$(jq -r '.previous.version // ""' "$VALIDATOR_STATE_FILE")
-    v_cmpIssues=$(jq -r '.compareIssueCount // 0' "$VALIDATOR_STATE_FILE")
 
     if [ "$v_status" = "passed" ]; then
       vg_icon=$(icon pass); vg_detail="Validator quality gate passed"
@@ -121,6 +120,56 @@ if [ "$render_validator" = "true" ]; then
   fi
 fi
 
+# --- Major Change Checker row -----------------------------------------------
+render_mcc="false"
+mcc_has_state_file="false"
+if [ -n "$MCC_OUTCOME" ] || { [ -n "$MCC_STATE_FILE" ] && [ -f "$MCC_STATE_FILE" ]; }; then
+  render_mcc="true"
+fi
+
+if [ "$render_mcc" = "true" ]; then
+  if [ -n "$MCC_STATE_FILE" ] && [ -f "$MCC_STATE_FILE" ]; then
+    mcc_has_state_file="true"
+    mcc_status=$(jq -r '.status // ""' "$MCC_STATE_FILE")
+    mcc_skipped=$(jq -r '.skipped // false' "$MCC_STATE_FILE")
+    mcc_skippedReason=$(jq -r '.skippedReason // ""' "$MCC_STATE_FILE")
+    mcc_issueCount=$(jq -r '.issueCount // 0' "$MCC_STATE_FILE")
+    mcc_version=$(jq -r '.version // ""' "$MCC_STATE_FILE")
+    mcc_prevVersion=$(jq -r '.previousVersion // ""' "$MCC_STATE_FILE")
+
+    case "$mcc_status" in
+      passed)
+        mcc_icon=$(icon pass); mcc_detail="No major changes detected" ;;
+      skipped)
+        mcc_icon=$(icon skip)
+        if [ -n "$mcc_skippedReason" ]; then
+          mcc_detail="Skipped - $mcc_skippedReason"
+        else
+          mcc_detail="Skipped"
+        fi
+        ;;
+      failed)
+        mcc_icon=$(icon fail); mcc_detail="Major Change Checker reported $mcc_issueCount issue(s)"
+        overall_failed="true" ;;
+      *)
+        mcc_icon=$(icon fail); mcc_detail="Major Change Checker quality gate failed"
+        overall_failed="true" ;;
+    esac
+  else
+    case "$MCC_OUTCOME" in
+      success)
+        mcc_icon=$(icon pass); mcc_detail="Major Change Checker quality gate passed" ;;
+      failure)
+        mcc_icon=$(icon fail); mcc_detail="Major Change Checker quality gate failed"
+        overall_failed="true" ;;
+      skipped|"")
+        mcc_icon=$(icon skip); mcc_detail="Skipped" ;;
+      *)
+        mcc_icon=$(icon warn); mcc_detail="Major Change Checker quality gate did not run" ;;
+    esac
+  fi
+fi
+
 # --- Overall status ---------------------------------------------------------
 if [ "$overall_failed" = "true" ]; then
   overall_icon=$(icon fail); overall_text="**Failed**"; final_status="failed"
@@ -141,6 +190,9 @@ comment_file="${GITHUB_WORKSPACE}/quality-gate-comment.md"
   fi
   if [ "$render_validator" = "true" ]; then
     echo "| Validator | $vg_icon | $vg_detail |"
+  fi
+  if [ "$render_mcc" = "true" ]; then
+    echo "| Major Change Checker | $mcc_icon | $mcc_detail |"
   fi
   echo ""
 
@@ -204,17 +256,24 @@ comment_file="${GITHUB_WORKSPACE}/quality-gate-comment.md"
         echo "| $prev_label | $v_prevC | $v_prevM | $v_prevMi |"
       fi
       echo ""
-      echo "Major change checker issues (compare): **$v_cmpIssues**"
       if [ "$v_hasCurXml" = "true" ] && [ "$v_hasPrev" = "true" ]; then
-        echo ""
         echo "_Delta rules are evaluated on the XML-based 'Compare' rows (same scope as previous) so solution-only checks don't skew the comparison. The solution-based counts are shown for reference._"
+        echo ""
       fi
-      echo ""
     fi
     failure_count=$(jq -r '(.failures | length) // 0' "$VALIDATOR_STATE_FILE")
     if [ "${failure_count:-0}" -gt 0 ]; then
       echo "**Validator failure reasons:**"
       jq -r '.failures[] | "- " + .' "$VALIDATOR_STATE_FILE"
+      echo ""
+    fi
+  fi
+
+  if [ "$mcc_has_state_file" = "true" ]; then
+    mcc_failure_count=$(jq -r '(.failures | length) // 0' "$MCC_STATE_FILE")
+    if [ "${mcc_failure_count:-0}" -gt 0 ]; then
+      echo "**Major Change Checker failure reasons:**"
+      jq -r '.failures[] | "- " + .' "$MCC_STATE_FILE"
       echo ""
     fi
   fi

@@ -30,6 +30,8 @@ action still produces the Job Summary and enforces the gate.
 | `sonar-status` | no | `''` | `steps.<id>.outputs.quality-gate-status` (`OK` / `FAILED` / ...). |
 | `validator-outcome` | no | `''` | `steps.<id>.outcome` of the Validator Quality Gate step. Empty ⇒ row omitted. |
 | `validator-state-file` | no | `''` | Absolute path to `validator-gate-state.json` produced by the Validator Quality Gate step. When provided, a detailed table (current vs previous critical/major/minor) is rendered. |
+| `major-change-checker-outcome` | no | `''` | `steps.<id>.outcome` of the Major Change Checker Quality Gate step. Empty ⇒ row omitted. |
+| `major-change-checker-state-file` | no | `''` | Absolute path to `mcc-gate-state.json` produced by the Major Change Checker Quality Gate step. When provided, the sub-gate row reflects its skipped/passed/failed status. |
 | `dependabot-bypass` | no | `'false'` | When `'true'` and `github.actor == 'dependabot[bot]'`, a failing SonarCloud gate is reported as a warning and does **not** fail the build. |
 | `comment-header` | no | `'skyline-quality-gate'` | Header id used by the sticky PR comment (also embedded as an HTML marker in the body). |
 | `post-pr-comment` | no | `'true'` | When `'true'`, post/update a sticky PR comment on `pull_request` events. Set to `'false'` to skip (e.g. self-tests without `pull-requests: write`). |

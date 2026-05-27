@@ -359,11 +359,6 @@ jobs:
               failures+=("Critical issue count is expected to be 0. (current=$curCritical)")
             fi
 
-            # Compare gate (breaking-change checker) still must be clean.
-            if [ "$compareIssueCount" != 0 ]; then
-              failures+=("Compare reported $compareIssueCount breaking-change issue(s).")
-            fi
-
             if [ ! -f "$previousValidateFile" ]; then
               failures+=("Previous validate results file not found ($previousValidateFile) - cannot enforce delta rules.")
             elif [ ! -f "$currentValidateFile" ]; then
@@ -441,6 +436,83 @@ jobs:
         continue-on-error: true
         shell: bash
 
+      - name: Major Change Checker Quality Gate
+        id: mcc-quality-gate
+        run: |
+          compareFile="${{ github.workspace }}/compareResults.json"
+          stateFile="${{ github.workspace }}/mcc-gate-state.json"
+
+          if [ ! -f "$compareFile" ]; then
+            # No compare results file at all - this can happen when the compare
+            # step itself failed. Surface that as a separate failure.
+            jq -n \
+              --arg msg "Compare results file not found ($compareFile) - the compare step did not produce results." \
+              '{
+                status: "failed",
+                skipped: false,
+                skippedReason: "",
+                issueCount: 0,
+                version: "",
+                previousVersion: "",
+                failures: [$msg]
+              }' > "$stateFile"
+            echo "Major Change Checker Quality Gate failed:"
+            echo "- Compare results file not found."
+            exit 1
+          fi
+
+          compareJson=$(cat "$compareFile")
+          skipped=$(echo "$compareJson" | jq -r '.Skipped // false')
+          skippedReason=$(echo "$compareJson" | jq -r '.SkippedReason // ""')
+          mccVersion=$(echo "$compareJson" | jq -r '.Version // ""')
+          mccPrevVersion=$(echo "$compareJson" | jq -r '.PreviousVersion // ""')
+          mccIssueCount=$(echo "$compareJson" | jq '.Issues | length')
+
+          failures=()
+          status="passed"
+
+          if [ "$skipped" = "true" ]; then
+            status="skipped"
+            echo "Major Change Checker skipped: $skippedReason"
+          else
+            if [ "$mccIssueCount" != 0 ]; then
+              failures+=("Major Change Checker reported $mccIssueCount issue(s).")
+              status="failed"
+            fi
+          fi
+
+          jq -n \
+            --arg status "$status" \
+            --argjson skipped "$skipped" \
+            --arg skippedReason "$skippedReason" \
+            --argjson issueCount "$mccIssueCount" \
+            --arg version "$mccVersion" \
+            --arg previousVersion "$mccPrevVersion" \
+            --arg failuresRaw "$(printf '%s\n' "${failures[@]}")" \
+            '{
+              status: $status,
+              skipped: $skipped,
+              skippedReason: $skippedReason,
+              issueCount: $issueCount,
+              version: $version,
+              previousVersion: $previousVersion,
+              failures: ($failuresRaw | split("\n") | map(select(length > 0)))
+            }' > "$stateFile"
+
+          if [ "$status" = "failed" ]; then
+            echo "Major Change Checker Quality Gate failed:"
+            for f in "${failures[@]}"; do echo "- $f"; done
+            exit 1
+          fi
+
+          if [ "$status" = "skipped" ]; then
+            echo "Major Change Checker Quality Gate skipped."
+          else
+            echo "Major Change Checker Quality Gate passed."
+          fi
+        continue-on-error: true
+        shell: bash
+
       - name: Quality Gate
         id: quality-step
         if: always()
@@ -451,6 +523,8 @@ jobs:
           sonar-status: ${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}
           validator-outcome: ${{ steps.validator-quality-gate.outcome }}
           validator-state-file: ${{ github.workspace }}/validator-gate-state.json
+          major-change-checker-outcome: ${{ steps.mcc-quality-gate.outcome }}
+          major-change-checker-state-file: ${{ github.workspace }}/mcc-gate-state.json
         
       - name: Create package name
         if: github.ref_type == 'tag'

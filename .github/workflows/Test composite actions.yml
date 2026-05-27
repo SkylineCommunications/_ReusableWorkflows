@@ -532,3 +532,63 @@ jobs:
         env:
           STATUS: ${{ steps.validator-pass.outputs.status }}
         run: test "$STATUS" = "passed"
+
+      - name: Stage MCC state file (skipped on revision==1)
+        run: |
+          cat > mcc-gate-state.json <<'EOF'
+          {
+            "status": "skipped",
+            "skipped": true,
+            "skippedReason": "Major change checker skipped - current protocol version revision is 1.",
+            "issueCount": 0,
+            "version": "2.1.0.1",
+            "previousVersion": "2.0.5.3",
+            "failures": []
+          }
+          EOF
+
+      - name: MCC skipped does not fail the gate
+        id: mcc-skipped
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          post-pr-comment: 'false'
+          unit-tests-outcome: success
+          major-change-checker-outcome: success
+          major-change-checker-state-file: ${{ github.workspace }}/mcc-gate-state.json
+
+      - name: Assert MCC skipped passes
+        env:
+          STATUS: ${{ steps.mcc-skipped.outputs.status }}
+        run: test "$STATUS" = "passed"
+
+      - name: Stage MCC state file (failed)
+        run: |
+          cat > mcc-gate-state.json <<'EOF'
+          {
+            "status": "failed",
+            "skipped": false,
+            "skippedReason": "",
+            "issueCount": 3,
+            "version": "2.1.0.5",
+            "previousVersion": "2.1.0.4",
+            "failures": ["Major Change Checker reported 3 issue(s)."]
+          }
+          EOF
+
+      - name: MCC failure fails the gate
+        id: mcc-fail
+        continue-on-error: true
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          post-pr-comment: 'false'
+          unit-tests-outcome: success
+          major-change-checker-outcome: failure
+          major-change-checker-state-file: ${{ github.workspace }}/mcc-gate-state.json
+
+      - name: Assert MCC failure surfaced
+        env:
+          OUTCOME: ${{ steps.mcc-fail.outcome }}
+          STATUS: ${{ steps.mcc-fail.outputs.status }}
+        run: |
+          test "$OUTCOME" = "failure"
+          test "$STATUS" = "failed"
