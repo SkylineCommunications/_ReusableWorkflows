@@ -23,11 +23,12 @@ This file applies when editing workflows under `.github/workflows/` or composite
 ## Referencing composite actions from inside this repo
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/<name>@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/<name>@main
 ```
 
-- Pin to a **full commit SHA**. Never `@main` for intra-repo composite references; pins are rewritten on merge by the maintenance script.
-- The relative form `uses: ./.github/actions/<name>` is acceptable for the testing of the composite actions.
+- Use `@main` for intra-repo composite and reusable-workflow references. This is the de facto convention across the fleet and across every workflow in this repo today.
+- Third-party `uses:` (e.g. `actions/checkout@v6`, `azure/login@...`) must still be pinned to a tag or full commit SHA.
+- The relative form `uses: ./.github/actions/<name>` is reserved for the `guard-trigger` first-step chicken-and-egg exception. Do not use it elsewhere.
 
 ## Adding or editing composite actions (`.github/actions/<name>/`)
 
@@ -63,7 +64,7 @@ Do not duplicate this migration logic in other workflows; extend the existing mi
 ## Forbidden patterns
 
 - `pull_request_target` triggers (the `guard-trigger` action fails the run).
-- `@main` for intra-repo composite action references.
+- Third-party `uses:` pinned to a mutable ref — they must be pinned to a tag or full commit SHA.
 - Interpolating `${{ inputs.* }}` or `${{ github.* }}` inside `.ps1` / `.sh` scripts invoked by composite actions.
 - Passing secrets through `with:`.
 - Echoing secrets to stdout.

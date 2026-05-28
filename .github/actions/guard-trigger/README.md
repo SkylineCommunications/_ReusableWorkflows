@@ -22,7 +22,7 @@ No outputs.
 ### Basic
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 ```
 
 ### Local (relative) form

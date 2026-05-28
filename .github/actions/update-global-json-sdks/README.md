@@ -27,7 +27,7 @@ No outputs.
 ### Basic
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
 ```
 
 ### Typical placement in CI
@@ -35,7 +35,7 @@ No outputs.
 ```yaml
 - name: Update managed SDK versions
   if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@<full-sha>
+  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
 
 - name: Build
   run: dotnet build "${{ needs.discover_projects.outputs.solution-path }}"

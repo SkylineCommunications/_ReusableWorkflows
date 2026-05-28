@@ -31,7 +31,7 @@ No explicit outputs.
 ### Basic
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@main
   with:
     sonarcloud-project-name: ${{ inputs.sonarcloud-project-name }}
     sonarcloud-token: ${{ env.SONAR_TOKEN }}
@@ -42,7 +42,7 @@ No explicit outputs.
 ### Conditional checks (master workflow pattern)
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@main
   with:
     sonarcloud-project-name: ${{ inputs.sonarcloud-project-name }}
     sonarcloud-token: ${{ env.SONAR_TOKEN }}

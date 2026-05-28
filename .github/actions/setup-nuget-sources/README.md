@@ -28,7 +28,7 @@ No explicit outputs.
 ### Basic
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
   with:
     repository-owner: ${{ github.repository_owner }}
     github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -37,7 +37,7 @@ No explicit outputs.
 ### Force GitHub feed only
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
   with:
     repository-owner: ${{ github.repository_owner }}
     github-token: ${{ secrets.GITHUB_TOKEN }}

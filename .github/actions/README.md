@@ -51,13 +51,12 @@ Usage examples in each action README are sourced from the master workflows in
 
 Composite actions are an implementation detail of the reusable
 workflows. When a reusable workflow consumes one, reference it relative
-to the repository root and pin to a full commit SHA so that callers who
-pin the reusable workflow to a specific SHA get a fully reproducible
-run:
+to the repository root and pin to `@main` — this matches the convention
+used across every workflow in this repo and the wider Skyline fleet:
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 ```
 
-The pins are rewritten on merge by the maintenance script (see plan).
-Do not use `@main` for intra-repo composite references.
+Third-party `uses:` (e.g. `actions/checkout@v6`) must still be pinned to
+a tag or full commit SHA.

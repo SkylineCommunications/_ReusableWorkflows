@@ -31,7 +31,7 @@ It also validates token usability and emits actionable errors.
 
 ```yaml
 - id: sonar-status
-  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@<full-sha>
+  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@main
   with:
     project-key: ${{ inputs.sonarcloud-project-name }}
     branch: ${{ github.ref_name }}

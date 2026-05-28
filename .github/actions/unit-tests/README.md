@@ -28,7 +28,7 @@ Convenience wrapper action that:
 
 ```yaml
 - id: unit-tests
-  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/unit-tests@<full-sha>
+  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/unit-tests@main
   with:
     solution-path: ${{ needs.discover_projects.outputs.solution-path }}
     configuration: ${{ inputs.configuration }}
