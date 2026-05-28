@@ -162,9 +162,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr comment ${{ github.event.issue.number }} \
-            --repo ${{ github.repository }} \
-            --body "ℹ️ **No downstream tests triggered** — the changed files in this PR don't affect any mapped reusable workflows."
+          set -euo pipefail
+          MARKER='<!-- sticky:test-downstream -->'
+          {
+            echo "$MARKER"
+            echo "ℹ️ **No downstream tests triggered** — the changed files in this PR don't affect any mapped reusable workflows."
+          } > /tmp/pr-comment.md
+
+          existing_id=$(gh api --paginate \
+            "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n1)
+
+          if [[ -n "$existing_id" ]]; then
+            jq -Rs '{body: .}' < /tmp/pr-comment.md \
+              | gh api --method PATCH \
+                "repos/${{ github.repository }}/issues/comments/$existing_id" \
+                --input - --silent
+          else
+            jq -Rs '{body: .}' < /tmp/pr-comment.md \
+              | gh api --method POST \
+                "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+                --input - --silent
+          fi
 
       - uses: actions/checkout@v6
         if: steps.targets.outputs.has_targets == 'true'
@@ -247,7 +266,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cat <<'COMMENT_BODY' > /tmp/pr-comment.md
+          set -euo pipefail
+          MARKER='<!-- sticky:test-downstream -->'
+          {
+            echo "$MARKER"
+            cat <<'COMMENT_BODY'
           ⏳ **Downstream tests triggered** from PR #${{ github.event.issue.number }} (`${{ steps.pr-details.outputs.head_sha }}`)
 
           Triggered repos:
@@ -255,10 +278,23 @@ jobs:
 
           Polling for results...
           COMMENT_BODY
+          } > /tmp/pr-comment.md
 
-          gh pr comment ${{ github.event.issue.number }} \
-            --repo ${{ github.repository }} \
-            --body-file /tmp/pr-comment.md
+          existing_id=$(gh api --paginate \
+            "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n1)
+
+          if [[ -n "$existing_id" ]]; then
+            jq -Rs '{body: .}' < /tmp/pr-comment.md \
+              | gh api --method PATCH \
+                "repos/${{ github.repository }}/issues/comments/$existing_id" \
+                --input - --silent
+          else
+            jq -Rs '{body: .}' < /tmp/pr-comment.md \
+              | gh api --method POST \
+                "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+                --input - --silent
+          fi
 
       - name: Poll for results
         if: steps.targets.outputs.has_targets == 'true'
@@ -378,6 +414,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+          MARKER='<!-- sticky:test-downstream -->'
+
           if [[ "${{ steps.poll.outputs.overall }}" == "success" ]]; then
             header="✅ **All downstream tests passed**"
           else
@@ -385,6 +424,7 @@ jobs:
           fi
 
           cat <<COMMENT_BODY > /tmp/pr-results.md
+          ${MARKER}
           ${header}
 
           PR #${{ github.event.issue.number }} (${{ steps.pr-details.outputs.head_sha }})
@@ -392,9 +432,21 @@ jobs:
           ${{ steps.poll.outputs.result_table }}
           COMMENT_BODY
 
-          gh pr comment ${{ github.event.issue.number }} \
-            --repo ${{ github.repository }} \
-            --body-file /tmp/pr-results.md
+          existing_id=$(gh api --paginate \
+            "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n1)
+
+          if [[ -n "$existing_id" ]]; then
+            jq -Rs '{body: .}' < /tmp/pr-results.md \
+              | gh api --method PATCH \
+                "repos/${{ github.repository }}/issues/comments/$existing_id" \
+                --input - --silent
+          else
+            jq -Rs '{body: .}' < /tmp/pr-results.md \
+              | gh api --method POST \
+                "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+                --input - --silent
+          fi
 
       - name: Set exit code
         if: steps.targets.outputs.has_targets == 'true' && steps.poll.outputs.overall != 'success'
