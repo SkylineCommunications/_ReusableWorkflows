@@ -155,6 +155,12 @@ jobs:
     name: CI
     needs: [check_oidc, discover_projects]
     runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+      actions: read
+      pull-requests: write # required by quality-gate-summary to post the sticky PR comment
     defaults:
       run:
         shell: bash
@@ -394,7 +400,7 @@ jobs:
       - name: SonarCloud Quality Gate check
         if: github.actor != 'dependabot[bot]'
         id: sonarcloud-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@cb3ed20f9fec62b4c3b8ad9e77656c6adaade913 # Master from 17 Nov 2025
+        uses: sonarsource/sonarqube-quality-gate-action@cb3ed20f9fec62b4c3b8ad9e77656c6adaade913
         with:
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
         continue-on-error: true

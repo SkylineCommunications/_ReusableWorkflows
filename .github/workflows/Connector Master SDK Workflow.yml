@@ -42,6 +42,8 @@ jobs:
   validate_trigger:
     name: Validate Trigger
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 
@@ -49,6 +51,9 @@ jobs:
     name: SDK Skyline Quality Gate
     needs: [validate_trigger]
     runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
     outputs:
       quality: ${{ steps.quality-step.outputs.results }}
     steps:
@@ -175,7 +180,7 @@ jobs:
 
       - name: SonarCloud Quality Gate check
         id: sonarcloud-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@master
+        uses: sonarsource/sonarqube-quality-gate-action@cb3ed20f9fec62b4c3b8ad9e77656c6adaade913
         with:
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
         continue-on-error: true
@@ -556,7 +561,11 @@ jobs:
   auto_generate_catalog_yaml:
     name: Auto-Generating Catalog from GitHub
     if: ${{ github.ref_type == 'branch' &&  github.event_name != 'pull_request' }}
+    needs: [validate_trigger]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Azure Login
         uses: azure/login@v3
@@ -645,7 +654,11 @@ jobs:
 
   artifact_creation:
     name: Artifact Creation
+    needs: [validate_trigger]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Azure Login
         uses: azure/login@v3
@@ -743,6 +756,9 @@ jobs:
     if: github.ref_type == 'tag'
     runs-on: windows-latest
     needs: [validate_skyline_quality_gate,artifact_creation]
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Azure Login
         uses: azure/login@v3
