@@ -54,6 +54,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: read
     outputs:
       quality: ${{ steps.quality-step.outputs.results }}
     steps:
@@ -566,6 +567,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      packages: read
     steps:
       - name: Azure Login
         uses: azure/login@v3
@@ -659,6 +661,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: read
     steps:
       - name: Azure Login
         uses: azure/login@v3
@@ -759,6 +762,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: read
     steps:
       - name: Azure Login
         uses: azure/login@v3
