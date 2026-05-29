@@ -19,8 +19,17 @@ across the fleet and can be evolved in a single place.
 | `Internal NuGet Solution Master Workflow.yml`             | *(deprecated)* Thin redirect to `Master Workflow.yml` for internal NuGet.     |
 | `DataMiner App Packages Master Workflow.yml`              | *(deprecated)* Thin redirect to `Master Workflow.yml` for app packages.       |
 | `Update Catalog Details Workflow.yml`                     | Update Catalog metadata on release.                                           |
-| `Test Downstream.yml`                                     | Verifies downstream repos still build against changes here.                   |
-| `Wrapper Migration Workflow.yml`                          | Opens a PR migrating callers off the deprecated redirecting wrappers.         |
+
+## Internal / maintenance workflows
+
+These workflows are not intended to be called from regular caller repos. They
+support development of `_ReusableWorkflows` itself or run automatically from
+the legacy wrappers.
+
+| Workflow                                                  | Purpose                                                                       |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `Test Downstream.yml`                                     | Repo-local: verifies downstream repos still build against changes here. Triggered by a `/test` PR comment. |
+| `Wrapper Migration Workflow.yml`                          | Opens a PR migrating callers off the deprecated redirecting wrappers. Called automatically by those wrappers; can also be dispatched standalone. |
 
 ## Using master workflows
 

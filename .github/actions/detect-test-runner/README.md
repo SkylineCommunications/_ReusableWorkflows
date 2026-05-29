@@ -26,7 +26,7 @@ No inputs.
 
 ```yaml
 - id: detect
-  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@<full-sha>
+  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@main
 
 - run: echo "Runner mode is ${{ steps.detect.outputs.mode }}"
 ```

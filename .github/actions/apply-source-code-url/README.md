@@ -24,7 +24,7 @@ No outputs.
 ### Basic
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@main
   with:
     repository: ${{ github.repository }}
 ```
@@ -33,7 +33,7 @@ No outputs.
 
 ```yaml
 - if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@<full-sha>
+  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@main
   with:
     repository: ${{ github.repository }}
 ```

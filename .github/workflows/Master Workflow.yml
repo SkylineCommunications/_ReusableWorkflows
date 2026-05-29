@@ -155,6 +155,12 @@ jobs:
     name: CI
     needs: [check_oidc, discover_projects]
     runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+      actions: read
+      pull-requests: write # required by quality-gate-summary to post the sticky PR comment
     defaults:
       run:
         shell: bash
@@ -394,7 +400,7 @@ jobs:
       - name: SonarCloud Quality Gate check
         if: github.actor != 'dependabot[bot]'
         id: sonarcloud-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@cb3ed20f9fec62b4c3b8ad9e77656c6adaade913 # Master from 17 Nov 2025
+        uses: sonarsource/sonarqube-quality-gate-action@cb3ed20f9fec62b4c3b8ad9e77656c6adaade913
         with:
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
         continue-on-error: true
@@ -402,33 +408,13 @@ jobs:
 
       - name: Quality Gate
         id: quality-step
-        env:
-          GH_ACTOR: ${{ github.actor }}
-          TEST_OUTCOME: ${{ steps.unit-tests.outcome }}
-          QG_STATUS: ${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}
-          QG_OUTCOME: ${{ steps.sonarcloud-quality-gate-check.outcome }}
-        run: |
-          import os
-          is_dependabot = os.environ["GH_ACTOR"] == "dependabot[bot]"
-
-          test_failed = os.environ["TEST_OUTCOME"] == "failure"
-
-          if test_failed:
-            print("Quality gate failed due to:")
-            print("- Test failures")
-
-          if not is_dependabot:
-            if os.environ["QG_STATUS"] == "FAILED":
-              print("Quality gate failed due to:")
-              print("- Code analysis quality gate failed")
-            if os.environ["QG_OUTCOME"] == "failure" and os.environ["QG_STATUS"] != "FAILED":
-              print("- Could not retrieve SonarCloud quality gate status, potentially due to reaching License max LoC. Ignoring SonarCloud quality gate status in this case.")
-
-          if test_failed:
-            exit(1)
-          if not is_dependabot and os.environ["QG_STATUS"] == "FAILED":
-            exit(1)
-        shell: python
+        if: always()
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@main
+        with:
+          unit-tests-outcome: ${{ steps.unit-tests.outcome }}
+          sonar-outcome: ${{ steps.sonarcloud-quality-gate-check.outcome }}
+          sonar-status: ${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}
+          dependabot-bypass: ${{ github.actor == 'dependabot[bot]' }}
 
       # ──────────────────────────────────────────────────────────────
       # E. Artifacts & Outputs

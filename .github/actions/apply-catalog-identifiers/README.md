@@ -26,7 +26,7 @@ No outputs.
 ### Basic
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@main
   with:
     mappings: |
       Connector/CatalogInformation/manifest.yml=12345678-1234-1234-1234-123456789abc
@@ -35,7 +35,7 @@ No outputs.
 ### No-op mode
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@main
   with:
     mappings: ''
 ```

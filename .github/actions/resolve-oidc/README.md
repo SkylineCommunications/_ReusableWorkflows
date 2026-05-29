@@ -55,7 +55,7 @@ federated credential rules.
 
 ```yaml
 - id: resolve
-  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@<full-sha>
+  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
   with:
     repository-owner: ${{ github.repository_owner }}
 ```
@@ -64,7 +64,7 @@ federated credential rules.
 
 ```yaml
 - id: resolve
-  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@<full-sha>
+  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
   with:
     client-id: ${{ inputs.oidc-client-id }}
     tenant-id: ${{ inputs.oidc-tenant-id }}

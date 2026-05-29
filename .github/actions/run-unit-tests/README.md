@@ -26,7 +26,7 @@ No explicit outputs.
 ### Basic (vstest)
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/run-unit-tests@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/run-unit-tests@main
   with:
     solution-path: ${{ needs.discover_projects.outputs.solution-path }}
     configuration: ${{ inputs.configuration }}
@@ -37,9 +37,9 @@ No explicit outputs.
 
 ```yaml
 - id: detect
-  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@<full-sha>
+  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@main
 
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/run-unit-tests@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/run-unit-tests@main
   with:
     solution-path: ${{ needs.discover_projects.outputs.solution-path }}
     configuration: ${{ inputs.configuration }}

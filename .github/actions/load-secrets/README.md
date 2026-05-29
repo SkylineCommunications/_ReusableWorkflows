@@ -51,7 +51,7 @@ own federated credential policies.
 ### Basic (overrides only)
 
 ```yaml
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
   with:
     use-oidc: 'false'
     overrides: |
@@ -69,7 +69,7 @@ own federated credential policies.
     tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
     subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
-- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@<full-sha>
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
   with:
     use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
     secret-names: |
