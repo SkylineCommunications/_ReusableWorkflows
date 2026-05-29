@@ -108,8 +108,7 @@ jobs:
       - name: Install .NET Tools
         run: |
           dotnet tool install -g dotnet-sonarscanner
-          #dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 3.*
-          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --prerelease
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Validator --version 3.*
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.Sbom --version 1.*
   
       - name: Prepare SonarCloud Variables
@@ -522,7 +521,7 @@ jobs:
       - name: Quality Gate
         id: quality-step
         if: always()
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@ValidatorCompareValidateResults
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@main
         with:
           unit-tests-outcome: ${{ steps.unit-tests.outcome }}
           sonar-outcome: ${{ steps.sonarcloud-quality-gate-check.outcome }}

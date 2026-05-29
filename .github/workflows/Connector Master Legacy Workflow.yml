@@ -255,7 +255,7 @@ jobs:
       - name: Quality Gate
         id: quality-step
         if: always()
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@ValidatorCompareValidateResults
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@main
         with:
           unit-tests-outcome: ${{ steps.unit-tests.outcome }}
           sonar-outcome: ${{ steps.sonarcloud-quality-gate-check.outcome }}
