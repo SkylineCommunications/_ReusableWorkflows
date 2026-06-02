@@ -143,15 +143,6 @@ jobs:
                 $relativePath = $file.FullName.Substring($workspace.Length + 1).Replace('\\', '/')
                 $catalogFiles.Add($relativePath)
               }
-
-              if ($catalogFiles.Count -eq 0) {
-                if (Test-Path "$workspace/catalog.yml") {
-                  $catalogFiles.Add("catalog.yml")
-                }
-                if (Test-Path "$workspace/manifest.yml") {
-                  $catalogFiles.Add("manifest.yml")
-                }
-              }
             }
             else {
               if (Test-Path "$workspace/catalog.yml") {
