@@ -719,7 +719,7 @@ jobs:
       - name: Create migration PR
         id: cpr
         if: steps.existing.outputs.skip != 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run != true && env.WRAPPER_MIGRATION_TOKEN != ''
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           path: caller
           token: ${{ env.WRAPPER_MIGRATION_TOKEN }}
