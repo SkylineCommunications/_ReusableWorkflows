@@ -143,7 +143,6 @@ jobs:
           sonarcloud-token: sk_fake_token
           dataminer-token: dm_fake_token
           repository: ${{ github.repository }}
-          run-number: ${{ github.run_number }}
           check-sonar: 'true'
           check-dataminer: 'true'
 
@@ -154,7 +153,6 @@ jobs:
         with:
           sonarcloud-token: sk_fake_token
           repository: ${{ github.repository }}
-          run-number: ${{ github.run_number }}
           check-sonar: 'true'
 
       - name: Assert failure was detected

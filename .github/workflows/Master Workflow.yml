@@ -196,7 +196,6 @@ jobs:
           sonarcloud-token: ${{ env.SONAR_TOKEN }}
           dataminer-token: ${{ env.DATAMINER_TOKEN }}
           repository: ${{ github.repository }}
-          run-number: ${{ github.run_number }}
           has-dataminer-projects: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
           check-sonar: ${{ github.actor != 'dependabot[bot]' }}
           check-dataminer: ${{ github.ref_type == 'tag' && needs.discover_projects.outputs.has-dataminer-projects == 'true' }}

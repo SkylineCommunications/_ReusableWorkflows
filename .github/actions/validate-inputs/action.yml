@@ -21,9 +21,6 @@ inputs:
   repository:
     description: '`github.repository`. Used in the error message URLs.'
     required: true
-  run-number:
-    description: '`github.run_number`. Used in the publish-step example.'
-    required: true
   has-dataminer-projects:
     description: Whether the solution contains DataMiner projects. Controls the extra publish hint.
     required: false
@@ -48,7 +45,6 @@ runs:
         SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
         HAS_DM_PROJECTS: ${{ inputs.has-dataminer-projects }}
         REPO: ${{ inputs.repository }}
-        RUN_NUMBER: ${{ inputs.run-number }}
       run: bash ./validate-sonar-name.sh
 
     - name: Validate SonarCloud Secret Token
@@ -59,7 +55,6 @@ runs:
         SONAR_TOKEN: ${{ inputs.sonarcloud-token }}
         HAS_DM_PROJECTS: ${{ inputs.has-dataminer-projects }}
         REPO: ${{ inputs.repository }}
-        RUN_NUMBER: ${{ inputs.run-number }}
       run: bash ./validate-sonar-token.sh
 
     - name: Validate DataMiner Secret Token

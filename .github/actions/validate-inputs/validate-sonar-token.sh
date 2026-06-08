@@ -16,7 +16,7 @@ if [[ "$HAS_DM_PROJECTS" == "true" ]]; then
   echo "    - name: Publish"
   echo "      env:"
   echo "        api-key: \${{ secrets.DATAMINER_TOKEN }}"
-  echo "      run: dotnet publish -p:Version=\"0.0.$RUN_NUMBER\" -p:VersionComment=\"Iterative Development\" -p:CatalogPublishKeyName=api-key"
+  echo "      run: dotnet publish -p:Version=\"0.0.\${{ github.run_number }}\" -p:VersionComment=\"Iterative Development\" -p:CatalogPublishKeyName=api-key"
 fi
 
 exit 1

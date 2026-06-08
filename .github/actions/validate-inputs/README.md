@@ -12,7 +12,6 @@ Checks are conditional so workflows can skip irrelevant validations (for example
 | `sonarcloud-token` | no | `""` | Sonar token (usually from environment). |
 | `dataminer-token` | no | `""` | DataMiner token (usually from environment). |
 | `repository` | yes | - | Repository value for validation error links. |
-| `run-number` | yes | - | Run number used in diagnostics. |
 | `has-dataminer-projects` | no | `true` | Whether DataMiner projects are present. |
 | `check-sonar` | no | `true` | Enables Sonar validation checks. |
 | `check-dataminer` | no | `false` | Enables DataMiner token checks. |
@@ -36,7 +35,6 @@ No explicit outputs.
     sonarcloud-project-name: ${{ inputs.sonarcloud-project-name }}
     sonarcloud-token: ${{ env.SONAR_TOKEN }}
     repository: ${{ github.repository }}
-    run-number: ${{ github.run_number }}
 ```
 
 ### Conditional checks (master workflow pattern)
@@ -48,7 +46,6 @@ No explicit outputs.
     sonarcloud-token: ${{ env.SONAR_TOKEN }}
     dataminer-token: ${{ env.DATAMINER_TOKEN }}
     repository: ${{ github.repository }}
-    run-number: ${{ github.run_number }}
     has-dataminer-projects: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
     check-sonar: ${{ github.actor != 'dependabot[bot]' }}
     check-dataminer: ${{ github.ref_type == 'tag' && needs.discover_projects.outputs.has-dataminer-projects == 'true' }}
