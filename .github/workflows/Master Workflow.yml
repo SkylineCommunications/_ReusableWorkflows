@@ -166,7 +166,6 @@ jobs:
         shell: bash
     outputs:
       has-nuget-packages: ${{ steps.detect-nuget-packages.outputs.has-nuget-packages }}
-      has-dataminer-packages: ${{ steps.detect-dataminer-packages.outputs.has-dataminer-packages }}
     steps:
       - name: Azure Login
         uses: azure/login@v3
@@ -444,22 +443,8 @@ jobs:
           name: NugetPackages
           path: _NuGetOutput/*.nupkg
 
-      - name: Detect DataMiner packages
-        if: github.actor != 'dependabot[bot]'
-        id: detect-dataminer-packages
-        run: |
-          dm_count=$(find . -type f \( -name "*.dmapp" -o -name "*.dmtest" \) | wc -l)
-          if [ "$dm_count" -gt 0 ]; then
-            echo "Found $dm_count DataMiner package(s)"
-            echo "has-dataminer-packages=true" >> $GITHUB_OUTPUT
-          else
-            echo "No DataMiner packages found"
-            echo "has-dataminer-packages=false" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
-
       - name: Create package name
-        if: github.actor != 'dependabot[bot]' && steps.detect-dataminer-packages.outputs.has-dataminer-packages == 'true'
+        if: github.actor != 'dependabot[bot]' && needs.discover_projects.outputs.has-dataminer-projects == 'true'
         id: packageName
         env:
           REPO: ${{ github.repository }}
@@ -470,7 +455,7 @@ jobs:
         shell: pwsh
 
       - name: Generate SBOM file
-        if: github.actor != 'dependabot[bot]' && steps.detect-dataminer-packages.outputs.has-dataminer-packages == 'true'
+        if: github.actor != 'dependabot[bot]' && needs.discover_projects.outputs.has-dataminer-projects == 'true'
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           PACKAGE_NAME: ${{ steps.packageName.outputs.name }}
@@ -489,7 +474,7 @@ jobs:
           done
 
       - name: Upload DataMiner packages
-        if: github.actor != 'dependabot[bot]' && steps.detect-dataminer-packages.outputs.has-dataminer-packages == 'true'
+        if: github.actor != 'dependabot[bot]' && needs.discover_projects.outputs.has-dataminer-projects == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: DataMiner Installation Packages (${{ inputs.configuration }} ${{ inputs.solution-filter-name }}) unsigned
@@ -644,7 +629,7 @@ jobs:
   upload_to_catalog:
     name: Upload to Catalog
     runs-on: windows-latest
-    if: github.ref_type == 'tag' && needs.ci.outputs.has-dataminer-packages == 'true'
+    if: github.ref_type == 'tag' && needs.discover_projects.outputs.has-dataminer-projects == 'true'
     needs: [ci, check_oidc, discover_projects]
     steps:
       - name: Azure Login
