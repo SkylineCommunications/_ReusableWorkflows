@@ -76,7 +76,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@test-downstream
 
   check_oidc:
     name: Check OIDC
@@ -89,7 +89,7 @@ jobs:
       use-oidc: ${{ steps.resolve.outputs.use-oidc }}
     steps:
       - id: resolve
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@test-downstream
         with:
           client-id: ${{ inputs.oidc-client-id }}
           tenant-id: ${{ inputs.oidc-tenant-id }}
@@ -176,7 +176,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -189,7 +189,7 @@ jobs:
             DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
 
       - name: Validate inputs
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@test-downstream
         with:
           sonarcloud-project-name: ${{ inputs.sonarcloud-project-name }}
           sonarcloud-token: ${{ env.SONAR_TOKEN }}
@@ -213,7 +213,7 @@ jobs:
           packages: mono-complete
       
       - name: Setup NuGet sources
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@test-downstream
         with:
           repository-owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -245,7 +245,7 @@ jobs:
 
       - name: Update msbuild-sdks in global.json
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@test-downstream
 
       - name: Update Skyline.DataMiner.Core.AppPackageInstaller
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
@@ -264,13 +264,13 @@ jobs:
         shell: pwsh
 
       - name: Apply catalog identifiers
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@test-downstream
         with:
           mappings: ${{ inputs.override-catalog-identifiers }}
 
       - name: Apply source_code_url to manifest
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@test-downstream
         with:
           repository: ${{ github.repository }}
 
@@ -288,7 +288,7 @@ jobs:
       - name: Get SonarCloud Status
         if: github.actor != 'dependabot[bot]'
         id: get-sonarcloud-status
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@test-downstream
         with:
           project-key: ${{ inputs.sonarcloud-project-name }}
           branch: ${{ github.ref_name }}
@@ -381,7 +381,7 @@ jobs:
       # ──────────────────────────────────────────────────────────────
       - name: Unit Tests
         id: unit-tests
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/unit-tests@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/unit-tests@test-downstream
         with:
           solution-path: ${{ needs.discover_projects.outputs.solution-path }}
           configuration: ${{ inputs.configuration }}
@@ -407,7 +407,7 @@ jobs:
       - name: Quality Gate
         id: quality-step
         if: always()
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@test-downstream
         with:
           unit-tests-outcome: ${{ steps.unit-tests.outcome }}
           sonar-outcome: ${{ steps.sonarcloud-quality-gate-check.outcome }}
@@ -506,7 +506,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load signing secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -571,7 +571,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load NuGet push secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -641,7 +641,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load catalog upload secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -749,7 +749,7 @@ jobs:
         shell: bash
 
       - name: Update msbuild-sdks in global.json
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@test-downstream
 
       - name: Publish To Catalog
         shell: pwsh
