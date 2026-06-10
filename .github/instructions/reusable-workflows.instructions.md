@@ -68,3 +68,7 @@ Do not duplicate this migration logic in other workflows; extend the existing mi
 - Interpolating `${{ inputs.* }}` or `${{ github.* }}` inside `.ps1` / `.sh` scripts invoked by composite actions.
 - Passing secrets through `with:`.
 - Echoing secrets to stdout.
+
+## Org-level Copilot agent
+
+A dedicated agent, **`skyline-workflow-author`** (in `SkylineCommunications/.github-private/agents/`), is the source-of-truth helper for authoring caller wrappers and editing this repo. Invoke it for non-trivial workflow/action changes; it enforces the two-phase plan/implement loop and links back to the two source-of-truth docs (this repo's `README.md`, `.github/actions/README.md`).
