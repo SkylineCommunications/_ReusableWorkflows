@@ -589,6 +589,8 @@ jobs:
         run: git config --global core.longpaths true
 
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Setup NuGet sources
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
@@ -647,8 +649,41 @@ jobs:
             Write-Host "No changes to commit."
           }
 
-      - name: Push .githubtocatalog/auto-generated-catalog
+      - name: Retrieve reusable workflows token from Key Vault
+        if: inputs.use-oidc == 'true'
+        shell: bash
         run: |
+          set -euo pipefail
+          echo "Fetching reusable-workflows-token from Azure Key Vault..."
+          secret_value=$(az keyvault secret show \
+            --vault-name kv-master-cicd-secrets \
+            --name reusable-workflows-token \
+            --query value -o tsv 2>/dev/null || true)
+          if [ -z "$secret_value" ]; then
+            echo "::warning::No 'reusable-workflows-token' secret in Azure Key Vault 'kv-master-cicd-secrets'. Falling back to GITHUB_TOKEN for git push."
+          else
+            echo "::add-mask::$secret_value"
+            echo "WRAPPER_MIGRATION_TOKEN=$secret_value" >> "$GITHUB_ENV"
+          fi
+
+      - name: Push .githubtocatalog/auto-generated-catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          push_token="${WRAPPER_MIGRATION_TOKEN:-${GITHUB_TOKEN}}"
+          if [ -n "${WRAPPER_MIGRATION_TOKEN:-}" ]; then
+            echo "Using reusable-workflows-token for git push."
+          else
+            echo "Using GITHUB_TOKEN for git push."
+          fi
+          actor_login=$(curl -fsSL \
+            -H "Authorization: Bearer ${push_token}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/user | jq -r '.login')
+          echo "Resolved git push token to GitHub actor: ${actor_login}"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git config --global --unset-all http.https://github.com/.extraheader || true
+          git remote set-url origin "https://x-access-token:${push_token}@github.com/${{ github.repository }}.git"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
