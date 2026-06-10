@@ -589,6 +589,8 @@ jobs:
         run: git config --global core.longpaths true
 
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Setup NuGet sources
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main

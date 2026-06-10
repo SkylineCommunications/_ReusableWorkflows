@@ -314,6 +314,8 @@ jobs:
           run: git config --global core.longpaths true
 
         - uses: actions/checkout@v6
+          with:
+            persist-credentials: false
 
         - name: Set up NuGet
           uses: nuget/setup-nuget@v4
