@@ -679,6 +679,8 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/user | jq -r '.login')
           echo "Resolved git push token to GitHub actor: ${actor_login}"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git config --global --unset-all http.https://github.com/.extraheader || true
           git remote set-url origin "https://x-access-token:${push_token}@github.com/${{ github.repository }}.git"
           git push
         env:
