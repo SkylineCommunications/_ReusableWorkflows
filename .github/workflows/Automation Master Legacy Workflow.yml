@@ -314,8 +314,6 @@ jobs:
           run: git config --global core.longpaths true
 
         - uses: actions/checkout@v6
-          with:
-            persist-credentials: false
 
         - name: Set up NuGet
           uses: nuget/setup-nuget@v4
@@ -417,6 +415,8 @@ jobs:
         run: git config --global core.longpaths true
 
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Enable Skyline NuGet Registries
         if: github.repository_owner == 'SkylineCommunications'
