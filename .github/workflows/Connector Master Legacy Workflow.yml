@@ -413,6 +413,16 @@ jobs:
         run: |
           set -euo pipefail
           push_token="${WRAPPER_MIGRATION_TOKEN:-${GITHUB_TOKEN}}"
+          if [ -n "${WRAPPER_MIGRATION_TOKEN:-}" ]; then
+            echo "Using reusable-workflows-token for git push."
+          else
+            echo "Using GITHUB_TOKEN for git push."
+          fi
+          actor_login=$(curl -fsSL \
+            -H "Authorization: Bearer ${push_token}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/user | jq -r '.login')
+          echo "Resolved git push token to GitHub actor: ${actor_login}"
           git remote set-url origin "https://x-access-token:${push_token}@github.com/${{ github.repository }}.git"
           git push
         env:
