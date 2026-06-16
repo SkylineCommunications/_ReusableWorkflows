@@ -133,21 +133,30 @@ jobs:
 
       - name: Detect projects with specific properties
         id: detect-projects
+        env:
+          SOLUTION_PATH: ${{ steps.find-solution-file.outputs.path }}
         run: |
-          $projectFiles = Get-ChildItem -Path . -Recurse -Filter "*.csproj"
+          $solutionPath = "$env:SOLUTION_PATH"
+          $solutionDir  = Split-Path $solutionPath -Parent
           $hasDataminerProjects = $false
-   
-          foreach ($project in $projectFiles) {
-            [xml]$content = Get-Content $project.FullName
-     
+
+          # Use dotnet sln list to enumerate projects in the solution (skip 2-line header)
+          $projectPaths = dotnet sln "$solutionPath" list | Select-Object -Skip 2 | Where-Object { $_ -ne '' }
+
+          foreach ($relativePath in $projectPaths) {
+            $absolutePath = Join-Path $solutionDir ($relativePath -replace '\\', '/')
+            if (-not (Test-Path $absolutePath)) { continue }
+
+            [xml]$content = Get-Content $absolutePath
+
             # Check for Skyline.DataMiner.Sdk projects (based on DataMinerType property)
             if ($content.SelectNodes("//DataMinerType").Count -gt 0) {
-              echo "Found at least one DataMiner project"
+              Write-Output "Found DataMiner project: $relativePath"
               $hasDataminerProjects = $true
               break
             }
           }
-    
+
           echo "has-dataminer-projects=$($hasDataminerProjects.ToString().ToLower())" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
