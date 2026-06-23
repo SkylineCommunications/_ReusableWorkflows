@@ -32,7 +32,7 @@ runs:
         # ------------------------------------------------------------
 
         # Shared version for the entire Skyline.DataMiner SDK family.
-        $DATAMINER_SDK_VERSION = '2.5.3'
+        $DATAMINER_SDK_VERSION = '2.5.4'
 
         # Regex patterns whose matching msbuild-sdks keys are bumped to
         # $DATAMINER_SDK_VERSION. Add more patterns here when the
