@@ -185,7 +185,7 @@ jobs:
                 --input - --silent
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.targets.outputs.has_targets == 'true'
         with:
           fetch-depth: 0

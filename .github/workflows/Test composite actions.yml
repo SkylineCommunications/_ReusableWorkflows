@@ -26,7 +26,7 @@ jobs:
     name: guard-trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Invoke composite
         uses: ./.github/actions/guard-trigger
       - name: Confirm pass
@@ -36,7 +36,7 @@ jobs:
     name: resolve-oidc
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Explicit inputs
         id: explicit
@@ -84,7 +84,7 @@ jobs:
     name: load-secrets (overrides only)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Invoke composite with overrides only
         uses: ./.github/actions/load-secrets
@@ -106,7 +106,7 @@ jobs:
     name: setup-nuget-sources
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Invoke composite (no Skyline feeds, no azure token)
         uses: ./.github/actions/setup-nuget-sources
@@ -134,7 +134,7 @@ jobs:
     name: validate-inputs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: All inputs set (should pass)
         uses: ./.github/actions/validate-inputs
@@ -166,7 +166,7 @@ jobs:
     name: apply-catalog-identifiers
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Stage fake manifest
         run: |
@@ -194,7 +194,7 @@ jobs:
     name: apply-source-code-url
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Stage fake manifest with empty source_code_url
         run: |
@@ -220,7 +220,7 @@ jobs:
     name: detect-test-runner
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: No global.json (default vstest)
         id: default
@@ -252,7 +252,7 @@ jobs:
     name: run-unit-tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Scaffold a minimal MSTest solution
         shell: bash
@@ -293,7 +293,7 @@ jobs:
     name: update-global-json-sdks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # The composite hard-codes the centrally-managed DataMiner SDK
       # version. Keep this in sync with $DATAMINER_SDK_VERSION in
@@ -371,7 +371,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Check prerequisites
         id: prereq
@@ -402,7 +402,7 @@ jobs:
     # needs `pull-requests: write`. We exercise the render + enforce paths
     # here; the comment step is covered by real PRs against caller repos.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: All pass (unit tests only)
         id: all-pass
