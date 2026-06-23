@@ -301,7 +301,7 @@ jobs:
       - name: Expected DataMiner SDK version
         id: expected
         shell: bash
-        run: echo "version=2.5.3" >> "$GITHUB_OUTPUT"
+        run: echo "version=2.5.4" >> "$GITHUB_OUTPUT"
 
       - name: No global.json (skip silently)
         uses: ./.github/actions/update-global-json-sdks
