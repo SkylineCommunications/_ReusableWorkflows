@@ -23,7 +23,7 @@ on:
         type: string
 
       sonarCloudProjectName:
-        required: true
+        required: false
         type: string
       debug:
         required: false
@@ -106,6 +106,7 @@ jobs:
 
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
+        if: inputs.sonarCloudProjectName != ''
         run: |
           import os
           env_file = os.getenv('GITHUB_ENV')
@@ -115,6 +116,7 @@ jobs:
 
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
+        if: inputs.sonarCloudProjectName != ''
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@main
         with:
           project-key: ${{ inputs.sonarCloudProjectName }}
@@ -141,6 +143,7 @@ jobs:
         continue-on-error: true
 
       - name: Start Analysis
+        if: inputs.sonarCloudProjectName != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
         run: |
@@ -165,6 +168,7 @@ jobs:
         continue-on-error: true
 
       - name: Stop Analysis
+        if: inputs.sonarCloudProjectName != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
         run: |
@@ -173,6 +177,7 @@ jobs:
 
       - name: SonarCloud Quality Gate check
         id: sonarcloud-quality-gate-check
+        if: inputs.sonarCloudProjectName != ''
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
@@ -181,6 +186,7 @@ jobs:
         timeout-minutes: 5
         
       - name: Upload Sonar report-task.txt artifact
+        if: inputs.sonarCloudProjectName != ''
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
@@ -195,8 +201,8 @@ jobs:
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@main
         with:
           unit-tests-outcome: ${{ steps.unit-tests.outcome }}
-          sonar-outcome: ${{ steps.sonarcloud-quality-gate-check.outcome }}
-          sonar-status: ${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}
+          sonar-outcome: ${{ inputs.sonarCloudProjectName != '' && steps.sonarcloud-quality-gate-check.outcome || '' }}
+          sonar-status: ${{ inputs.sonarCloudProjectName != '' && steps.sonarcloud-quality-gate-check.outputs.quality-gate-status || '' }}
 
       - name: Create package name
         if: github.ref_type == 'tag'
