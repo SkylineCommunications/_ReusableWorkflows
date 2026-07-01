@@ -66,7 +66,10 @@ jobs:
     name: Test Downstream Repos
     if: >-
       github.event.issue.pull_request
-      && github.event.comment.body == '/test'
+      && (
+        github.event.comment.body == '/test'
+        || github.event.comment.body == '/test-all'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -132,17 +135,24 @@ jobs:
 
       - name: Determine target repos
         id: targets
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
+          command="$COMMENT_BODY"
           changed_workflows="${{ steps.changed-files.outputs.changed_workflows }}"
 
-          # Filter DOWNSTREAM_MAP to repos whose workflows were changed
-          target_repos=$(echo '${{ env.DOWNSTREAM_MAP }}' | jq -r --arg changed "$changed_workflows" '
-            # Split changed files into an array
-            ($changed | split("\n") | map(select(. != ""))) as $changed_files |
-            # Keep only entries where at least one workflow matches a changed file
-            map(select(.workflows as $wfs | $changed_files | any(. as $cf | $wfs | any(. == $cf)))) |
-            .[].repo
-          ')
+          if [[ "$command" == "/test-all" ]]; then
+            target_repos=$(echo '${{ env.DOWNSTREAM_MAP }}' | jq -r '.[].repo')
+          else
+            # Filter DOWNSTREAM_MAP to repos whose workflows were changed
+            target_repos=$(echo '${{ env.DOWNSTREAM_MAP }}' | jq -r --arg changed "$changed_workflows" '
+              # Split changed files into an array
+              ($changed | split("\n") | map(select(. != ""))) as $changed_files |
+              # Keep only entries where at least one workflow matches a changed file
+              map(select(.workflows as $wfs | $changed_files | any(. as $cf | $wfs | any(. == $cf)))) |
+              .[].repo
+            ')
+          fi
 
           if [[ -z "$target_repos" ]]; then
             echo "No target repos affected by the changed workflow files."
