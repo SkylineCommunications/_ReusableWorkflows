@@ -1,0 +1,55 @@
+name: Setup Skyline NuGet sources
+description: >
+  Registers all Skyline NuGet sources: the SkylineCommunications and
+  SkylineCommunicationsCore GitHub Packages feeds, plus the Skyline Cloud
+  and Private Azure DevOps feeds. Existing sources with the same name are
+  updated in place so the step is idempotent.
+
+inputs:
+  skylinecommunications-github-token:
+    description: Token used to authenticate against the SkylineCommunications GitHub Packages feed. Optional; the feed is skipped when empty.
+    required: false
+    default: ""
+  skylinecommunicationscore-github-token:
+    description: Token used to authenticate against the SkylineCommunicationsCore GitHub Packages feed. Optional; the feed is skipped when empty.
+    required: false
+    default: ""
+  azure-token:
+    description: Token used to authenticate against the Skyline Azure DevOps NuGet feeds. Optional; the Azure feeds are skipped when empty.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Register SkylineCommunications GitHub NuGet source
+      if: ${{ inputs.skylinecommunications-github-token != '' }}
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+      with:
+        organization: SkylineCommunications
+        token: ${{ inputs.skylinecommunications-github-token }}
+        name: PrivateGitHubNugets
+
+    - name: Register SkylineCommunicationsCore GitHub NuGet source
+      if: ${{ inputs.skylinecommunicationscore-github-token != '' }}
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+      with:
+        organization: SkylineCommunicationsCore
+        token: ${{ inputs.skylinecommunicationscore-github-token }}
+        name: SkylineCommunicationsCoreGitHubNugets
+
+    - name: Register Skyline Cloud NuGet source
+      if: ${{ inputs.azure-token != '' }}
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@main
+      with:
+        url: https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json
+        token: ${{ inputs.azure-token }}
+        name: CloudNuGets
+
+    - name: Register Skyline Private Azure NuGet source
+      if: ${{ inputs.azure-token != '' }}
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@main
+      with:
+        url: https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json
+        token: ${{ inputs.azure-token }}
+        name: PrivateAzureNuGets
