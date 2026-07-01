@@ -15,10 +15,11 @@ The action is idempotent: re-running updates existing sources in place.
 
 ## Inputs
 
-| Input | Required | Description |
-| --- | --- | --- |
-| `github-token` | yes | Token used to authenticate against both GitHub Packages feeds. |
-| `azure-token` | yes | Token used to authenticate against the Skyline Azure DevOps NuGet feeds. |
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `skylinecommunications-github-token` | no | `""` | Token used to authenticate against the SkylineCommunications GitHub Packages feed. The feed is skipped when empty. |
+| `skylinecommunicationscore-github-token` | no | `""` | Token used to authenticate against the SkylineCommunicationsCore GitHub Packages feed. The feed is skipped when empty. |
+| `azure-token` | no | `""` | Token used to authenticate against the Skyline Azure DevOps NuGet feeds. Both Azure feeds are skipped when empty. |
 
 ## Outputs
 
@@ -34,7 +35,7 @@ permissions:
   packages: read
 ```
 
-The GitHub token must be allowed to read packages from both Skyline GitHub organizations. The Azure token must be allowed to read packages from the Skyline Azure DevOps feeds.
+Each GitHub token must be allowed to read packages from its matching Skyline GitHub organization. The Azure token must be allowed to read packages from the Skyline Azure DevOps feeds.
 
 ## Used by
 
@@ -47,6 +48,15 @@ The GitHub token must be allowed to read packages from both Skyline GitHub organ
 ```yaml
 - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
   with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
+    skylinecommunications-github-token: ${{ secrets.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
+    skylinecommunicationscore-github-token: ${{ secrets.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
     azure-token: ${{ env.AZURE_TOKEN }}
+```
+
+### GitHub feed only
+
+```yaml
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+  with:
+    skylinecommunications-github-token: ${{ secrets.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
 ```

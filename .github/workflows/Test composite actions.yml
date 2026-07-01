@@ -195,7 +195,8 @@ jobs:
       - name: Invoke composite
         uses: ./.github/actions/setup-skyline-nuget-sources
         with:
-          github-token: fake-token
+          skylinecommunications-github-token: fake-token
+          skylinecommunicationscore-github-token: fake-token
           azure-token: fake-token
 
       - name: Assert sources registered
@@ -208,7 +209,8 @@ jobs:
       - name: Re-invoke (idempotency check)
         uses: ./.github/actions/setup-skyline-nuget-sources
         with:
-          github-token: fake-token
+          skylinecommunications-github-token: fake-token
+          skylinecommunicationscore-github-token: fake-token
           azure-token: fake-token
 
       - name: Assert still exactly one entry per source
@@ -217,6 +219,24 @@ jobs:
           test "$(dotnet nuget list source | grep -c SkylineCommunicationsCoreGitHubNugets)" -eq 1
           test "$(dotnet nuget list source | grep -c CloudNuGets)" -eq 1
           test "$(dotnet nuget list source | grep -c PrivateAzureNuGets)" -eq 1
+
+  setup-skyline-nuget-sources-skip-empty-tokens:
+    name: setup-skyline-nuget-sources (skip empty tokens)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Invoke composite with only Core GitHub token
+        uses: ./.github/actions/setup-skyline-nuget-sources
+        with:
+          skylinecommunicationscore-github-token: fake-token
+
+      - name: Assert only Core source registered
+        run: |
+          dotnet nuget list source | grep -q SkylineCommunicationsCoreGitHubNugets
+          test "$(dotnet nuget list source | grep -c PrivateGitHubNugets)" -eq 0
+          test "$(dotnet nuget list source | grep -c CloudNuGets)" -eq 0
+          test "$(dotnet nuget list source | grep -c PrivateAzureNuGets)" -eq 0
 
   validate-inputs:
     name: validate-inputs
