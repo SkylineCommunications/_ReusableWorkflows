@@ -20,7 +20,7 @@ on:
         type: string
 
       sonarcloud-project-name:
-        required: true
+        required: false
         type: string
 
       configuration:
@@ -205,7 +205,7 @@ jobs:
           dataminer-token: ${{ env.DATAMINER_TOKEN }}
           repository: ${{ github.repository }}
           has-dataminer-projects: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
-          check-sonar: ${{ github.actor != 'dependabot[bot]' }}
+          check-sonar: ${{ github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' }}
           check-dataminer: ${{ github.ref_type == 'tag' && needs.discover_projects.outputs.has-dataminer-projects == 'true' }}
 
       - name: Enable long paths
@@ -232,8 +232,9 @@ jobs:
         env:
           GH_ACTOR: ${{ github.actor }}
           HAS_DM_PROJECTS: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
+          SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
         run: |
-          if [[ "$GH_ACTOR" != "dependabot[bot]" ]]; then
+          if [[ "$GH_ACTOR" != "dependabot[bot]" ]] && [[ -n "$SONAR_PROJECT_NAME" ]]; then
             dotnet tool install dotnet-sonarscanner --global
           fi
 
@@ -288,14 +289,14 @@ jobs:
       # ──────────────────────────────────────────────────────────────
 
       - name: Prepare SonarCloud Variables
-        if: github.actor != 'dependabot[bot]'
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != ''
         id: prepSonarCloudVar
         env:
           OWNER: ${{ github.repository_owner }}
         run: echo "lowerCaseOwner=${OWNER,,}" >> "$GITHUB_ENV"
 
       - name: Get SonarCloud Status
-        if: github.actor != 'dependabot[bot]'
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != ''
         id: get-sonarcloud-status
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@main
         with:
@@ -305,7 +306,7 @@ jobs:
           repository: ${{ github.repository }}
 
       - name: Trigger Initial Analysis
-        if: github.actor != 'dependabot[bot]' && steps.get-sonarcloud-status.outputs.needs-initial-analysis == 'true'
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && steps.get-sonarcloud-status.outputs.needs-initial-analysis == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
@@ -330,7 +331,7 @@ jobs:
         continue-on-error: true
 
       - name: Start Analysis
-        if: github.actor != 'dependabot[bot]'
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
@@ -396,7 +397,7 @@ jobs:
           configuration: ${{ inputs.configuration }}
 
       - name: Stop Analysis
-        if: github.actor != 'dependabot[bot]'
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MSYS_NO_PATHCONV: '1'
@@ -405,7 +406,7 @@ jobs:
         continue-on-error: true
 
       - name: SonarCloud Quality Gate check
-        if: github.actor != 'dependabot[bot]'
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != ''
         id: sonarcloud-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@8e9b0ca0a7273d6f16986388d98393efdfcf56fd
         with:
@@ -419,8 +420,8 @@ jobs:
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@main
         with:
           unit-tests-outcome: ${{ steps.unit-tests.outcome }}
-          sonar-outcome: ${{ steps.sonarcloud-quality-gate-check.outcome }}
-          sonar-status: ${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}
+          sonar-outcome: ${{ inputs.sonarcloud-project-name != '' && steps.sonarcloud-quality-gate-check.outcome || '' }}
+          sonar-status: ${{ inputs.sonarcloud-project-name != '' && steps.sonarcloud-quality-gate-check.outputs.quality-gate-status || '' }}
           dependabot-bypass: ${{ github.actor == 'dependabot[bot]' }}
 
       # ──────────────────────────────────────────────────────────────
