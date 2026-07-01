@@ -36,6 +36,8 @@ Usage examples in each action README are sourced from the master workflows in
 | `guard-trigger` | Blocks unsupported `pull_request_target` executions. | [guard-trigger/README.md](guard-trigger/README.md) |
 | `resolve-oidc` | Resolves Azure OIDC values and exposes `use-oidc`. | [resolve-oidc/README.md](resolve-oidc/README.md) |
 | `load-secrets` | Loads Key Vault secrets and applies caller overrides. | [load-secrets/README.md](load-secrets/README.md) |
+| `add-github-nuget-source` | Registers a GitHub Packages NuGet source. | [add-github-nuget-source/README.md](add-github-nuget-source/README.md) |
+| `add-azure-nuget-source` | Registers an Azure DevOps NuGet source by URL. | [add-azure-nuget-source/README.md](add-azure-nuget-source/README.md) |
 | `setup-nuget-sources` | Registers GitHub and optional Skyline NuGet feeds. | [setup-nuget-sources/README.md](setup-nuget-sources/README.md) |
 | `validate-inputs` | Validates mandatory Sonar/DataMiner inputs based on context. | [validate-inputs/README.md](validate-inputs/README.md) |
 | `update-global-json-sdks` | Rewrites managed `msbuild-sdks` versions in `global.json`. | [update-global-json-sdks/README.md](update-global-json-sdks/README.md) |

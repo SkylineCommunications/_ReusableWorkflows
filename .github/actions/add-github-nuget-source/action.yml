@@ -1,0 +1,27 @@
+name: Add GitHub NuGet source
+description: >
+  Registers a GitHub Packages NuGet source for the specified organization.
+  Existing sources with the same name are updated in place so the step is idempotent.
+
+inputs:
+  organization:
+    description: GitHub organization or owner that hosts the NuGet feed.
+    required: true
+  token:
+    description: Token used to authenticate against the GitHub Packages feed.
+    required: true
+  name:
+    description: Optional NuGet source name. Defaults to a name derived from `organization`.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Add GitHub NuGet source
+      shell: pwsh
+      env:
+        ORGANIZATION: ${{ inputs.organization }}
+        TOKEN: ${{ inputs.token }}
+        SOURCE_NAME: ${{ inputs.name }}
+      run: ${{ github.action_path }}/add-github-nuget-source.ps1

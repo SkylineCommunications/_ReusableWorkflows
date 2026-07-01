@@ -130,6 +130,62 @@ jobs:
           count=$(dotnet nuget list source | grep -c PrivateGitHubNugets)
           test "$count" -eq 1
 
+  add-github-nuget-source:
+    name: add-github-nuget-source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Invoke composite
+        uses: ./.github/actions/add-github-nuget-source
+        with:
+          organization: ExampleOrganization
+          token: fake-token
+          name: TestGitHubNuGets
+
+      - name: Assert source registered
+        run: dotnet nuget list source | grep -q TestGitHubNuGets
+
+      - name: Re-invoke (idempotency check)
+        uses: ./.github/actions/add-github-nuget-source
+        with:
+          organization: ExampleOrganization
+          token: fake-token
+          name: TestGitHubNuGets
+
+      - name: Assert still exactly one entry
+        run: |
+          count=$(dotnet nuget list source | grep -c TestGitHubNuGets)
+          test "$count" -eq 1
+
+  add-azure-nuget-source:
+    name: add-azure-nuget-source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Invoke composite
+        uses: ./.github/actions/add-azure-nuget-source
+        with:
+          url: https://pkgs.dev.azure.com/example/project/_packaging/feed/nuget/v3/index.json
+          token: fake-token
+          name: TestAzureNuGets
+
+      - name: Assert source registered
+        run: dotnet nuget list source | grep -q TestAzureNuGets
+
+      - name: Re-invoke (idempotency check)
+        uses: ./.github/actions/add-azure-nuget-source
+        with:
+          url: https://pkgs.dev.azure.com/example/project/_packaging/feed/nuget/v3/index.json
+          token: fake-token
+          name: TestAzureNuGets
+
+      - name: Assert still exactly one entry
+        run: |
+          count=$(dotnet nuget list source | grep -c TestAzureNuGets)
+          test "$count" -eq 1
+
   validate-inputs:
     name: validate-inputs
     runs-on: ubuntu-latest

@@ -1,0 +1,27 @@
+name: Add Azure NuGet source
+description: >
+  Registers an Azure DevOps NuGet source by URL.
+  Existing sources with the same name are updated in place so the step is idempotent.
+
+inputs:
+  url:
+    description: Azure DevOps NuGet feed URL.
+    required: true
+  token:
+    description: Token used to authenticate against the Azure DevOps NuGet feed.
+    required: true
+  name:
+    description: Optional NuGet source name. Defaults to a name derived from `url`.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Add Azure NuGet source
+      shell: pwsh
+      env:
+        URL: ${{ inputs.url }}
+        TOKEN: ${{ inputs.token }}
+        SOURCE_NAME: ${{ inputs.name }}
+      run: ${{ github.action_path }}/add-azure-nuget-source.ps1
