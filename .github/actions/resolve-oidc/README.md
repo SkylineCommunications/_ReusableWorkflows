@@ -4,9 +4,10 @@ Resolves Azure OIDC settings used by `azure/login` and downstream secret-loading
 
 Resolution order:
 
-1. Use explicit caller-provided inputs when present.
-2. Else use Skyline defaults when `repository-owner == SkylineCommunications`.
-3. Else set `use-oidc=false`.
+1. Set `use-oidc=false` for pull requests from forks.
+2. Use explicit caller-provided inputs when present.
+3. Else use Skyline defaults when `repository-owner` is Skyline-managed according to [is-skyline-managed-org](../is-skyline-managed-org/README.md).
+4. Else set `use-oidc=false`.
 
 ## Inputs
 
@@ -16,6 +17,7 @@ Resolution order:
 | `tenant-id` | no | `""` | Caller-provided OIDC tenant id. |
 | `subscription-id` | no | `""` | Caller-provided OIDC subscription id. |
 | `repository-owner` | yes | - | Repository owner, typically `${{ github.repository_owner }}`. |
+| `is-fork` | no | `false` | Set to `true` for pull requests from forks, where OIDC is unavailable. |
 
 ## Outputs
 
@@ -25,6 +27,7 @@ Resolution order:
 | `tenant-id` | Resolved tenant id. |
 | `subscription-id` | Resolved subscription id. |
 | `use-oidc` | `true` when OIDC can be used, else `false`. |
+| `is-skyline-managed` | `true` when the repository owner is Skyline-managed; otherwise `false`. |
 
 ## Used by
 

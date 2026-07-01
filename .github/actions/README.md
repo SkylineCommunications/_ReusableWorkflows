@@ -34,6 +34,7 @@ Usage examples in each action README are sourced from the master workflows in
 | Action | What it does | Docs |
 | --- | --- | --- |
 | `guard-trigger` | Blocks unsupported `pull_request_target` executions. | [guard-trigger/README.md](guard-trigger/README.md) |
+| `is-skyline-managed-org` | Checks whether a repository owner is Skyline-managed. | [is-skyline-managed-org/README.md](is-skyline-managed-org/README.md) |
 | `resolve-oidc` | Resolves Azure OIDC values and exposes `use-oidc`. | [resolve-oidc/README.md](resolve-oidc/README.md) |
 | `load-secrets` | Loads Key Vault secrets and applies caller overrides. | [load-secrets/README.md](load-secrets/README.md) |
 | `add-github-nuget-source` | Registers a GitHub Packages NuGet source. | [add-github-nuget-source/README.md](add-github-nuget-source/README.md) |

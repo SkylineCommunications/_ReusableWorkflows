@@ -2,8 +2,8 @@ name: Resolve OIDC parameters
 description: >
   Determines the Azure OIDC client id, tenant id, and subscription id
   to use for `azure/login`. Returns the caller-provided values when
-  given, falls back to the SkylineCommunications defaults when running
-  inside that organization, and otherwise signals that OIDC must not
+  given, falls back to the Skyline-managed defaults when running inside
+  a managed organization, and otherwise signals that OIDC must not
   be attempted.
 
 inputs:
@@ -20,8 +20,12 @@ inputs:
     required: false
     default: ""
   repository-owner:
-    description: The repository owner (`github.repository_owner`). Used to enable Skyline defaults.
+    description: The repository owner (`github.repository_owner`). Used to enable Skyline-managed defaults.
     required: true
+  is-fork:
+    description: '`true` when the run is for a pull request from a fork. Forks cannot use OIDC.'
+    required: false
+    default: "false"
 
 outputs:
   client-id:
@@ -36,10 +40,20 @@ outputs:
   use-oidc:
     description: '`true` when OIDC parameters were resolved, `false` otherwise.'
     value: ${{ steps.set_oidc.outputs.use-oidc }}
+  is-skyline-managed:
+    description: '`true` when the repository owner is Skyline-managed; otherwise `false`.'
+    value: ${{ steps.skyline-managed-org.outputs.is-skyline-managed }}
 
 runs:
   using: composite
   steps:
+    - name: Check Skyline-managed organization
+      id: skyline-managed-org
+      shell: bash
+      env:
+        REPOSITORY_OWNER: ${{ inputs.repository-owner }}
+      run: bash "${{ github.action_path }}/../is-skyline-managed-org/is-skyline-managed-org.sh"
+
     - name: Set Azure OIDC parameters
       id: set_oidc
       shell: bash
@@ -47,11 +61,15 @@ runs:
         OIDC_CLIENT_ID: ${{ inputs.client-id }}
         OIDC_TENANT_ID: ${{ inputs.tenant-id }}
         OIDC_SUBSCRIPTION_ID: ${{ inputs.subscription-id }}
-        REPO_OWNER: ${{ inputs.repository-owner }}
+        IS_FORK: ${{ inputs.is-fork }}
+        IS_SKYLINE_MANAGED: ${{ steps.skyline-managed-org.outputs.is-skyline-managed }}
       run: |
         echo "Determining Azure OIDC parameters..."
 
-        if [[ -n "$OIDC_CLIENT_ID" ]]; then
+        if [[ "$IS_FORK" == "true" ]]; then
+          echo "OIDC is disabled for pull requests from forks."
+          echo "use-oidc=false" >> "$GITHUB_OUTPUT"
+        elif [[ -n "$OIDC_CLIENT_ID" ]]; then
           echo "Using provided OIDC parameters"
           {
             echo "client-id=$OIDC_CLIENT_ID"
@@ -59,8 +77,8 @@ runs:
             echo "subscription-id=$OIDC_SUBSCRIPTION_ID"
             echo "use-oidc=true"
           } >> "$GITHUB_OUTPUT"
-        elif [[ "$REPO_OWNER" == "SkylineCommunications" ]]; then
-          echo "Using SkylineCommunications default OIDC parameters"
+        elif [[ "$IS_SKYLINE_MANAGED" == "true" ]]; then
+          echo "Using Skyline-managed default OIDC parameters"
           {
             echo "client-id=c50da9cc-ba14-4138-8595-a62d97ab0e53"
             echo "tenant-id=5f175691-8d1c-4932-b7c8-ce990839ac40"
@@ -68,6 +86,6 @@ runs:
             echo "use-oidc=true"
           } >> "$GITHUB_OUTPUT"
         else
-          echo "No OIDC parameters provided and owner does not match SkylineCommunications"
+          echo "No OIDC parameters provided and owner is not Skyline-managed"
           echo "use-oidc=false" >> "$GITHUB_OUTPUT"
         fi

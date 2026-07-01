@@ -4,7 +4,7 @@ Registers NuGet feeds required by the reusable workflows.
 
 Always registers the owner-scoped GitHub Packages feed and can also register Skyline Azure feeds. The action is idempotent: re-running updates existing sources in place.
 
-This action composes [add-github-nuget-source](../add-github-nuget-source/README.md) and [add-azure-nuget-source](../add-azure-nuget-source/README.md) while preserving the legacy source names used by existing workflows.
+This action composes [add-github-nuget-source](../add-github-nuget-source/README.md), [add-azure-nuget-source](../add-azure-nuget-source/README.md), and [is-skyline-managed-org](../is-skyline-managed-org/README.md) while preserving the legacy source names used by existing workflows.
 
 ## Inputs
 
@@ -13,7 +13,8 @@ This action composes [add-github-nuget-source](../add-github-nuget-source/README
 | `repository-owner` | yes | - | Repository owner (`github.repository_owner`). |
 | `github-token` | yes | - | Token for GitHub Packages authentication. |
 | `azure-token` | no | `""` | PAT for Skyline Azure DevOps feeds. |
-| `include-skyline` | no | `auto` | `true`, `false`, or `auto` (enabled only for Skyline owner). |
+| `include-skyline` | no | `auto` | `true`, `false`, or `auto` (enabled only for owners allowed by `is-skyline-managed-org`). |
+| `public-only` | no | `false` | When `true`, registers only the GitHub Packages feed and skips private Azure feeds. |
 
 ## Outputs
 
@@ -44,6 +45,16 @@ No explicit outputs.
     repository-owner: ${{ github.repository_owner }}
     github-token: ${{ secrets.GITHUB_TOKEN }}
     include-skyline: 'false'
+```
+
+### Forked pull request / public-only mode
+
+```yaml
+- uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
+  with:
+    repository-owner: ${{ github.repository_owner }}
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    public-only: 'true'
 ```
 
 ## Notes

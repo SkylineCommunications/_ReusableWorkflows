@@ -87,7 +87,23 @@ jobs:
       tenant-id: ${{ steps.resolve.outputs.tenant-id }}
       subscription-id: ${{ steps.resolve.outputs.subscription-id }}
       use-oidc: ${{ steps.resolve.outputs.use-oidc }}
+      is-skyline-managed: ${{ steps.resolve.outputs.is-skyline-managed }}
+      is-fork: ${{ steps.detect-fork.outputs.is-fork }}
     steps:
+      - name: Detect forked pull request
+        id: detect-fork
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$REPOSITORY" ]]; then
+            echo "is-fork=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-fork=false" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
       - id: resolve
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
         with:
@@ -95,6 +111,7 @@ jobs:
           tenant-id: ${{ inputs.oidc-tenant-id }}
           subscription-id: ${{ inputs.oidc-subscription-id }}
           repository-owner: ${{ github.repository_owner }}
+          is-fork: ${{ steps.detect-fork.outputs.is-fork }}
 
   discover_projects:
     name: Discover Project Types
@@ -227,6 +244,7 @@ jobs:
           repository-owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           azure-token: ${{ env.AZURE_TOKEN }}
+          public-only: ${{ needs.check_oidc.outputs.is-fork }}
 
       - name: Install .NET tools
         env:
@@ -267,9 +285,9 @@ jobs:
         if: github.actor != 'dependabot[bot]'
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-          REPO_OWNER: ${{ github.repository_owner }}
+          IS_SKYLINE_MANAGED: ${{ needs.check_oidc.outputs.is-skyline-managed }}
         run: |
-          $minimal = "$env:REPO_OWNER" -ne "SkylineCommunications"
+          $minimal = "$env:IS_SKYLINE_MANAGED" -ne "true"
           NuGetValidateSkylineSpecifications --solution-filepath "$env:SOLUTION_PATH" --minimal $minimal
         shell: pwsh
 
