@@ -2,7 +2,7 @@ name: Setup NuGet sources
 description: >
   Registers the NuGet sources required by Skyline reusable workflows:
   the per-owner GitHub Packages feed, and (when running inside
-  SkylineCommunications) the Skyline Cloud and Private Azure feeds.
+  a Skyline-managed organization) the Skyline Cloud and Private Azure feeds.
   Existing sources with the same name are updated in place so the
   step is idempotent.
 
@@ -21,14 +21,24 @@ inputs:
     description: >
       When `true`, register the Skyline Cloud + Private Azure NuGet
       feeds in addition to GitHub Packages. Defaults to `auto`, which
-      enables them only when `repository-owner` is
-      `SkylineCommunications`.
+      enables them only for Skyline-managed repository owners.
     required: false
     default: auto
+  public-only:
+    description: When `true`, register only public/package-registry feeds and skip private Azure feeds.
+    required: false
+    default: "false"
 
 runs:
   using: composite
   steps:
+    - name: Check Skyline-managed organization
+      id: skyline-managed-org
+      shell: bash
+      env:
+        REPOSITORY_OWNER: ${{ inputs.repository-owner }}
+      run: bash "${{ github.action_path }}/../is-skyline-managed-org/is-skyline-managed-org.sh"
+
     - name: Register GitHub NuGet source
       uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
       with:
@@ -37,7 +47,7 @@ runs:
         name: PrivateGitHubNugets
 
     - name: Register Skyline Cloud NuGet source
-      if: ${{ inputs.azure-token != '' && (inputs.include-skyline == 'true' || (inputs.include-skyline != 'false' && inputs.repository-owner == 'SkylineCommunications')) }}
+      if: ${{ inputs.public-only != 'true' && inputs.azure-token != '' && (inputs.include-skyline == 'true' || (inputs.include-skyline != 'false' && steps.skyline-managed-org.outputs.is-skyline-managed == 'true')) }}
       uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@main
       with:
         url: https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json
@@ -45,7 +55,7 @@ runs:
         name: CloudNuGets
 
     - name: Register Skyline Private Azure NuGet source
-      if: ${{ inputs.azure-token != '' && (inputs.include-skyline == 'true' || (inputs.include-skyline != 'false' && inputs.repository-owner == 'SkylineCommunications')) }}
+      if: ${{ inputs.public-only != 'true' && inputs.azure-token != '' && (inputs.include-skyline == 'true' || (inputs.include-skyline != 'false' && steps.skyline-managed-org.outputs.is-skyline-managed == 'true')) }}
       uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@main
       with:
         url: https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json

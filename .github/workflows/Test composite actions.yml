@@ -32,6 +32,40 @@ jobs:
       - name: Confirm pass
         run: echo "guard-trigger passed on event '${{ github.event_name }}'"
 
+  is-skyline-managed-org:
+    name: is-skyline-managed-org
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: SkylineCommunications is managed
+        id: skylinecommunications
+        uses: ./.github/actions/is-skyline-managed-org
+        with:
+          repository-owner: SkylineCommunications
+
+      - name: SkylineCommunicationsCore is managed
+        id: skylinecommunicationscore
+        uses: ./.github/actions/is-skyline-managed-org
+        with:
+          repository-owner: SkylineCommunicationsCore
+
+      - name: External owner is not managed
+        id: external
+        uses: ./.github/actions/is-skyline-managed-org
+        with:
+          repository-owner: SomeOtherOrg
+
+      - name: Assert managed organization outputs
+        env:
+          SKYLINECOMMUNICATIONS: ${{ steps.skylinecommunications.outputs.is-skyline-managed }}
+          SKYLINECOMMUNICATIONSCORE: ${{ steps.skylinecommunicationscore.outputs.is-skyline-managed }}
+          EXTERNAL: ${{ steps.external.outputs.is-skyline-managed }}
+        run: |
+          test "$SKYLINECOMMUNICATIONS" = "true"
+          test "$SKYLINECOMMUNICATIONSCORE" = "true"
+          test "$EXTERNAL" = "false"
+
   resolve-oidc:
     name: resolve-oidc
     runs-on: ubuntu-latest
@@ -68,6 +102,35 @@ jobs:
         run: |
           test "$USE_OIDC" = "true"
           test "$CLIENT_ID" = "c50da9cc-ba14-4138-8595-a62d97ab0e53"
+
+      - name: Skyline Core defaults
+        id: skyline-core
+        uses: ./.github/actions/resolve-oidc
+        with:
+          repository-owner: SkylineCommunicationsCore
+
+      - name: Assert Skyline Core defaults
+        env:
+          USE_OIDC: ${{ steps.skyline-core.outputs.use-oidc }}
+          CLIENT_ID: ${{ steps.skyline-core.outputs.client-id }}
+        run: |
+          test "$USE_OIDC" = "true"
+          test "$CLIENT_ID" = "c50da9cc-ba14-4138-8595-a62d97ab0e53"
+
+      - name: Forked pull request disables OIDC
+        id: fork
+        uses: ./.github/actions/resolve-oidc
+        with:
+          client-id: 11111111-1111-1111-1111-111111111111
+          tenant-id: 22222222-2222-2222-2222-222222222222
+          subscription-id: 33333333-3333-3333-3333-333333333333
+          repository-owner: SkylineCommunications
+          is-fork: 'true'
+
+      - name: Assert forked pull request disables OIDC
+        env:
+          USE_OIDC: ${{ steps.fork.outputs.use-oidc }}
+        run: test "$USE_OIDC" = "false"
 
       - name: External owner, no inputs
         id: external
@@ -129,6 +192,33 @@ jobs:
         run: |
           count=$(dotnet nuget list source | grep -c PrivateGitHubNugets)
           test "$count" -eq 1
+
+      - name: Invoke composite in public-only mode for Skyline Core
+        uses: ./.github/actions/setup-nuget-sources
+        with:
+          repository-owner: SkylineCommunicationsCore
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          azure-token: fake-token
+          public-only: 'true'
+
+      - name: Assert public-only skips Azure sources
+        run: |
+          if dotnet nuget list source | grep -q PrivateAzureNuGets; then
+            echo "Private Azure source should not be registered in public-only mode."
+            exit 1
+          fi
+
+      - name: Invoke composite with Skyline Core auto feeds
+        uses: ./.github/actions/setup-nuget-sources
+        with:
+          repository-owner: SkylineCommunicationsCore
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          azure-token: fake-token
+
+      - name: Assert Skyline Core auto registers Azure sources
+        run: |
+          dotnet nuget list source | grep -q CloudNuGets
+          dotnet nuget list source | grep -q PrivateAzureNuGets
 
   add-github-nuget-source:
     name: add-github-nuget-source

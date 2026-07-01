@@ -1,0 +1,22 @@
+name: Check Skyline-managed organization
+description: Checks whether a repository owner is in the Skyline-managed organization allowlist.
+
+inputs:
+  repository-owner:
+    description: The repository owner (`github.repository_owner`) to check.
+    required: true
+
+outputs:
+  is-skyline-managed:
+    description: '`true` when the repository owner is Skyline-managed; otherwise `false`.'
+    value: ${{ steps.check.outputs.is-skyline-managed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check Skyline-managed organization
+      id: check
+      shell: bash
+      env:
+        REPOSITORY_OWNER: ${{ inputs.repository-owner }}
+      run: bash "${{ github.action_path }}/is-skyline-managed-org.sh"
