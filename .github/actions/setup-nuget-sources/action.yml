@@ -29,11 +29,25 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Register NuGet sources
-      shell: pwsh
-      env:
-        REPO_OWNER: ${{ inputs.repository-owner }}
-        GH_TOKEN: ${{ inputs.github-token }}
-        AZURE_TOKEN: ${{ inputs.azure-token }}
-        INCLUDE_SKYLINE: ${{ inputs.include-skyline }}
-      run: ${{ github.action_path }}/setup-nuget-sources.ps1
+    - name: Register GitHub NuGet source
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+      with:
+        organization: ${{ inputs.repository-owner }}
+        token: ${{ inputs.github-token }}
+        name: PrivateGitHubNugets
+
+    - name: Register Skyline Cloud NuGet source
+      if: ${{ inputs.azure-token != '' && (inputs.include-skyline == 'true' || (inputs.include-skyline != 'false' && inputs.repository-owner == 'SkylineCommunications')) }}
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@main
+      with:
+        url: https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json
+        token: ${{ inputs.azure-token }}
+        name: CloudNuGets
+
+    - name: Register Skyline Private Azure NuGet source
+      if: ${{ inputs.azure-token != '' && (inputs.include-skyline == 'true' || (inputs.include-skyline != 'false' && inputs.repository-owner == 'SkylineCommunications')) }}
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@main
+      with:
+        url: https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json
+        token: ${{ inputs.azure-token }}
+        name: PrivateAzureNuGets

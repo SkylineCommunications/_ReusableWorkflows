@@ -186,6 +186,38 @@ jobs:
           count=$(dotnet nuget list source | grep -c TestAzureNuGets)
           test "$count" -eq 1
 
+  setup-skyline-nuget-sources:
+    name: setup-skyline-nuget-sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Invoke composite
+        uses: ./.github/actions/setup-skyline-nuget-sources
+        with:
+          github-token: fake-token
+          azure-token: fake-token
+
+      - name: Assert sources registered
+        run: |
+          dotnet nuget list source | grep -q PrivateGitHubNugets
+          dotnet nuget list source | grep -q SkylineCommunicationsCoreGitHubNugets
+          dotnet nuget list source | grep -q CloudNuGets
+          dotnet nuget list source | grep -q PrivateAzureNuGets
+
+      - name: Re-invoke (idempotency check)
+        uses: ./.github/actions/setup-skyline-nuget-sources
+        with:
+          github-token: fake-token
+          azure-token: fake-token
+
+      - name: Assert still exactly one entry per source
+        run: |
+          test "$(dotnet nuget list source | grep -c PrivateGitHubNugets)" -eq 1
+          test "$(dotnet nuget list source | grep -c SkylineCommunicationsCoreGitHubNugets)" -eq 1
+          test "$(dotnet nuget list source | grep -c CloudNuGets)" -eq 1
+          test "$(dotnet nuget list source | grep -c PrivateAzureNuGets)" -eq 1
+
   validate-inputs:
     name: validate-inputs
     runs-on: ubuntu-latest

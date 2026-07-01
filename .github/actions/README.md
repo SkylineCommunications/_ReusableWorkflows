@@ -39,6 +39,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `add-github-nuget-source` | Registers a GitHub Packages NuGet source. | [add-github-nuget-source/README.md](add-github-nuget-source/README.md) |
 | `add-azure-nuget-source` | Registers an Azure DevOps NuGet source by URL. | [add-azure-nuget-source/README.md](add-azure-nuget-source/README.md) |
 | `setup-nuget-sources` | Registers GitHub and optional Skyline NuGet feeds. | [setup-nuget-sources/README.md](setup-nuget-sources/README.md) |
+| `setup-skyline-nuget-sources` | Registers all Skyline GitHub and Azure NuGet feeds. | [setup-skyline-nuget-sources/README.md](setup-skyline-nuget-sources/README.md) |
 | `validate-inputs` | Validates mandatory Sonar/DataMiner inputs based on context. | [validate-inputs/README.md](validate-inputs/README.md) |
 | `update-global-json-sdks` | Rewrites managed `msbuild-sdks` versions in `global.json`. | [update-global-json-sdks/README.md](update-global-json-sdks/README.md) |
 | `apply-catalog-identifiers` | Rewrites manifest `id:` fields from mapping input. | [apply-catalog-identifiers/README.md](apply-catalog-identifiers/README.md) |

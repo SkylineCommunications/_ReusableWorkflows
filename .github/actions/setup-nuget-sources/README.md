@@ -4,6 +4,8 @@ Registers NuGet feeds required by the reusable workflows.
 
 Always registers the owner-scoped GitHub Packages feed and can also register Skyline Azure feeds. The action is idempotent: re-running updates existing sources in place.
 
+This action composes [add-github-nuget-source](../add-github-nuget-source/README.md) and [add-azure-nuget-source](../add-azure-nuget-source/README.md) while preserving the legacy source names used by existing workflows.
+
 ## Inputs
 
 | Input | Required | Default | Description |
