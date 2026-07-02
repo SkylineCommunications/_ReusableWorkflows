@@ -593,6 +593,42 @@ jobs:
           token: ${{ secrets.SONAR_TOKEN }}
           repository: ${{ github.repository }}
 
+  parse-rn-task-table:
+    name: parse-rn-task-table
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run 16-case parser corpus
+        shell: pwsh
+        run: ./.github/actions/parse-rn-task-table/test.ps1
+
+      - name: Invoke composite smoke test
+        id: rn-task
+        uses: ./.github/actions/parse-rn-task-table
+        with:
+          pr-body: |
+            | RN | Task |
+            | --- | --- |
+            | RN12 | DCP35 |
+          actor: human
+          labels-json: '["Change-Type:Major"]'
+
+      - name: Assert composite outputs
+        env:
+          STATUS: ${{ steps.rn-task.outputs.status }}
+          CHANGE_TYPE: ${{ steps.rn-task.outputs.change-type }}
+          RNS: ${{ steps.rn-task.outputs.rns }}
+          PAIRS: ${{ steps.rn-task.outputs.pairs }}
+        shell: pwsh
+        run: |
+          if ($env:STATUS -ne 'passed') { throw "Expected status passed, got '$env:STATUS'." }
+          if ($env:CHANGE_TYPE -ne 'Major') { throw "Expected change-type Major, got '$env:CHANGE_TYPE'." }
+          $rns = ConvertTo-Json -InputObject (ConvertFrom-Json -InputObject $env:RNS -NoEnumerate) -Compress -Depth 10
+          $pairs = ConvertTo-Json -InputObject (ConvertFrom-Json -InputObject $env:PAIRS -NoEnumerate) -Compress -Depth 10
+          if ($rns -ne '["RN12"]') { throw "Unexpected RN output: $rns" }
+          if ($pairs -ne '[{"rns":["RN12"],"tasks":["DCP35"]}]') { throw "Unexpected pairs output: $pairs" }
+
   quality-gate-summary:
     name: quality-gate-summary
     runs-on: ubuntu-latest

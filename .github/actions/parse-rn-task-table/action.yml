@@ -1,0 +1,46 @@
+name: Parse RN Task Table
+description: >
+  Parses the RN/Task markdown table from a pull request body, validates RN and
+  DCP task ids, resolves the Change-Type label, and renders a markdown summary
+  for a sticky PR comment.
+
+inputs:
+  pr-body:
+    description: The pull request description markdown.
+    required: true
+  actor:
+    description: The pull request author login. Used for the dependabot[bot] task exception.
+    required: true
+  labels-json:
+    description: JSON array of pull request label names. Used to resolve Change-Type.
+    required: true
+
+outputs:
+  status:
+    description: Validation result, either passed or failed.
+    value: ${{ steps.parse.outputs.status }}
+  rns:
+    description: JSON array of all normalized RN ids found in the table.
+    value: ${{ steps.parse.outputs.rns }}
+  pairs:
+    description: JSON array of row groupings, each with rns and tasks arrays.
+    value: ${{ steps.parse.outputs.pairs }}
+  change-type:
+    description: Resolved change type, one of Patch, Minor, or Major.
+    value: ${{ steps.parse.outputs.change-type }}
+  comment-file:
+    description: Absolute path to the rendered markdown summary file.
+    value: ${{ steps.parse.outputs.comment-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Parse RN/Task table
+      id: parse
+      shell: pwsh
+      env:
+        PR_BODY: ${{ inputs.pr-body }}
+        ACTOR: ${{ inputs.actor }}
+        LABELS_JSON: ${{ inputs.labels-json }}
+        COMMENT_HEADER: skyline-rn-task
+      run: '& "$env:GITHUB_ACTION_PATH/parse-rn-task-table.ps1"'
