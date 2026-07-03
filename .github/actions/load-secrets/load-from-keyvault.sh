@@ -18,6 +18,17 @@ for secret_name in "${secret_names[@]}"; do
 
   secret_value=$(az keyvault secret show --vault-name "$VAULT_NAME" --name "$secret_name" --query value -o tsv)
 
-  echo "::add-mask::$secret_value"
-  echo "$env_var_name=$secret_value" >> "$GITHUB_ENV"
+  # Mask every line so multi-line secrets (e.g. PEM private keys) never leak in logs.
+  while IFS= read -r secret_line; do
+    [[ -n "$secret_line" ]] && echo "::add-mask::$secret_line"
+  done <<< "$secret_value"
+
+  # Write to $GITHUB_ENV using the heredoc form so multi-line values (e.g. PEM keys)
+  # are preserved. A random delimiter avoids clashing with the secret content.
+  delimiter="ghadelim_${secret_name}_${RANDOM}${RANDOM}"
+  {
+    printf '%s<<%s\n' "$env_var_name" "$delimiter"
+    printf '%s\n' "$secret_value"
+    printf '%s\n' "$delimiter"
+  } >> "$GITHUB_ENV"
 done

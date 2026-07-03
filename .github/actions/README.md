@@ -44,6 +44,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `validate-inputs` | Validates mandatory Sonar/DataMiner inputs based on context. | [validate-inputs/README.md](validate-inputs/README.md) |
 | `update-global-json-sdks` | Rewrites managed `msbuild-sdks` versions in `global.json`. | [update-global-json-sdks/README.md](update-global-json-sdks/README.md) |
 | `apply-catalog-identifiers` | Rewrites manifest `id:` fields from mapping input. | [apply-catalog-identifiers/README.md](apply-catalog-identifiers/README.md) |
+| `compute-next-version` | Computes the next SemVer version from the latest final tag + Change-Type bump. | [compute-next-version/README.md](compute-next-version/README.md) |
 | `apply-source-code-url` | Fills empty `source_code_url:` fields in catalog manifests. | [apply-source-code-url/README.md](apply-source-code-url/README.md) |
 | `sonarcloud-status` | Checks SonarCloud project status and emits analysis flag. | [sonarcloud-status/README.md](sonarcloud-status/README.md) |
 | `detect-test-runner` | Detects MTP or VSTest mode from `global.json`. | [detect-test-runner/README.md](detect-test-runner/README.md) |
