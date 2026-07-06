@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $actionDirectory = Split-Path -Parent $PSCommandPath
-$temporaryDirectory = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "parse-rn-task-table-$([System.Guid]::NewGuid())"
+$temporaryDirectory = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "references-parser-$([System.Guid]::NewGuid())"
 New-Item -Path $temporaryDirectory -ItemType Directory | Out-Null
 
 function Get-OutputValue {
@@ -69,12 +69,12 @@ function Invoke-ParserCase {
     $env:PR_BODY = $Body
     $env:ACTOR = $Actor
     $env:LABELS_JSON = $LabelsJson
-    $env:COMMENT_HEADER = 'skyline-rn-task'
+    $env:COMMENT_HEADER = 'skyline-references'
     $env:GITHUB_OUTPUT = $outputFile
     $env:GITHUB_STEP_SUMMARY = $summaryFile
     $env:GITHUB_WORKSPACE = $workspaceDirectory
 
-    & (Join-Path -Path $actionDirectory -ChildPath 'parse-rn-task-table.ps1')
+    & (Join-Path -Path $actionDirectory -ChildPath 'references-parser.ps1')
 
     $status = Get-OutputValue -Name 'status' -Path $outputFile
     $changeType = Get-OutputValue -Name 'change-type' -Path $outputFile
@@ -135,7 +135,7 @@ try {
 
     # Comment-format cases (lock the sticky-comment structure).
     Invoke-ParserCase -Name '17 comment format happy path' -Body "References: [RN12] [RN13] [DCP35]" -Actor 'human' -LabelsJson '["Change-Type:Minor"]' -ExpectedStatus 'passed' -ExpectedChangeType 'Minor' -ExpectedRnsJson '["RN12","RN13"]' -ExpectedTasksJson '["DCP35"]' -ExpectedCommentContains @(
-        '## PR RN/Task Validation: ✅ **Passed**',
+        '## PR References Validation: ✅ **Passed**',
         '| Status | ✅ |',
         '| Change-Type | Minor |',
         '**Release Notes**',
@@ -145,7 +145,7 @@ try {
         '- [DCP35](https://collaboration.dataminer.services/task/35)'
     ) -ExpectedCommentMissing @('Dependabot RN-only mode', '| RN(s) | Task(s) |', 'Parsed RN ids')
     Invoke-ParserCase -Name '18 comment format failed' -Body "References: [R12] [DCP35]" -Actor 'human' -LabelsJson '[]' -ExpectedStatus 'failed' -ExpectedChangeType '-' -ExpectedRnsJson '-' -ExpectedTasksJson '-' -ExpectedCommentContains @(
-        '## PR RN/Task Validation: ❌ **Failed**',
+        '## PR References Validation: ❌ **Failed**',
         '| Status | ❌ |',
         'Validation errors:'
     )
@@ -160,7 +160,7 @@ try {
         '- [DCP35](https://collaboration.dataminer.services/task/35)'
     )
 
-    Write-Output 'All parse-rn-task-table cases passed.'
+    Write-Output 'All references-parser cases passed.'
 } finally {
     Remove-Item -Path $temporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue
 }

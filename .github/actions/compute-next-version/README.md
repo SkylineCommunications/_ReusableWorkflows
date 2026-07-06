@@ -37,7 +37,7 @@ bumping from the same final version.
   id: version
   uses: SkylineCommunications/_ReusableWorkflows/.github/actions/compute-next-version@main
   with:
-    change-type: ${{ steps.rn-task.outputs.change-type }}
+    change-type: ${{ steps.references.outputs.change-type }}
     mode: prerelease
     suffix: dev-myfeature.42
 ```

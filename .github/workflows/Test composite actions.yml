@@ -593,19 +593,19 @@ jobs:
           token: ${{ secrets.SONAR_TOKEN }}
           repository: ${{ github.repository }}
 
-  parse-rn-task-table:
-    name: parse-rn-task-table
+  references-parser:
+    name: references-parser
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
       - name: Run 16-case parser corpus
         shell: pwsh
-        run: ./.github/actions/parse-rn-task-table/test.ps1
+        run: ./.github/actions/references-parser/test.ps1
 
       - name: Invoke composite smoke test
-        id: rn-task
-        uses: ./.github/actions/parse-rn-task-table
+        id: references
+        uses: ./.github/actions/references-parser
         with:
           pr-body: |
             Example change description.
@@ -616,10 +616,10 @@ jobs:
 
       - name: Assert composite outputs
         env:
-          STATUS: ${{ steps.rn-task.outputs.status }}
-          CHANGE_TYPE: ${{ steps.rn-task.outputs.change-type }}
-          RNS: ${{ steps.rn-task.outputs.rns }}
-          TASKS: ${{ steps.rn-task.outputs.tasks }}
+          STATUS: ${{ steps.references.outputs.status }}
+          CHANGE_TYPE: ${{ steps.references.outputs.change-type }}
+          RNS: ${{ steps.references.outputs.rns }}
+          TASKS: ${{ steps.references.outputs.tasks }}
         shell: pwsh
         run: |
           if ($env:STATUS -ne 'passed') { throw "Expected status passed, got '$env:STATUS'." }
