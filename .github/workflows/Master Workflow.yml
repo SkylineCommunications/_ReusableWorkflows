@@ -247,6 +247,8 @@ jobs:
           secret-names: |
             azure-token
             sonar-token
+            skylinecommunications-github-token
+            skylinecommunicationscore-github-token
             ${{ needs.discover_projects.outputs.has-dataminer-projects == 'true' && 'dataminer-token' || '' }}
           overrides: |
             AZURE_TOKEN=${{ secrets.AZURE_TOKEN }}
@@ -277,13 +279,24 @@ jobs:
         with:
           packages: mono-complete
       
-      - name: Setup NuGet sources
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
+      # Skyline-managed repos register BOTH organizations' GitHub Packages feeds
+      # (cross-org restore needs the Key Vault tokens - the default GITHUB_TOKEN only
+      # reads its own org) + the Skyline Azure feeds. Non-Skyline owners and fork PRs
+      # (no Key Vault) fall back to just their own organization's feed.
+      - name: Setup Skyline NuGet sources
+        if: needs.check_oidc.outputs.is-skyline-managed == 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
         with:
-          repository-owner: ${{ github.repository_owner }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
+          skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
           azure-token: ${{ env.AZURE_TOKEN }}
-          public-only: ${{ needs.check_oidc.outputs.is-fork }}
+
+      - name: Setup local GitHub NuGet source
+        if: needs.check_oidc.outputs.is-skyline-managed != 'true' || needs.check_oidc.outputs.is-fork == 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+        with:
+          organization: ${{ github.repository_owner }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install .NET tools
         env:
@@ -504,17 +517,27 @@ jobs:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
             azure-token
+            skylinecommunications-github-token
+            skylinecommunicationscore-github-token
           overrides: |
             AZURE_TOKEN=${{ secrets.AZURE_TOKEN }}
 
       - uses: actions/checkout@v7
 
-      - name: Setup NuGet sources
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
+      - name: Setup Skyline NuGet sources
+        if: needs.check_oidc.outputs.is-skyline-managed == 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
         with:
-          repository-owner: ${{ github.repository_owner }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
+          skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
           azure-token: ${{ env.AZURE_TOKEN }}
+
+      - name: Setup local GitHub NuGet source
+        if: needs.check_oidc.outputs.is-skyline-managed != 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+        with:
+          organization: ${{ github.repository_owner }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dataminer-sbom
         if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
@@ -570,6 +593,8 @@ jobs:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
             azure-token
+            skylinecommunications-github-token
+            skylinecommunicationscore-github-token
             signing-client-id
             signing-client-secret
             signing-tenant-id
@@ -588,12 +613,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup NuGet sources
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
+      - name: Setup Skyline NuGet sources
+        if: needs.check_oidc.outputs.is-skyline-managed == 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
         with:
-          repository-owner: ${{ github.repository_owner }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
+          skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
           azure-token: ${{ env.AZURE_TOKEN }}
+
+      - name: Setup local GitHub NuGet source
+        if: needs.check_oidc.outputs.is-skyline-managed != 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+        with:
+          organization: ${{ github.repository_owner }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install .NET tools
         env:
