@@ -322,7 +322,7 @@ jobs:
 
       - name: Remove WiX projects (not buildable in cross-platform CI)
         if: needs.discover_projects.outputs.has-wix-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/remove-wix-projects@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/remove-wix-projects@CI
         with:
           solution-path: ${{ needs.discover_projects.outputs.solution-path }}
       - name: Update msbuild-sdks in global.json
