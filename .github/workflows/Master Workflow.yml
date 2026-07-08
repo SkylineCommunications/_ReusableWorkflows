@@ -212,7 +212,7 @@ jobs:
     steps:
       - name: Determine version
         id: determine-version
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/determine-version@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/determine-version@CI
         with:
           ref-type: ${{ github.ref_type }}
           ref-name: ${{ github.ref_name }}

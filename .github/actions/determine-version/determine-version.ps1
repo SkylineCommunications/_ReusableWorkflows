@@ -25,24 +25,29 @@ if ($refType -eq 'tag') {
     $version = "0.0.$runNumber"
 }
 
-# numeric-version: strip any pre-release/build suffix (-… / +…) down to major.minor.patch,
-# then append the run number as the 4th field. Assembly metadata restricts each version
-# field to UInt16.MaxValue - 1 (65534) — every field must be strictly less than 65535 — so
-# every field is wrapped into range by subtracting 65535 until it fits (value % 65535).
-# A wrap-around, not a clamp, so the value keeps changing across runs instead of sticking
-# at the ceiling. This also covers the legacy branch version 0.0.<run-number>, whose patch
-# field is the (unbounded) run number.
+# numeric-version: strip any pre-release/build suffix (-… / +…) down to the numeric core,
+# then ensure 4 fields. A 3-field core (major.minor.patch — SemVer tags) gets the run
+# number appended as the 4th field; a 4-field core (e.g. date-based tags like
+# 2026.07.08.230) already carries its own 4th field, which is kept (run number unused).
+# Assembly metadata restricts each version field to UInt16.MaxValue - 1 (65534) — every
+# field must be strictly less than 65535 — so every field is wrapped into range by
+# subtracting 65535 until it fits (value % 65535). A wrap-around, not a clamp, so the
+# value keeps changing across runs instead of sticking at the ceiling. This also covers
+# the legacy branch version 0.0.<run-number>, whose patch field is the (unbounded) run
+# number.
 $core = ($version -split '[-+]', 2)[0]
-$match = [regex]::Match($core, '^v?(\d+)\.(\d+)\.(\d+)$')
+$match = [regex]::Match($core, '^v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?$')
 if (-not $match.Success) {
-    throw "Cannot derive numeric-version: '$version' does not start with a major.minor.patch core."
+    throw "Cannot derive numeric-version: '$version' does not start with a major.minor.patch[.build] core."
 }
+
+$fourthField = if ($match.Groups[4].Success) { [long]$match.Groups[4].Value } else { $runNumber }
 
 $numericVersion = '{0}.{1}.{2}.{3}' -f `
     ([long]$match.Groups[1].Value % 65535), `
     ([long]$match.Groups[2].Value % 65535), `
     ([long]$match.Groups[3].Value % 65535), `
-    ($runNumber % 65535)
+    ($fourthField % 65535)
 
 Write-Host "Determined version '$version' and numeric-version '$numericVersion' (ref-type: $refType, run-number: $runNumber)."
 

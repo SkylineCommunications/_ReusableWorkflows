@@ -2,10 +2,11 @@ name: Determine version
 description: >
   Determines the canonical build version from the git ref: tag builds use
   the tag name, branch builds use 0.0.<run-number>. Also derives a strict
-  4-field numeric version (pre-release/build suffix stripped, run number
-  appended as 4th field, every field wrapped into the assembly-metadata
-  range with % 65535) for MSBuild AssemblyVersion/FileVersion and the WiX
-  MSI ProductVersion.
+  4-field numeric version (pre-release/build suffix stripped; the run
+  number is appended as 4th field unless the version already has one, e.g.
+  date-based tags; every field wrapped into the assembly-metadata range
+  with % 65535) for MSBuild AssemblyVersion/FileVersion and the WiX MSI
+  ProductVersion.
 
 inputs:
   ref-type:
@@ -23,7 +24,7 @@ outputs:
     description: The full SemVer version — the tag name on tag builds (e.g. `2.3.1`, `1.4.0-dev-myfeature.42`), `0.0.<run-number>` on branch builds.
     value: ${{ steps.determine.outputs.version }}
   numeric-version:
-    description: Strict 4-field `major.minor.patch.<run-number>` version with any pre-release/build suffix stripped; every field is wrapped into the valid assembly-metadata range (`% 65535`, max 65534).
+    description: Strict 4-field `major.minor.patch.<build>` version with any pre-release/build suffix stripped; `<build>` is the run number, or the version's own 4th field when it already has one; every field is wrapped into the valid assembly-metadata range (`% 65535`, max 65534).
     value: ${{ steps.determine.outputs.numeric-version }}
 
 runs:

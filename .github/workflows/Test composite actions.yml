@@ -635,7 +635,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run 14-case version corpus
+      - name: Run 18-case version corpus
         shell: pwsh
         run: ./.github/actions/determine-version/test.ps1
 
