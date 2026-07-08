@@ -689,7 +689,6 @@ jobs:
             -p:AssemblyVersion="$NUMERIC_VERSION" \
             -p:FileVersion="$NUMERIC_VERSION" \
             -p:ProductVersion="$NUMERIC_VERSION" \
-            -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" \
             --configuration "$CONFIGURATION" \
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" \
             -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" \
