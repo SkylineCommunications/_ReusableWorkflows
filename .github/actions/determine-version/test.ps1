@@ -104,7 +104,7 @@ function Invoke-FailureCase {
 try {
     # Branch builds keep the legacy 0.0.<run-number> in all modes.
     Invoke-Case -Name 'Branch build'                       -RefType 'branch' -RefName 'dev/my-feature'            -RunNumber '42'    -ExpectedVersion '0.0.42'                 -ExpectedNumericVersion '0.0.42.42'
-    Invoke-Case -Name 'Branch build, large run number'     -RefType 'branch' -RefName 'main'                      -RunNumber '70000' -ExpectedVersion '0.0.70000'              -ExpectedNumericVersion '0.0.70000.4464'
+    Invoke-Case -Name 'Branch build, large run number'     -RefType 'branch' -RefName 'main'                      -RunNumber '70000' -ExpectedVersion '0.0.70000'              -ExpectedNumericVersion '0.0.4465.4465'
 
     # Tag builds use the tag name; numeric-version strips the suffix + appends the run number.
     Invoke-Case -Name 'Final release tag'                  -RefType 'tag'    -RefName '1.2.3'                     -RunNumber '7'     -ExpectedVersion '1.2.3'                  -ExpectedNumericVersion '1.2.3.7'
@@ -113,9 +113,11 @@ try {
     Invoke-Case -Name 'Pre-release + metadata tag'         -RefType 'tag'    -RefName '1.2.3-rc.1+meta'           -RunNumber '8'     -ExpectedVersion '1.2.3-rc.1+meta'        -ExpectedNumericVersion '1.2.3.8'
     Invoke-Case -Name 'Leading v prefix tolerated'         -RefType 'tag'    -RefName 'v1.2.3'                    -RunNumber '5'     -ExpectedVersion 'v1.2.3'                 -ExpectedNumericVersion '1.2.3.5'
 
-    # UInt16 wrap-around on the 4th field (run_number % 65536, never a clamp).
-    Invoke-Case -Name 'Run number wraps at 65536'          -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '65536' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.0'
-    Invoke-Case -Name 'Run number above 65536'             -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '70000' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.4464'
+    # Fields must be < 65535 (assembly-metadata max 65534): wrap-around % 65535, never a clamp.
+    Invoke-Case -Name 'Run number 65534 fits'              -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '65534' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.65534'
+    Invoke-Case -Name 'Run number wraps at 65535'          -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '65535' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.0'
+    Invoke-Case -Name 'Run number 65536 wraps to 1'        -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '65536' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.1'
+    Invoke-Case -Name 'Run number above 65536'             -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '70000' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.4465'
 
     # Failure cases: tags that have no major.minor.patch core cannot yield a numeric-version.
     Invoke-FailureCase -Name 'Non-SemVer tag rejected'     -RefType 'tag'    -RefName 'release-1'                 -RunNumber '1'

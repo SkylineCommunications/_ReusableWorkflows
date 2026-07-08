@@ -26,18 +26,23 @@ if ($refType -eq 'tag') {
 }
 
 # numeric-version: strip any pre-release/build suffix (-… / +…) down to major.minor.patch,
-# then append the run number as the 4th field. Each version field is a UInt16 (max 65535),
-# so the run number is always wrapped into range (run_number % 65536) — a wrap-around, not
-# a clamp, so the value keeps changing across runs instead of sticking at the ceiling.
-$buildField = $runNumber % 65536
-
+# then append the run number as the 4th field. Assembly metadata restricts each version
+# field to UInt16.MaxValue - 1 (65534) — every field must be strictly less than 65535 — so
+# every field is wrapped into range by subtracting 65535 until it fits (value % 65535).
+# A wrap-around, not a clamp, so the value keeps changing across runs instead of sticking
+# at the ceiling. This also covers the legacy branch version 0.0.<run-number>, whose patch
+# field is the (unbounded) run number.
 $core = ($version -split '[-+]', 2)[0]
 $match = [regex]::Match($core, '^v?(\d+)\.(\d+)\.(\d+)$')
 if (-not $match.Success) {
     throw "Cannot derive numeric-version: '$version' does not start with a major.minor.patch core."
 }
 
-$numericVersion = '{0}.{1}.{2}.{3}' -f [int]$match.Groups[1].Value, [int]$match.Groups[2].Value, [int]$match.Groups[3].Value, $buildField
+$numericVersion = '{0}.{1}.{2}.{3}' -f `
+    ([long]$match.Groups[1].Value % 65535), `
+    ([long]$match.Groups[2].Value % 65535), `
+    ([long]$match.Groups[3].Value % 65535), `
+    ($runNumber % 65535)
 
 Write-Host "Determined version '$version' and numeric-version '$numericVersion' (ref-type: $refType, run-number: $runNumber)."
 

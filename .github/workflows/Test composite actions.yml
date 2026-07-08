@@ -635,7 +635,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run 12-case version corpus
+      - name: Run 14-case version corpus
         shell: pwsh
         run: ./.github/actions/determine-version/test.ps1
 
@@ -665,7 +665,7 @@ jobs:
           test "$TAG_VERSION" = "1.4.0-dev-myfeature.42"
           test "$TAG_NUMERIC" = "1.4.0.99"
           test "$BRANCH_VERSION" = "0.0.70000"
-          test "$BRANCH_NUMERIC" = "0.0.70000.4464"
+          test "$BRANCH_NUMERIC" = "0.0.4465.4465"
 
   quality-gate-summary:
     name: quality-gate-summary

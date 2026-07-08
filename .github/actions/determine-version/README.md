@@ -19,15 +19,18 @@ strict 4-field numeric companion for consumers that reject SemVer suffixes.
 | Output | Suffix allowed? | Description |
 | --- | :--: | --- |
 | `version` | ✔ | Full SemVer — for MSBuild `Version` / `PackageVersion`, NuGet, `.dmapp` / Catalog, `.deb` (after its own `~` normalisation), DxM release. |
-| `numeric-version` | ✘ | Strict 4-field `major.minor.patch.<run-number % 65536>` — for `AssemblyVersion` / `FileVersion` and the WiX MSI `ProductVersion`. |
+| `numeric-version` | ✘ | Strict 4-field `major.minor.patch.<run-number>` (every field wrapped `% 65535`) — for `AssemblyVersion` / `FileVersion` and the WiX MSI `ProductVersion`. |
 
 ## Rules
 
 - `numeric-version` = `version` with any pre-release/build suffix (`-…` / `+…`) stripped down to
   `major.minor.patch`, then `run-number` appended as the 4th field. An optional leading `v` on the
   tag is tolerated (and stripped).
-- Each version field is a `UInt16` (max 65535), so the 4th field is always **wrapped** into range
-  (`run_number % 65536`) — a wrap-around, not a clamp, so the value keeps changing across runs.
+- Assembly metadata restricts each version field to **65534** (`UInt16.MaxValue - 1` — every field
+  must be strictly **less than 65535**), so **every field** of `numeric-version` is wrapped into
+  range (`value % 65535`: 65534 → 65534, 65535 → 0, 65536 → 1) — a wrap-around, not a clamp, so the
+  value keeps changing across runs. This also covers the legacy branch version `0.0.<run-number>`,
+  whose patch field is the (unbounded) run number.
 - A tag whose core is not `major.minor.patch` (e.g. `release-1`, `1.2`) fails the action with a
   clear error — such a version could not build anyway.
 - **MSI caveat:** Windows Installer compares only the first **three** fields of `ProductVersion` for
