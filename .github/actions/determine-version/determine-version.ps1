@@ -1,0 +1,47 @@
+$ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($env:GITHUB_OUTPUT)) {
+    throw 'GITHUB_OUTPUT must be set.'
+}
+
+$refType = if ($null -eq $env:REF_TYPE) { '' } else { $env:REF_TYPE.Trim().ToLowerInvariant() }
+$refName = if ($null -eq $env:REF_NAME) { '' } else { $env:REF_NAME.Trim() }
+
+if ([string]::IsNullOrWhiteSpace($env:RUN_NUMBER)) {
+    throw 'RUN_NUMBER must be set.'
+}
+$runNumber = [long]$env:RUN_NUMBER.Trim()
+if ($runNumber -lt 0) {
+    throw "RUN_NUMBER must be non-negative, got '$runNumber'."
+}
+
+# Tag builds use the tag name verbatim; branch builds keep the legacy 0.0.<run-number>.
+if ($refType -eq 'tag') {
+    if ([string]::IsNullOrWhiteSpace($refName)) {
+        throw 'REF_NAME must be set for tag builds.'
+    }
+    $version = $refName
+} else {
+    $version = "0.0.$runNumber"
+}
+
+# numeric-version: strip any pre-release/build suffix (-… / +…) down to major.minor.patch,
+# then append the run number as the 4th field. Each version field is a UInt16 (max 65535),
+# so the run number is always wrapped into range (run_number % 65536) — a wrap-around, not
+# a clamp, so the value keeps changing across runs instead of sticking at the ceiling.
+$buildField = $runNumber % 65536
+
+$core = ($version -split '[-+]', 2)[0]
+$match = [regex]::Match($core, '^v?(\d+)\.(\d+)\.(\d+)$')
+if (-not $match.Success) {
+    throw "Cannot derive numeric-version: '$version' does not start with a major.minor.patch core."
+}
+
+$numericVersion = '{0}.{1}.{2}.{3}' -f [int]$match.Groups[1].Value, [int]$match.Groups[2].Value, [int]$match.Groups[3].Value, $buildField
+
+Write-Host "Determined version '$version' and numeric-version '$numericVersion' (ref-type: $refType, run-number: $runNumber)."
+
+@(
+    "version=$version"
+    "numeric-version=$numericVersion"
+) | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8

@@ -629,6 +629,44 @@ jobs:
           if ($rns -ne '["RN12"]') { throw "Unexpected RN output: $rns" }
           if ($tasks -ne '["DCP35"]') { throw "Unexpected tasks output: $tasks" }
 
+  determine-version:
+    name: determine-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run 12-case version corpus
+        shell: pwsh
+        run: ./.github/actions/determine-version/test.ps1
+
+      - name: Tag build smoke test
+        id: tag-build
+        uses: ./.github/actions/determine-version
+        with:
+          ref-type: tag
+          ref-name: 1.4.0-dev-myfeature.42
+          run-number: 99
+
+      - name: Branch build smoke test
+        id: branch-build
+        uses: ./.github/actions/determine-version
+        with:
+          ref-type: branch
+          ref-name: main
+          run-number: 70000
+
+      - name: Assert composite outputs
+        env:
+          TAG_VERSION: ${{ steps.tag-build.outputs.version }}
+          TAG_NUMERIC: ${{ steps.tag-build.outputs.numeric-version }}
+          BRANCH_VERSION: ${{ steps.branch-build.outputs.version }}
+          BRANCH_NUMERIC: ${{ steps.branch-build.outputs.numeric-version }}
+        run: |
+          test "$TAG_VERSION" = "1.4.0-dev-myfeature.42"
+          test "$TAG_NUMERIC" = "1.4.0.99"
+          test "$BRANCH_VERSION" = "0.0.70000"
+          test "$BRANCH_NUMERIC" = "0.0.70000.4464"
+
   quality-gate-summary:
     name: quality-gate-summary
     runs-on: ubuntu-latest

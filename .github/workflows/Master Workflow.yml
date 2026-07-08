@@ -55,6 +55,12 @@ on:
         required: false
         type: string
 
+      # Comma-separated list of project names to `dotnet publish` for Linux and package as `.deb`.
+      # Empty ⇒ the Ubuntu packaging and `.deb` release flows are skipped.
+      dxm-projects-ubuntu:
+        required: false
+        type: string
+
     secrets:
       SONAR_TOKEN:
         required: false
@@ -119,6 +125,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       has-dataminer-projects: ${{ steps.detect-projects.outputs.has-dataminer-projects }}
+      has-wix-projects: ${{ steps.detect-projects.outputs.has-wix-projects }}
+      has-ubuntu-dxm: ${{ inputs.dxm-projects-ubuntu != '' }}
       solution-path: ${{ steps.find-solution-file.outputs.path }}
     steps:
       - uses: actions/checkout@v7
@@ -156,6 +164,7 @@ jobs:
           $solutionPath = "$env:SOLUTION_PATH"
           $solutionDir  = Split-Path $solutionPath -Parent
           $hasDataminerProjects = $false
+          $hasWixProjects = $false
 
           # Use dotnet sln list to enumerate projects in the solution (skip 2-line header)
           $projectPaths = dotnet sln "$solutionPath" list | Select-Object -Skip 2 | Where-Object { $_ -ne '' }
@@ -164,17 +173,33 @@ jobs:
             $absolutePath = Join-Path $solutionDir ($relativePath -replace '\\', '/')
             if (-not (Test-Path $absolutePath)) { continue }
 
+            # Check for WiX installer projects (by extension)
+            if ($relativePath -like '*.wixproj') {
+              Write-Output "Found WiX project: $relativePath"
+              $hasWixProjects = $true
+              if ($hasDataminerProjects) { break }
+              continue
+            }
+
             [xml]$content = Get-Content $absolutePath
 
             # Check for Skyline.DataMiner.Sdk projects (based on DataMinerType property)
-            if ($content.SelectNodes("//DataMinerType").Count -gt 0) {
+            if (-not $hasDataminerProjects -and $content.SelectNodes("//DataMinerType").Count -gt 0) {
               Write-Output "Found DataMiner project: $relativePath"
               $hasDataminerProjects = $true
-              break
             }
+
+            # Check for WiX custom-action projects (based on WixToolset.Dtf package references)
+            if (-not $hasWixProjects -and $content.SelectNodes("//PackageReference[@Include='WixToolset.Dtf.CustomAction' or @Include='WixToolset.Dtf.WindowsInstaller']").Count -gt 0) {
+              Write-Output "Found WiX-related project: $relativePath"
+              $hasWixProjects = $true
+            }
+
+            if ($hasDataminerProjects -and $hasWixProjects) { break }
           }
 
           echo "has-dataminer-projects=$($hasDataminerProjects.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          echo "has-wix-projects=$($hasWixProjects.ToString().ToLower())" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
   ci:

@@ -1,0 +1,38 @@
+name: Determine version
+description: >
+  Determines the canonical build version from the git ref: tag builds use
+  the tag name, branch builds use 0.0.<run-number>. Also derives a strict
+  4-field numeric version (pre-release/build suffix stripped, run number
+  appended as 4th field, wrapped into UInt16 range) for MSBuild
+  AssemblyVersion/FileVersion and the WiX MSI ProductVersion.
+
+inputs:
+  ref-type:
+    description: The git ref type of the run (`github.ref_type`), `tag` or `branch`.
+    required: true
+  ref-name:
+    description: The git ref name of the run (`github.ref_name`). Used as the version on tag builds.
+    required: true
+  run-number:
+    description: The workflow run number (`github.run_number`). Used for the branch version and the 4th numeric field.
+    required: true
+
+outputs:
+  version:
+    description: The full SemVer version — the tag name on tag builds (e.g. `2.3.1`, `1.4.0-dev-myfeature.42`), `0.0.<run-number>` on branch builds.
+    value: ${{ steps.determine.outputs.version }}
+  numeric-version:
+    description: Strict 4-field `major.minor.patch.<run-number % 65536>` version with any pre-release/build suffix stripped.
+    value: ${{ steps.determine.outputs.numeric-version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Determine version
+      id: determine
+      shell: pwsh
+      env:
+        REF_TYPE: ${{ inputs.ref-type }}
+        REF_NAME: ${{ inputs.ref-name }}
+        RUN_NUMBER: ${{ inputs.run-number }}
+      run: '& "$env:GITHUB_ACTION_PATH/determine-version.ps1"'
