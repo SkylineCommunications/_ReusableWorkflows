@@ -837,9 +837,18 @@ jobs:
       - name: Detect produced artifacts
         id: detect-artifacts
         run: |
-          nuget_count=$(find _SignedNuGetResults -name '*.nupkg' 2>/dev/null | wc -l)
+          # NOTE: this step runs under `bash -e -o pipefail`; `find` on a missing
+          # directory exits non-zero and would abort the script, so guard each
+          # directory with -d instead of relying on 2>/dev/null.
+          nuget_count=0
+          if [ -d "_SignedNuGetResults" ]; then
+            nuget_count=$(find _SignedNuGetResults -name '*.nupkg' | wc -l)
+          fi
+          msi_count=0
+          if [ -d "_SignedInstallers" ]; then
+            msi_count=$(find _SignedInstallers -name '*.msi' | wc -l)
+          fi
           dm_count=$(find . -type f \( -name '*.dmapp' -o -name '*.dmtest' \) -path '*/bin/*' | wc -l)
-          msi_count=$(find _SignedInstallers -name '*.msi' 2>/dev/null | wc -l)
           echo "Found $nuget_count NuGet package(s), $dm_count DataMiner package(s), $msi_count MSI installer(s)."
           echo "has-nuget-packages=$([ "$nuget_count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "has-dataminer-packages=$([ "$dm_count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
