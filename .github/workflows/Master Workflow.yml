@@ -480,13 +480,14 @@ jobs:
           dependabot-bypass: ${{ github.actor == 'dependabot[bot]' }}
 
   # ════════════════════════════════════════════════════════════════
-  # Ubuntu packaging (tag only): one .deb per project in dxm-projects-ubuntu
+  # Ubuntu packaging: one .deb per project in dxm-projects-ubuntu. Runs on every
+  # ref except fork PRs (no secrets) and Dependabot; the .deb release stays tag-only.
   # ════════════════════════════════════════════════════════════════
 
   package_ubuntu:
     name: Package Ubuntu Services
     runs-on: ubuntu-latest
-    if: github.ref_type == 'tag' && needs.discover_projects.outputs.has-ubuntu-dxm == 'true'
+    if: needs.check_oidc.outputs.is-fork != 'true' && github.actor != 'dependabot[bot]' && needs.discover_projects.outputs.has-ubuntu-dxm == 'true'
     needs: [ci, check_oidc, discover_projects, determine_version]
     steps:
       - name: Azure Login
@@ -516,7 +517,7 @@ jobs:
           azure-token: ${{ env.AZURE_TOKEN }}
 
       - name: Install dataminer-sbom
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
         run: dotnet tool install Skyline.DataMiner.CICD.Tools.Sbom --global --version 1.*
         shell: bash
 
@@ -526,7 +527,7 @@ jobs:
         with:
           projects: ${{ inputs.dxm-projects-ubuntu }}
           version: ${{ needs.determine_version.outputs.version }}
-          generate-sbom: ${{ !contains(github.ref_name, '-') }}
+          generate-sbom: ${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
           configuration: ${{ inputs.configuration }}
           output-directory: output
 
@@ -537,16 +538,18 @@ jobs:
           path: output/*.deb
 
   # ════════════════════════════════════════════════════════════════
-  # Windows packaging & signing (tag only): build all shippable artifacts and
+  # Windows packaging & signing: build all shippable artifacts and
   # sign everything in one place — DLL/EXE → WiX rebuild → MSI → NuGet → dmapp.
-  # The upload jobs below only consume the signed artifacts produced here.
+  # Runs on every ref except fork PRs (no secrets) and Dependabot, so packaging
+  # problems surface before the release tag; the upload jobs below consume the
+  # signed artifacts and remain tag-only.
   # (Windows required for NuGet signing: https://github.com/dotnet/runtime/issues/48794)
   # ════════════════════════════════════════════════════════════════
 
   package_windows:
     name: Package & Sign (Windows)
     runs-on: windows-latest
-    if: github.ref_type == 'tag' && github.actor != 'dependabot[bot]'
+    if: needs.check_oidc.outputs.is-fork != 'true' && github.actor != 'dependabot[bot]'
     needs: [ci, check_oidc, discover_projects, determine_version]
     outputs:
       has-nuget-packages: ${{ steps.detect-artifacts.outputs.has-nuget-packages }}
@@ -693,7 +696,7 @@ jobs:
         shell: bash
 
       - name: Generate SBOM files for WiX installers
-        if: needs.discover_projects.outputs.has-wix-projects == 'true' && !contains(github.ref_name, '-')
+        if: needs.discover_projects.outputs.has-wix-projects == 'true' && github.ref_type == 'tag' && !contains(github.ref_name, '-')
         env:
           PACKAGE_VERSION: ${{ needs.determine_version.outputs.version }}
         run: |
@@ -705,7 +708,7 @@ jobs:
         shell: bash
 
       - name: Inject SBOM into WiX projects and rebuild
-        if: needs.discover_projects.outputs.has-wix-projects == 'true' && !contains(github.ref_name, '-')
+        if: needs.discover_projects.outputs.has-wix-projects == 'true' && github.ref_type == 'tag' && !contains(github.ref_name, '-')
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
