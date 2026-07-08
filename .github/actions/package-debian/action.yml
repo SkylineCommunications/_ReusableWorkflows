@@ -1,0 +1,46 @@
+name: Package Debian services
+description: >
+  Builds a Debian package (`.deb`) for each listed DxM project. Each project
+  is staged in its own temporary tree from the project's packaging/Debian
+  skeleton, published self-contained for linux-x64, versioned, and built
+  with dpkg-deb. Optionally generates an SBOM into
+  usr/share/doc/skyline-communications-<project> (full releases).
+
+inputs:
+  projects:
+    description: Comma-separated list of DxM project paths (relative to the repo root). The project folder name is the Debian service name.
+    required: true
+  version:
+    description: The canonical build version (from `determine-version`). Normalised for Debian (`x.y.z-suffix` → `x.y.z~suffix`).
+    required: true
+  generate-sbom:
+    description: When `true`, generate an SBOM into `usr/share/doc/skyline-communications-<project>` (requires the `dataminer-sbom` tool; full releases only).
+    required: false
+    default: 'false'
+  configuration:
+    description: The build configuration passed to `dotnet publish`.
+    required: false
+    default: 'Release'
+  output-directory:
+    description: Directory receiving the built `.deb` files.
+    required: false
+    default: 'output'
+
+outputs:
+  package-count:
+    description: The number of `.deb` packages built.
+    value: ${{ steps.package.outputs.package-count }}
+
+runs:
+  using: composite
+  steps:
+    - name: Package Debian services
+      id: package
+      shell: bash
+      env:
+        PROJECTS: ${{ inputs.projects }}
+        VERSION: ${{ inputs.version }}
+        GENERATE_SBOM: ${{ inputs.generate-sbom }}
+        CONFIGURATION: ${{ inputs.configuration }}
+        OUTPUT_DIR: ${{ inputs.output-directory }}
+      run: bash "${{ github.action_path }}/package-debian.sh"

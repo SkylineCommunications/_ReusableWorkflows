@@ -667,6 +667,56 @@ jobs:
           test "$BRANCH_VERSION" = "0.0.70000"
           test "$BRANCH_NUMERIC" = "0.0.4465.4465"
 
+  package-debian:
+    name: package-debian
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Scaffold two DxM projects with Debian skeletons
+        run: |
+          demo_dir="${RUNNER_TEMP}/deb-demo"
+          mkdir -p "$demo_dir"
+          cd "$demo_dir"
+          for svc in SvcOne SvcTwo; do
+            dotnet new console -n "$svc" -o "$svc"
+            echo '{ "setting": "value" }' > "$svc/appsettings.json"
+            sed -i 's#</Project>#  <ItemGroup><Content Include="appsettings.json" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>\n</Project>#' "$svc/$svc.csproj"
+            mkdir -p "$svc/packaging/Debian/content/DEBIAN"
+            lower=$(echo "$svc" | tr '[:upper:]' '[:lower:]')
+            {
+              echo "Package: $lower"
+              echo "Version: <VERSION>"
+              echo "Architecture: amd64"
+              echo "Maintainer: Skyline Communications <devops@skyline.be>"
+              echo "Description: Test service $svc"
+            } > "$svc/packaging/Debian/content/DEBIAN/control"
+            echo "/etc/skyline-communications/$svc/appsettings.json" > "$svc/packaging/Debian/content/DEBIAN/conffiles"
+          done
+
+      - name: Invoke composite (pre-release version, no SBOM)
+        id: package
+        uses: ./.github/actions/package-debian
+        with:
+          projects: ${{ runner.temp }}/deb-demo/SvcOne, ${{ runner.temp }}/deb-demo/SvcTwo
+          version: 1.2.3-beta.1
+          generate-sbom: 'false'
+          output-directory: deb-output
+
+      - name: Assert Debian packages
+        env:
+          PACKAGE_COUNT: ${{ steps.package.outputs.package-count }}
+        run: |
+          ls -l deb-output
+          test "$PACKAGE_COUNT" = "2"
+          test -f "deb-output/SvcOne_1.2.3~beta.1.deb"
+          test -f "deb-output/SvcTwo_1.2.3~beta.1.deb"
+          version=$(dpkg-deb --field "deb-output/SvcOne_1.2.3~beta.1.deb" Version)
+          test "$version" = "1.2.3~beta.1"
+          dpkg-deb --contents "deb-output/SvcOne_1.2.3~beta.1.deb" | grep -q 'opt/skyline-communications/SvcOne/'
+          dpkg-deb --contents "deb-output/SvcOne_1.2.3~beta.1.deb" | grep -q 'etc/skyline-communications/SvcOne/appsettings.json'
+          dpkg-deb --contents "deb-output/SvcTwo_1.2.3~beta.1.deb" | grep -q 'opt/skyline-communications/SvcTwo/'
+
   remove-wix-projects:
     name: remove-wix-projects
     runs-on: ubuntu-latest

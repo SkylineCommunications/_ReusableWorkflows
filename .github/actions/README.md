@@ -47,6 +47,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `compute-next-version` | Computes the next SemVer version from the latest final tag + Change-Type bump. | [compute-next-version/README.md](compute-next-version/README.md) |
 | `determine-version` | Determines the canonical build version (`version` + 4-field `numeric-version`) from the git ref. | [determine-version/README.md](determine-version/README.md) |
 | `remove-wix-projects` | Strips WiX projects from a solution for cross-platform CI builds. | [remove-wix-projects/README.md](remove-wix-projects/README.md) |
+| `package-debian` | Builds a `.deb` per DxM project from per-project Debian skeletons. | [package-debian/README.md](package-debian/README.md) |
 | `apply-source-code-url` | Fills empty `source_code_url:` fields in catalog manifests. | [apply-source-code-url/README.md](apply-source-code-url/README.md) |
 | `sonarcloud-status` | Checks SonarCloud project status and emits analysis flag. | [sonarcloud-status/README.md](sonarcloud-status/README.md) |
 | `detect-test-runner` | Detects MTP or VSTest mode from `global.json`. | [detect-test-runner/README.md](detect-test-runner/README.md) |
