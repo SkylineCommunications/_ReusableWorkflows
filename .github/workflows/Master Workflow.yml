@@ -202,9 +202,25 @@ jobs:
           echo "has-wix-projects=$($hasWixProjects.ToString().ToLower())" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
+  determine_version:
+    name: Determine Version
+    needs: [validate_trigger]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.determine-version.outputs.version }}
+      numeric-version: ${{ steps.determine-version.outputs.numeric-version }}
+    steps:
+      - name: Determine version
+        id: determine-version
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/determine-version@main
+        with:
+          ref-type: ${{ github.ref_type }}
+          ref-name: ${{ github.ref_name }}
+          run-number: ${{ github.run_number }}
+
   ci:
     name: CI
-    needs: [check_oidc, discover_projects]
+    needs: [check_oidc, discover_projects, determine_version]
     runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: read
@@ -247,7 +263,7 @@ jobs:
           dataminer-token: ${{ env.DATAMINER_TOKEN }}
           repository: ${{ github.repository }}
           has-dataminer-projects: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
-          check-sonar: ${{ github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' }}
+          check-sonar: ${{ github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true' }}
           check-dataminer: ${{ github.ref_type == 'tag' && needs.discover_projects.outputs.has-dataminer-projects == 'true' }}
 
       - name: Enable long paths
@@ -276,8 +292,9 @@ jobs:
           GH_ACTOR: ${{ github.actor }}
           HAS_DM_PROJECTS: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
           SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
+          IS_FORK: ${{ needs.check_oidc.outputs.is-fork }}
         run: |
-          if [[ "$GH_ACTOR" != "dependabot[bot]" ]] && [[ -n "$SONAR_PROJECT_NAME" ]]; then
+          if [[ "$GH_ACTOR" != "dependabot[bot]" ]] && [[ -n "$SONAR_PROJECT_NAME" ]] && [[ "$IS_FORK" != "true" ]]; then
             dotnet tool install dotnet-sonarscanner --global
           fi
 
@@ -295,7 +312,19 @@ jobs:
       # ──────────────────────────────────────────────────────────────
       # A. DataMiner-specific setup
       # ──────────────────────────────────────────────────────────────
+      - name: Require dxm-id-file.json for DxM repositories
+        if: needs.discover_projects.outputs.has-wix-projects == 'true' || needs.discover_projects.outputs.has-ubuntu-dxm == 'true'
+        run: |
+          if [ ! -f "dxm-id-file.json" ]; then
+            echo "::error::dxm-id-file.json is required for DxM repositories but was not found at the repository root."
+            exit 1
+          fi
 
+      - name: Remove WiX projects (not buildable in cross-platform CI)
+        if: needs.discover_projects.outputs.has-wix-projects == 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/remove-wix-projects@main
+        with:
+          solution-path: ${{ needs.discover_projects.outputs.solution-path }}
       - name: Update msbuild-sdks in global.json
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
@@ -332,14 +361,14 @@ jobs:
       # ──────────────────────────────────────────────────────────────
 
       - name: Prepare SonarCloud Variables
-        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != ''
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true'
         id: prepSonarCloudVar
         env:
           OWNER: ${{ github.repository_owner }}
         run: echo "lowerCaseOwner=${OWNER,,}" >> "$GITHUB_ENV"
 
       - name: Get SonarCloud Status
-        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != ''
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true'
         id: get-sonarcloud-status
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@main
         with:
@@ -349,7 +378,7 @@ jobs:
           repository: ${{ github.repository }}
 
       - name: Trigger Initial Analysis
-        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && steps.get-sonarcloud-status.outputs.needs-initial-analysis == 'true'
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true' && steps.get-sonarcloud-status.outputs.needs-initial-analysis == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
@@ -374,7 +403,7 @@ jobs:
         continue-on-error: true
 
       - name: Start Analysis
-        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != ''
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
@@ -397,28 +426,23 @@ jobs:
       # C. Build
       # ──────────────────────────────────────────────────────────────
 
-      - name: Determine version
-        id: determine-version
-        env:
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
-          RUN_NUMBER: ${{ github.run_number }}
-        run: |
-          if [[ "$REF_TYPE" == "tag" ]]; then
-            echo "version=$REF_NAME" >> $GITHUB_OUTPUT
-          else
-            echo "version=0.0.$RUN_NUMBER" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
-
       - name: Build
         env:
           OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.OVERRIDE_CATALOG_DOWNLOAD_TOKEN }}
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-          VERSION: ${{ steps.determine-version.outputs.version }}
+          VERSION: ${{ needs.determine_version.outputs.version }}
           CONFIGURATION: ${{ inputs.configuration }}
           DEBUG_FLAG: ${{ inputs.debug }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
+          # Transitional (until the Windows packaging job exists): tag builds still produce
+          # the NuGet/DataMiner packages here for the downstream sign/upload jobs; branch
+          # and PR builds are validation-only, so packaging is off (also keeps the catalog
+          # download token out of fork CI, which has no secrets).
+          packaging_flags=()
+          if [[ "$REF_TYPE" != "tag" ]]; then
+            packaging_flags+=( -p:GeneratePackageOnBuild=false -p:GenerateDataMinerPackage=false )
+          fi
           dotnet build "$SOLUTION_PATH" \
             -p:Version="$VERSION" \
             -p:PackageVersion="$VERSION" \
@@ -427,7 +451,8 @@ jobs:
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" \
             -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" \
             -p:SkylineDataMinerSdkDebug="$DEBUG_FLAG" \
-            -p:PackageOutputPath="${GITHUB_WORKSPACE}/_NuGetOutput"
+            -p:PackageOutputPath="${GITHUB_WORKSPACE}/_NuGetOutput" \
+            "${packaging_flags[@]}"
 
       # ──────────────────────────────────────────────────────────────
       # D. Test & Quality Gate
@@ -440,7 +465,7 @@ jobs:
           configuration: ${{ inputs.configuration }}
 
       - name: Stop Analysis
-        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != ''
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MSYS_NO_PATHCONV: '1'
@@ -449,7 +474,7 @@ jobs:
         continue-on-error: true
 
       - name: SonarCloud Quality Gate check
-        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != ''
+        if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true'
         id: sonarcloud-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@8e9b0ca0a7273d6f16986388d98393efdfcf56fd
         with:
@@ -463,8 +488,9 @@ jobs:
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@main
         with:
           unit-tests-outcome: ${{ steps.unit-tests.outcome }}
-          sonar-outcome: ${{ inputs.sonarcloud-project-name != '' && steps.sonarcloud-quality-gate-check.outcome || '' }}
-          sonar-status: ${{ inputs.sonarcloud-project-name != '' && steps.sonarcloud-quality-gate-check.outputs.quality-gate-status || '' }}
+          sonar-outcome: ${{ inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true' && steps.sonarcloud-quality-gate-check.outcome || '' }}
+          sonar-status: ${{ inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true' && steps.sonarcloud-quality-gate-check.outputs.quality-gate-status || '' }}
+          sonarcloud-project-name: ${{ github.actor != 'dependabot[bot]' && needs.check_oidc.outputs.is-fork != 'true' && inputs.sonarcloud-project-name || '' }}
           dependabot-bypass: ${{ github.actor == 'dependabot[bot]' }}
 
       # ──────────────────────────────────────────────────────────────
@@ -512,7 +538,7 @@ jobs:
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           PACKAGE_NAME: ${{ steps.packageName.outputs.name }}
-          PACKAGE_VERSION: ${{ github.ref_name }}
+          PACKAGE_VERSION: ${{ needs.determine_version.outputs.version }}
           DEBUG_FLAG: ${{ inputs.debug }}
         run: |
           find . -type f \( -name "*.dmapp" -o -name "*.dmtest" \) -print0 | while IFS= read -r -d '' file; do

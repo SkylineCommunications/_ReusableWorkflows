@@ -17,6 +17,10 @@ inputs:
     description: "Quality-gate-status output from sonarqube-quality-gate-action (OK|FAILED|...)."
     required: false
     default: ''
+  sonarcloud-project-name:
+    description: "SonarCloud project key. When non-empty, a link to the project's new-code dashboard for the current branch/tag is appended to the summary."
+    required: false
+    default: ''
   validator-outcome:
     description: "Outcome of the Validator Quality Gate step. Leave empty to omit the Validator sub-gate."
     required: false
@@ -61,6 +65,8 @@ runs:
         UNIT_TESTS_OUTCOME: ${{ inputs.unit-tests-outcome }}
         SONAR_OUTCOME: ${{ inputs.sonar-outcome }}
         SONAR_STATUS: ${{ inputs.sonar-status }}
+        SONAR_PROJECT_NAME: ${{ inputs.sonarcloud-project-name }}
+        BRANCH_NAME: ${{ github.ref_name }}
         VALIDATOR_OUTCOME: ${{ inputs.validator-outcome }}
         VALIDATOR_STATE_FILE: ${{ inputs.validator-state-file }}
         MCC_OUTCOME: ${{ inputs.major-change-checker-outcome }}

@@ -28,6 +28,7 @@ action still produces the Job Summary and enforces the gate.
 | `unit-tests-outcome` | yes | — | `steps.<id>.outcome` of the unit-tests step (`success` / `failure` / `skipped`). |
 | `sonar-outcome` | no | `''` | `steps.<id>.outcome` of the SonarCloud Quality Gate step. Empty ⇒ row omitted. |
 | `sonar-status` | no | `''` | `steps.<id>.outputs.quality-gate-status` (`OK` / `FAILED` / ...). |
+| `sonarcloud-project-name` | no | `''` | SonarCloud project key. Non-empty ⇒ a link to the project's new-code dashboard for the current branch/tag is appended to the summary. |
 | `validator-outcome` | no | `''` | `steps.<id>.outcome` of the Validator Quality Gate step. Empty ⇒ row omitted. |
 | `validator-state-file` | no | `''` | Absolute path to `validator-gate-state.json` produced by the Validator Quality Gate step. When provided, a detailed table (current vs previous critical/major/minor) is rendered. |
 | `major-change-checker-outcome` | no | `''` | `steps.<id>.outcome` of the Major Change Checker Quality Gate step. Empty ⇒ row omitted. |
