@@ -212,7 +212,7 @@ jobs:
     steps:
       - name: Determine version
         id: determine-version
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/determine-version@CI
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/determine-version@main
         with:
           ref-type: ${{ github.ref_type }}
           ref-name: ${{ github.ref_name }}
@@ -322,7 +322,7 @@ jobs:
 
       - name: Remove WiX projects (not buildable in cross-platform CI)
         if: needs.discover_projects.outputs.has-wix-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/remove-wix-projects@CI
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/remove-wix-projects@main
         with:
           solution-path: ${{ needs.discover_projects.outputs.solution-path }}
       - name: Update msbuild-sdks in global.json
