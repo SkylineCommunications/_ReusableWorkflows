@@ -228,6 +228,15 @@ jobs:
       packages: write
       actions: read
       pull-requests: write # required by quality-gate-summary to post the sticky PR comment
+    env:
+      # DataMiner compile constants, exposed as an ENVIRONMENT variable instead of a
+      # -p:DefineConstants global property on purpose: a global property overrides the
+      # DefineConstants a project sets for itself, which breaks WiX projects (they use
+      # DefineConstants for preprocessor variables, e.g. ProductVersion=$(ProductVersion)).
+      # An environment variable is the lowest-precedence source: SDK-style C# projects
+      # append to it ($(DefineConstants);TRACE;NETx_y) so they still get the constants,
+      # while a project that sets its own DefineConstants keeps its value.
+      DefineConstants: DCFv1;DBInfo;ALARM_SQUASHING
     defaults:
       run:
         shell: bash
@@ -444,10 +453,10 @@ jobs:
           # Validation-only build: packaging is off — the shippable artifacts (NuGet,
           # .dmapp, MSI, .deb) are produced and signed by the tag-only packaging jobs.
           # This also keeps the catalog download token out of fork CI (no secrets there).
+          # DefineConstants comes from the job-level env var (see the job's env block).
           dotnet build "$SOLUTION_PATH" \
             -p:Version="$VERSION" \
             -p:PackageVersion="$VERSION" \
-            -p:DefineConstants="DCFv1%3BDBInfo%3BALARM_SQUASHING" \
             --configuration "$CONFIGURATION" \
             -p:SkylineDataMinerSdkDebug="$DEBUG_FLAG" \
             -p:GeneratePackageOnBuild=false \
@@ -574,6 +583,12 @@ jobs:
     runs-on: windows-latest
     if: needs.check_oidc.outputs.is-fork != 'true' && github.actor != 'dependabot[bot]'
     needs: [ci, check_oidc, discover_projects, determine_version]
+    env:
+      # Environment variable instead of -p:DefineConstants — a global property would
+      # override the WiX projects' own DefineConstants (used for preprocessor variables
+      # like ProductVersion=$(ProductVersion)) and break the MSI build. SDK-style C#
+      # projects append to the environment value, so they still get the constants.
+      DefineConstants: DCFv1;DBInfo;ALARM_SQUASHING
     outputs:
       has-nuget-packages: ${{ steps.detect-artifacts.outputs.has-nuget-packages }}
       has-dataminer-packages: ${{ steps.detect-artifacts.outputs.has-dataminer-packages }}
@@ -683,6 +698,8 @@ jobs:
           # NuGet/DataMiner packaging uses the full (suffix-bearing) version; assemblies and
           # the WiX MSI ProductVersion use the strict 4-field numeric version (WiX projects
           # reference it as $(ProductVersion) in <Package Version="...">).
+          # DefineConstants comes from the job-level env var so the WiX projects can keep
+          # their own preprocessor constants (a -p: global would clobber them).
           dotnet build "$SOLUTION_PATH" \
             -p:Version="$VERSION" \
             -p:PackageVersion="$VERSION" \
