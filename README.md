@@ -112,80 +112,17 @@ subject restrictions.
 For implementation details and action-level usage, see
 [.github/actions/README.md](.github/actions/README.md).
 
-## Playwright Docker ACR Workflow — build/push, then deploy
+## Playwright Docker ACR Workflow
 
-`Playwright Docker ACR Workflow.yml` builds a .NET `LiveServiceTesting` test
-project, packages it into a Docker image, and pushes that image to the
-team's Azure Container Registry. It does **not** deploy or schedule the
-image — that's a separate, follow-up step (see below).
+`Playwright Docker ACR Workflow.yml` builds .NET `LiveServiceTesting` test projects, packages them into Docker images, and pushes them to Azure Container Registry.
 
-### What it does
+**For templates, usage instructions, and deployment guides,** see:  
+[`SkylineCommunications/platform-delivery-deployments`](https://github.com/SkylineCommunications/platform-delivery-deployments/tree/main/templates/playwright-docker-acr)
 
-1. Checks out the caller repo and validates that `image-name` is lowercase
-   (required by ACR).
-2. Sets up the requested .NET SDK and adds the Skyline NuGet feed.
-3. Publishes the `LiveServiceTesting` project at `project-path`.
-4. Logs in to the team's ACR and builds/pushes the Docker image using
-   `dockerfile-path`, tagged with `image-tag` (and optionally the commit SHA
-   when `include-sha-tag: true`).
-
-### Calling it from a team repo
-
-**Templates available at:** [`SkylineCommunications/platform-delivery-deployments`](https://github.com/SkylineCommunications/platform-delivery-deployments/tree/main/templates/playwright-docker-acr)
-
-Copy the workflow template, Dockerfile, and .dockerignore from the templates directory to your repo. See the [templates README](https://github.com/SkylineCommunications/platform-delivery-deployments/blob/main/templates/playwright-docker-acr/README.md) for quick start instructions.
-
-Example based on `SLC-RT-DaaS/.github/workflows/docker-image.yml`:
-
-```yaml
-name: Build and Push Playwright Tests
-
-on:
-  workflow_dispatch:  # Manual trigger - customize as needed
-
-jobs:
-  build-and-push:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Playwright Docker ACR Workflow.yml@main
-    with:
-      project-path: 'MyTeam.LiveServiceTesting'   # LiveServiceTesting project folder
-      image-name: 'myteam-tests'                  # ACR image name, lowercase only
-      dockerfile-path: 'Dockerfile'
-      dotnet-version: '8.x'
-      image-tag: 'latest'
-      include-sha-tag: false
-    # SkylineCommunications repos: omit secrets (uses OIDC)
-    # External repos: pass ACR credentials explicitly
-    # secrets:
-    #   LIVESERVICETESTS_ACR_LOGIN_SERVER: ${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
-    #   LIVESERVICETESTS_ACR_USERNAME: ${{ secrets.LIVESERVICETESTS_ACR_USERNAME }}
-    #   LIVESERVICETESTS_ACR_PASSWORD: ${{ secrets.LIVESERVICETESTS_ACR_PASSWORD }}
-```
-
-**For SkylineCommunications repos:** No secrets needed — the workflow uses OIDC to
-authenticate automatically. **For external repos or custom ACR:** Pass explicit credentials as shown in the commented section above.
-
-### Next step: deploying your image
-
-Building and pushing the image is only half the story — it does not run
-anywhere on its own. To actually run the image on a schedule in Azure, go to
-[`SkylineCommunications/platform-delivery-deployments`](https://github.com/SkylineCommunications/platform-delivery-deployments)
-and follow its
-[`CONTRIBUTING.md`](https://github.com/SkylineCommunications/platform-delivery-deployments/blob/main/CONTRIBUTING.md):
-
-1. Add or update a `.bicepparam` job file under
-   `projects/<project>/job-params/`, referencing the image name/tag you just
-   pushed to ACR.
-2. Open a PR in `platform-delivery-deployments` with that change.
-3. The PR pipeline runs a **what-if preview**, and rollout to the live
-   environment requires **manual approval** via a per-project GitHub
-   Environment before anything actually deploys.
-
-Secrets for the deployment are handled separately from this repo: job files
-reference secrets **by name only**, and the actual values are exchanged
-out-of-band with Platform Delivery. See the "Getting a new secret added"
-section of `platform-delivery-deployments`'
-[`CONTRIBUTING.md`](https://github.com/SkylineCommunications/platform-delivery-deployments/blob/main/CONTRIBUTING.md)
-for that process.
+**Quick reference:**
+- SkylineCommunications repos: uses OIDC (no secrets needed)
+- External repos: pass `LIVESERVICETESTS_ACR_*` secrets explicitly
+- See [templates README](https://github.com/SkylineCommunications/platform-delivery-deployments/blob/main/templates/playwright-docker-acr/README.md) for quick start
 
 ## Composite actions
 
