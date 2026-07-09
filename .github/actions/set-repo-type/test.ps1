@@ -121,6 +121,21 @@ $multiParsed = $multiBody | ConvertFrom-Json
 Assert-Equal -Label 'multi value content' `
     -Actual ($multiParsed.properties[0].value -join ',') -Expected 'DxM,NuGet'
 
+# ---- ConvertTo-OrgPropertyPatchBody ---------------------------------------------------------------
+
+$orgBody = ConvertTo-OrgPropertyPatchBody -PropertyName 'Workflow-Repo-Type' -Value @('Connector') -RepositoryName 'MyRepo'
+$orgParsed = $orgBody | ConvertFrom-Json
+Assert-True -Label 'org body repository_names is an array' `
+    -Condition ($orgParsed.repository_names -is [array])
+Assert-Equal -Label 'org body repository_names content' `
+    -Actual ($orgParsed.repository_names -join ',') -Expected 'MyRepo'
+Assert-Equal -Label 'org body property_name' `
+    -Actual $orgParsed.properties[0].property_name -Expected 'Workflow-Repo-Type'
+Assert-True -Label 'org body single value serialises as JSON array' `
+    -Condition ($orgParsed.properties[0].value -is [array])
+Assert-Equal -Label 'org body value content' `
+    -Actual ($orgParsed.properties[0].value -join ',') -Expected 'Connector'
+
 # ---- Result ---------------------------------------------------------------------------------------
 
 if ($script:failures -gt 0) {

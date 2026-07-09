@@ -29,8 +29,13 @@ more than one type at once (e.g. `["DxM","NuGet"]`).
 
 Writing custom-property **values** is privileged — the default `GITHUB_TOKEN` returns `404`. The
 token's user must be an **organization owner** of the repo's org, and the token needs the classic
-**`repo`** scope (`admin:org` is not required). Calls the per-repo endpoint
-`GET`/`PATCH /repos/{owner}/{repo}/properties/values`.
+**`repo`** scope (`admin:org` is not required). A token that is not an org owner of that org gets a
+`404` on the write (GitHub hides the resource rather than returning `403`), even though it can still
+`GET` the values.
+
+Reads use the per-repo `GET /repos/{owner}/{repo}/properties/values`. Writes try the per-repo
+`PATCH /repos/{owner}/{repo}/properties/values` first and, on any error, fall back to the org-level
+`PATCH /orgs/{org}/properties/values` (targeting the single repo by name) as a safety net.
 
 ## Usage
 

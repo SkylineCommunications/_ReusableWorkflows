@@ -79,6 +79,29 @@ function ConvertTo-PropertyPatchBody {
     return ($payload | ConvertTo-Json -Depth 5)
 }
 
+# Build the PATCH body for the ORG-LEVEL custom-property-values endpoint, which sets the property on a
+# named set of repos. This is the fallback for an enterprise property whose `values_editable_by` is
+# `org_actors`: the per-repo endpoint returns 404 for such a property, but an org owner can set it here.
+function ConvertTo-OrgPropertyPatchBody {
+    param(
+        [Parameter(Mandatory)][string]$PropertyName,
+        [Parameter(Mandatory)][string[]]$Value,
+        [Parameter(Mandatory)][string]$RepositoryName
+    )
+
+    $payload = [ordered]@{
+        repository_names = @($RepositoryName)
+        properties       = @(
+            [ordered]@{
+                property_name = $PropertyName
+                value         = @($Value)
+            }
+        )
+    }
+
+    return ($payload | ConvertTo-Json -Depth 5)
+}
+
 function Invoke-Main {
     if ([string]::IsNullOrWhiteSpace($env:REPOSITORY)) {
         throw 'REPOSITORY must be set (owner/repo).'
@@ -118,9 +141,27 @@ function Invoke-Main {
     }
 
     Write-Host "Updating '$propertyName' from [$($currentValue -join ', ')] to [$($desired -join ', ')] ..."
-    $body = ConvertTo-PropertyPatchBody -PropertyName $propertyName -Value $desired
-    Invoke-RestMethod -Method Patch -Uri $endpoint -Headers $headers -Body $body -ContentType 'application/json' | Out-Null
-    Write-Host "Updated '$propertyName'."
+
+    # Try the per-repo endpoint first (works when the token's user is an org owner). On any error fall
+    # back to the org-level endpoint as a safety net. A 404 here usually means the token's user is not
+    # an org owner of this repo's org (GitHub hides the resource rather than returning 403).
+    $repoBody = ConvertTo-PropertyPatchBody -PropertyName $propertyName -Value $desired
+    try {
+        Invoke-RestMethod -Method Patch -Uri $endpoint -Headers $headers -Body $repoBody -ContentType 'application/json' | Out-Null
+        Write-Host "Updated '$propertyName' via the per-repo endpoint."
+        return
+    }
+    catch {
+        $repoError = $_.Exception.Message
+        Write-Host "Per-repo endpoint did not accept the write ($repoError); trying the org-level endpoint ..."
+    }
+
+    $owner = ($env:REPOSITORY -split '/', 2)[0]
+    $repositoryName = ($env:REPOSITORY -split '/', 2)[1]
+    $orgEndpoint = "$apiUrl/orgs/$owner/properties/values"
+    $orgBody = ConvertTo-OrgPropertyPatchBody -PropertyName $propertyName -Value $desired -RepositoryName $repositoryName
+    Invoke-RestMethod -Method Patch -Uri $orgEndpoint -Headers $headers -Body $orgBody -ContentType 'application/json' | Out-Null
+    Write-Host "Updated '$propertyName' via the org-level endpoint."
 }
 
 # Run the network logic only when executed directly; test.ps1 dot-sources this file to unit-test the
