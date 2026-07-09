@@ -279,7 +279,7 @@ jobs:
 
       - name: Set repo type
         if: steps.map.outputs.repo-types != ''
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/set-repo-type@WorkflowRepoType
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/set-repo-type@main
         with:
           repo-types: ${{ steps.map.outputs.repo-types }}
           token: ${{ env.REUSABLE_WORKFLOWS_TOKEN }}
