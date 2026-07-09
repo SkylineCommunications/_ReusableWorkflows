@@ -29,13 +29,13 @@ on:
     secrets:
       LIVESERVICETESTS_ACR_LOGIN_SERVER:
         required: false
-        description: 'ACR login server. Optional override; loaded from the LiveService Key Vault when omitted.'
+        description: 'ACR login server (e.g. liveservicetests-xyz.azurecr.io). Optional - uses OIDC for SkylineCommunications repos, required for external repos.'
       LIVESERVICETESTS_ACR_USERNAME:
         required: false
-        description: 'ACR username. Optional override; loaded from the LiveService Key Vault when omitted.'
+        description: 'ACR username. Optional - uses OIDC for SkylineCommunications repos, required for external repos.'
       LIVESERVICETESTS_ACR_PASSWORD:
         required: false
-        description: 'ACR password. Optional override; loaded from the LiveService Key Vault when omitted.'
+        description: 'ACR password. Optional - uses OIDC for SkylineCommunications repos, required for external repos.'
 
 jobs:
   validate_trigger:
