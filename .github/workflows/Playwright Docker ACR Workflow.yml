@@ -16,6 +16,11 @@ on:
         type: string
         default: 'Dockerfile'
         description: 'Path to Dockerfile relative to repository root'
+      dotnet-version:
+        required: false
+        type: string
+        default: '8.x'
+        description: '.NET SDK version to use'
       image-tag:
         required: false
         type: string
