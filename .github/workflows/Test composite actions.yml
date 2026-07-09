@@ -667,6 +667,17 @@ jobs:
           test "$BRANCH_VERSION" = "0.0.70000"
           test "$BRANCH_NUMERIC" = "0.0.4465.4465"
 
+  set-repo-type:
+    name: set-repo-type
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run repo-type mapping unit tests
+        shell: pwsh
+        run: ./.github/actions/set-repo-type/test.ps1
+
+
   package-debian:
     name: package-debian
     runs-on: ubuntu-latest

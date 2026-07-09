@@ -126,6 +126,7 @@ jobs:
     outputs:
       has-dataminer-projects: ${{ steps.detect-projects.outputs.has-dataminer-projects }}
       has-wix-projects: ${{ steps.detect-projects.outputs.has-wix-projects }}
+      has-nuget-projects: ${{ steps.detect-projects.outputs.has-nuget-projects }}
       has-ubuntu-dxm: ${{ inputs.dxm-projects-ubuntu != '' }}
       solution-path: ${{ steps.find-solution-file.outputs.path }}
     steps:
@@ -165,6 +166,7 @@ jobs:
           $solutionDir  = Split-Path $solutionPath -Parent
           $hasDataminerProjects = $false
           $hasWixProjects = $false
+          $hasNugetProjects = $false
 
           # Use dotnet sln list to enumerate projects in the solution (skip 2-line header)
           $projectPaths = dotnet sln "$solutionPath" list | Select-Object -Skip 2 | Where-Object { $_ -ne '' }
@@ -195,11 +197,21 @@ jobs:
               $hasWixProjects = $true
             }
 
-            if ($hasDataminerProjects -and $hasWixProjects) { break }
+            # Check for NuGet-publishing projects: those that opt into packaging
+            # (GeneratePackageOnBuild / IsPackable = true)
+            if (-not $hasNugetProjects) {
+              $generatePackage = $content.SelectNodes("//GeneratePackageOnBuild") | Where-Object { "$($_.InnerText)".Trim().ToLowerInvariant() -eq 'true' }
+              $isPackable = $content.SelectNodes("//IsPackable") | Where-Object { "$($_.InnerText)".Trim().ToLowerInvariant() -eq 'true' }
+              if ($generatePackage -or $isPackable) {
+                Write-Output "Found NuGet-publishing project: $relativePath"
+                $hasNugetProjects = $true
+              }
+            }
           }
 
           echo "has-dataminer-projects=$($hasDataminerProjects.ToString().ToLower())" >> $env:GITHUB_OUTPUT
           echo "has-wix-projects=$($hasWixProjects.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          echo "has-nuget-projects=$($hasNugetProjects.ToString().ToLower())" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
   determine_version:
@@ -217,6 +229,60 @@ jobs:
           ref-type: ${{ github.ref_type }}
           ref-name: ${{ github.ref_name }}
           run-number: ${{ github.run_number }}
+
+  # Keep the enterprise custom property `Workflow-Repo-Type` in sync with what the repo builds, so
+  # the conditional governance rulesets stay correct. Runs only on the repository's default branch
+  # (feature branches / PRs / tags never flip the governance type) and only for Skyline-managed,
+  # non-fork repos where OIDC (and thus the Key Vault token) is available. The write identity is the
+  # org-owner classic PAT `reusable-workflow-token`; the default GITHUB_TOKEN cannot write it.
+  set_repo_type:
+    name: Set Repo Type
+    needs: [check_oidc, discover_projects]
+    if: >-
+      github.ref_name == github.event.repository.default_branch &&
+      needs.check_oidc.outputs.is-skyline-managed == 'true' &&
+      needs.check_oidc.outputs.is-fork != 'true' &&
+      needs.check_oidc.outputs.use-oidc == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Azure Login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ needs.check_oidc.outputs.client-id }}
+          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+      - name: Load secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+          secret-names: |
+            reusable-workflow-token
+
+      - name: Compute repo types
+        id: map
+        env:
+          HAS_DXM: ${{ needs.discover_projects.outputs.has-wix-projects == 'true' || needs.discover_projects.outputs.has-ubuntu-dxm == 'true' }}
+          HAS_APPPACKAGE: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
+          HAS_NUGET: ${{ needs.discover_projects.outputs.has-nuget-projects }}
+        run: |
+          types=()
+          [[ "$HAS_DXM" == "true" ]] && types+=("DxM")
+          [[ "$HAS_APPPACKAGE" == "true" ]] && types+=("AppPackage")
+          [[ "$HAS_NUGET" == "true" ]] && types+=("NuGet")
+          IFS=','
+          echo "repo-types=${types[*]}" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Set repo type
+        if: steps.map.outputs.repo-types != ''
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/set-repo-type@WorkflowRepoType
+        with:
+          repo-types: ${{ steps.map.outputs.repo-types }}
+          token: ${{ env.REUSABLE_WORKFLOW_TOKEN }}
 
   ci:
     name: CI

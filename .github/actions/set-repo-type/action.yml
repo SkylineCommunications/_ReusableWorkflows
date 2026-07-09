@@ -1,0 +1,40 @@
+name: Set repo type
+description: >
+  Writes the enterprise custom repository property `Workflow-Repo-Type`
+  (multi-select) on the repository the workflow runs in, so the governance
+  signal driving the conditional rulesets stays in sync with what the repo
+  actually builds. Reads the current value first and only PATCHes when the
+  computed set differs (idempotent); an empty set leaves the current value
+  untouched. Requires an org-owner token with the `repo` scope — the default
+  `GITHUB_TOKEN` cannot write custom-property values.
+
+inputs:
+  repo-types:
+    description: >
+      The value(s) to set — a JSON array (e.g. `["DxM","NuGet"]`) or a
+      comma-separated list (e.g. `DxM,NuGet`) of `DxM` / `NuGet` /
+      `Connector` / `AppPackage`. An empty value leaves the property unchanged.
+    required: true
+  token:
+    description: >
+      An organization-owner token with the `repo` scope (the OIDC-gated Key
+      Vault classic PAT `reusable-workflow-token`) — NOT the default
+      `GITHUB_TOKEN`, which cannot write custom-property values.
+    required: true
+  property-name:
+    description: The custom property to write.
+    required: false
+    default: Workflow-Repo-Type
+
+runs:
+  using: composite
+  steps:
+    - name: Set repo type
+      shell: pwsh
+      env:
+        REPO_TYPES: ${{ inputs.repo-types }}
+        TOKEN: ${{ inputs.token }}
+        PROPERTY_NAME: ${{ inputs.property-name }}
+        REPOSITORY: ${{ github.repository }}
+        GITHUB_API_URL: ${{ github.api_url }}
+      run: '& "$env:GITHUB_ACTION_PATH/set-repo-type.ps1"'

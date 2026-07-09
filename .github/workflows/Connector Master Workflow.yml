@@ -112,6 +112,7 @@ jobs:
       tenant-id: ${{ steps.resolve.outputs.tenant-id }}
       subscription-id: ${{ steps.resolve.outputs.subscription-id }}
       use-oidc: ${{ steps.resolve.outputs.use-oidc }}
+      is-skyline-managed: ${{ steps.resolve.outputs.is-skyline-managed }}
     steps:
       - id: resolve
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
@@ -174,3 +175,40 @@ jobs:
       sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
       debug: ${{ inputs.debug }}
     secrets: inherit
+
+  # Keep the enterprise custom property `Workflow-Repo-Type` in sync: a connector repo is always
+  # `Connector`. Runs only on the repository's default branch (feature branches / PRs / tags never
+  # flip the governance type) and only for Skyline-managed repos where OIDC (and thus the Key Vault
+  # token) is available. The write identity is the org-owner classic PAT `reusable-workflow-token`;
+  # the default GITHUB_TOKEN cannot write it.
+  set_repo_type:
+    name: Set Repo Type
+    needs: [check_oidc]
+    if: >-
+      github.ref_name == github.event.repository.default_branch &&
+      needs.check_oidc.outputs.is-skyline-managed == 'true' &&
+      needs.check_oidc.outputs.use-oidc == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Azure Login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ needs.check_oidc.outputs.client-id }}
+          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+      - name: Load secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+          secret-names: |
+            reusable-workflow-token
+
+      - name: Set repo type
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/set-repo-type@WorkflowRepoType
+        with:
+          repo-types: Connector
+          token: ${{ env.REUSABLE_WORKFLOW_TOKEN }}
