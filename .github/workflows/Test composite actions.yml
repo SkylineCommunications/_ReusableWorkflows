@@ -593,19 +593,19 @@ jobs:
           token: ${{ secrets.SONAR_TOKEN }}
           repository: ${{ github.repository }}
 
-  parse-rn-task-table:
-    name: parse-rn-task-table
+  references-parser:
+    name: references-parser
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
       - name: Run 16-case parser corpus
         shell: pwsh
-        run: ./.github/actions/parse-rn-task-table/test.ps1
+        run: ./.github/actions/references-parser/test.ps1
 
       - name: Invoke composite smoke test
-        id: rn-task
-        uses: ./.github/actions/parse-rn-task-table
+        id: references
+        uses: ./.github/actions/references-parser
         with:
           pr-body: |
             Example change description.
@@ -616,10 +616,10 @@ jobs:
 
       - name: Assert composite outputs
         env:
-          STATUS: ${{ steps.rn-task.outputs.status }}
-          CHANGE_TYPE: ${{ steps.rn-task.outputs.change-type }}
-          RNS: ${{ steps.rn-task.outputs.rns }}
-          TASKS: ${{ steps.rn-task.outputs.tasks }}
+          STATUS: ${{ steps.references.outputs.status }}
+          CHANGE_TYPE: ${{ steps.references.outputs.change-type }}
+          RNS: ${{ steps.references.outputs.rns }}
+          TASKS: ${{ steps.references.outputs.tasks }}
         shell: pwsh
         run: |
           if ($env:STATUS -ne 'passed') { throw "Expected status passed, got '$env:STATUS'." }
@@ -628,6 +628,138 @@ jobs:
           $tasks = ConvertTo-Json -InputObject (ConvertFrom-Json -InputObject $env:TASKS -NoEnumerate) -Compress -Depth 10
           if ($rns -ne '["RN12"]') { throw "Unexpected RN output: $rns" }
           if ($tasks -ne '["DCP35"]') { throw "Unexpected tasks output: $tasks" }
+
+  determine-version:
+    name: determine-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run 18-case version corpus
+        shell: pwsh
+        run: ./.github/actions/determine-version/test.ps1
+
+      - name: Tag build smoke test
+        id: tag-build
+        uses: ./.github/actions/determine-version
+        with:
+          ref-type: tag
+          ref-name: 1.4.0-dev-myfeature.42
+          run-number: 99
+
+      - name: Branch build smoke test
+        id: branch-build
+        uses: ./.github/actions/determine-version
+        with:
+          ref-type: branch
+          ref-name: main
+          run-number: 70000
+
+      - name: Assert composite outputs
+        env:
+          TAG_VERSION: ${{ steps.tag-build.outputs.version }}
+          TAG_NUMERIC: ${{ steps.tag-build.outputs.numeric-version }}
+          BRANCH_VERSION: ${{ steps.branch-build.outputs.version }}
+          BRANCH_NUMERIC: ${{ steps.branch-build.outputs.numeric-version }}
+        run: |
+          test "$TAG_VERSION" = "1.4.0-dev-myfeature.42"
+          test "$TAG_NUMERIC" = "1.4.0.99"
+          test "$BRANCH_VERSION" = "0.0.70000"
+          test "$BRANCH_NUMERIC" = "0.0.4465.4465"
+
+  package-debian:
+    name: package-debian
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Scaffold two DxM projects with Debian skeletons
+        run: |
+          demo_dir="${RUNNER_TEMP}/deb-demo"
+          mkdir -p "$demo_dir"
+          cd "$demo_dir"
+          for svc in SvcOne SvcTwo; do
+            dotnet new console -n "$svc" -o "$svc"
+            echo '{ "setting": "value" }' > "$svc/appsettings.json"
+            sed -i 's#</Project>#  <ItemGroup><Content Include="appsettings.json" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>\n</Project>#' "$svc/$svc.csproj"
+            mkdir -p "$svc/packaging/Debian/content/DEBIAN"
+            lower=$(echo "$svc" | tr '[:upper:]' '[:lower:]')
+            {
+              echo "Package: $lower"
+              echo "Version: <VERSION>"
+              echo "Architecture: amd64"
+              echo "Maintainer: Skyline Communications <devops@skyline.be>"
+              echo "Description: Test service $svc"
+            } > "$svc/packaging/Debian/content/DEBIAN/control"
+            echo "/etc/skyline-communications/$svc/appsettings.json" > "$svc/packaging/Debian/content/DEBIAN/conffiles"
+          done
+
+      - name: Invoke composite (pre-release version, no SBOM)
+        id: package
+        uses: ./.github/actions/package-debian
+        with:
+          projects: ${{ runner.temp }}/deb-demo/SvcOne, ${{ runner.temp }}/deb-demo/SvcTwo
+          version: 1.2.3-beta.1
+          generate-sbom: 'false'
+          output-directory: deb-output
+
+      - name: Assert Debian packages
+        env:
+          PACKAGE_COUNT: ${{ steps.package.outputs.package-count }}
+        run: |
+          ls -l deb-output
+          test "$PACKAGE_COUNT" = "2"
+          test -f "deb-output/SvcOne_1.2.3~beta.1.deb"
+          test -f "deb-output/SvcTwo_1.2.3~beta.1.deb"
+          version=$(dpkg-deb --field "deb-output/SvcOne_1.2.3~beta.1.deb" Version)
+          test "$version" = "1.2.3~beta.1"
+          dpkg-deb --contents "deb-output/SvcOne_1.2.3~beta.1.deb" | grep -q 'opt/skyline-communications/SvcOne/'
+          dpkg-deb --contents "deb-output/SvcOne_1.2.3~beta.1.deb" | grep -q 'etc/skyline-communications/SvcOne/appsettings.json'
+          dpkg-deb --contents "deb-output/SvcTwo_1.2.3~beta.1.deb" | grep -q 'opt/skyline-communications/SvcTwo/'
+
+  remove-wix-projects:
+    name: remove-wix-projects
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run offline test corpus
+        shell: pwsh
+        run: ./.github/actions/remove-wix-projects/test.ps1
+
+      - name: Scaffold a solution with WiX projects
+        id: scaffold
+        run: |
+          demo_dir="${RUNNER_TEMP}/wix-demo"
+          mkdir -p "$demo_dir"
+          cd "$demo_dir"
+          dotnet new sln --name Demo
+          solution_path=$(find "$demo_dir" -maxdepth 1 -name 'Demo.sln*' | head -n 1)
+          dotnet new classlib -n PlainLib -o PlainLib
+          dotnet sln "$solution_path" add PlainLib/PlainLib.csproj
+          mkdir Installer
+          echo '<Project Sdk="WixToolset.Sdk/6.0.0"></Project>' > Installer/Installer.wixproj
+          dotnet sln "$solution_path" add Installer/Installer.wixproj
+          echo "solution-path=$solution_path" >> "$GITHUB_OUTPUT"
+
+      - name: Invoke composite smoke test
+        id: remove
+        uses: ./.github/actions/remove-wix-projects
+        with:
+          solution-path: ${{ steps.scaffold.outputs.solution-path }}
+
+      - name: Assert removal
+        env:
+          REMOVED_COUNT: ${{ steps.remove.outputs.removed-count }}
+          SOLUTION_PATH: ${{ steps.scaffold.outputs.solution-path }}
+        run: |
+          test "$REMOVED_COUNT" = "1"
+          remaining=$(dotnet sln "$SOLUTION_PATH" list | tail -n +3)
+          echo "$remaining" | grep -q 'PlainLib'
+          if echo "$remaining" | grep -q 'wixproj'; then
+            echo 'wixproj was not removed'
+            exit 1
+          fi
 
   quality-gate-summary:
     name: quality-gate-summary
@@ -649,6 +781,19 @@ jobs:
         env:
           STATUS: ${{ steps.all-pass.outputs.status }}
         run: test "$STATUS" = "passed"
+
+      - name: Sonar link rendered when project name given
+        id: sonar-link
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          post-pr-comment: 'false'
+          unit-tests-outcome: success
+          sonar-outcome: success
+          sonar-status: PASSED
+          sonarcloud-project-name: my-org_my-project
+
+      - name: Assert sonar link in comment file
+        run: grep -q 'https://sonarcloud.io/summary/new_code?id=my-org_my-project' "$GITHUB_WORKSPACE/quality-gate-comment.md"
 
       - name: Unit test failure fails the gate
         id: ut-fail

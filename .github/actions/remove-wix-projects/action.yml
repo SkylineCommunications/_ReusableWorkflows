@@ -1,0 +1,27 @@
+name: Remove WiX projects
+description: >
+  Removes WiX installer projects (*.wixproj) and WiX custom-action projects
+  (*.csproj referencing WixToolset.Dtf.CustomAction /
+  WixToolset.Dtf.WindowsInstaller) from a solution. WiX cannot be built on
+  Linux, so the cross-platform ci job strips these projects before building;
+  the real installer build happens in the Windows packaging job.
+
+inputs:
+  solution-path:
+    description: Path to the solution file (`.sln` / `.slnx`) to strip.
+    required: true
+
+outputs:
+  removed-count:
+    description: The number of WiX-related projects removed from the solution.
+    value: ${{ steps.remove.outputs.removed-count }}
+
+runs:
+  using: composite
+  steps:
+    - name: Remove WiX projects
+      id: remove
+      shell: bash
+      env:
+        SOLUTION_PATH: ${{ inputs.solution-path }}
+      run: bash "${{ github.action_path }}/remove-wix-projects.sh"

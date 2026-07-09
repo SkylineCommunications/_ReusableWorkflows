@@ -1,0 +1,40 @@
+name: Compute next version
+description: >
+  Computes the next SemVer version from the latest final git tag and a
+  Change-Type bump. Pre-release tags are ignored when selecting the base
+  tag, so repeated pre-releases keep bumping from the same final version.
+  In prerelease mode the provided suffix is appended.
+
+inputs:
+  change-type:
+    description: The SemVer bump to apply, one of Patch, Minor, or Major. Defaults to Patch when empty.
+    required: false
+    default: Patch
+  mode:
+    description: Either release (bare version) or prerelease (suffix appended). Defaults to release.
+    required: false
+    default: release
+  suffix:
+    description: The pre-release suffix body (e.g. dev-myfeature.42). Used only when mode is prerelease.
+    required: false
+    default: ""
+
+outputs:
+  version:
+    description: The computed version, e.g. 1.4.0 or 1.4.0-dev-myfeature.42.
+    value: ${{ steps.compute.outputs.version }}
+  latest-tag:
+    description: The latest final tag the bump was computed from, or empty when no final tag exists.
+    value: ${{ steps.compute.outputs.latest-tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Compute next version
+      id: compute
+      shell: pwsh
+      env:
+        CHANGE_TYPE: ${{ inputs.change-type }}
+        MODE: ${{ inputs.mode }}
+        SUFFIX: ${{ inputs.suffix }}
+      run: '& "$env:GITHUB_ACTION_PATH/compute-next-version.ps1"'

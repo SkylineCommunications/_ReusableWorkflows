@@ -1,8 +1,8 @@
-# parse-rn-task-table
+# references-parser
 
-Parses the `References:` line in a pull request description and validates the mandatory DxM release administration.
+Parses the `References:` line in a pull request description (or squash-merge commit message) and validates the mandatory DxM release administration.
 
-The action finds the `References:` line (e.g. `References: [RN44205] [DCP284603] [RN4345] [DCP28543]`), extracts the bracketed ids, normalizes them to upper-case, validates the id format, resolves the `Change-Type` label, and writes a markdown summary for the `skyline-rn-task` sticky PR comment.
+The action finds the `References:` line (e.g. `References: [RN44205] [DCP284603] [RN4345] [DCP28543]`), extracts the bracketed ids, normalizes them to upper-case, validates the id format, resolves the `Change-Type` label, and writes a markdown summary for the `skyline-references` sticky PR comment.
 
 ## Inputs
 
@@ -36,9 +36,9 @@ The action finds the `References:` line (e.g. `References: [RN44205] [DCP284603]
 ## Usage
 
 ```yaml
-- name: Parse RN/Task references
-  id: rn-task
-  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/parse-rn-task-table@main
+- name: Parse References line
+  id: references
+  uses: SkylineCommunications/_ReusableWorkflows/.github/actions/references-parser@main
   with:
     pr-body: ${{ github.event.pull_request.body }}
     actor: ${{ github.event.pull_request.user.login }}
@@ -49,13 +49,13 @@ The parser does not fail the step for validation errors. It emits `status=failed
 
 ## Sticky comment example
 
-The action renders `comment-file`, which the reusable workflow posts as the `skyline-rn-task` sticky
+The action renders `comment-file`, which the reusable workflow posts as the `skyline-references` sticky
 comment. RN and task ids link to their DataMiner collaboration pages.
 
 A passing PR:
 
 ```markdown
-## PR RN/Task Validation: ✅ **Passed**
+## PR References Validation: ✅ **Passed**
 
 | Item | Value |
 | --- | :---: |
@@ -77,7 +77,7 @@ A Dependabot PR adds a `Dependabot RN-only mode` row, and the **Tasks** section 
 task is linked:
 
 ```markdown
-## PR RN/Task Validation: ✅ **Passed**
+## PR References Validation: ✅ **Passed**
 
 | Item | Value |
 | --- | :---: |
@@ -93,7 +93,7 @@ task is linked:
 A failing PR shows a ❌ status and lists the validation errors:
 
 ```markdown
-## PR RN/Task Validation: ❌ **Failed**
+## PR References Validation: ❌ **Failed**
 
 | Item | Value |
 | --- | :---: |
@@ -114,7 +114,7 @@ Validation errors:
 The PR validation corpus runs through:
 
 ```powershell
-pwsh .github/actions/parse-rn-task-table/test.ps1
+pwsh .github/actions/references-parser/test.ps1
 ```
 
 The same command is wired into [Test composite actions.yml](../../workflows/Test%20composite%20actions.yml).

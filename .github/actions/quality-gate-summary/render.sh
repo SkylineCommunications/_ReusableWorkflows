@@ -278,6 +278,11 @@ comment_file="${GITHUB_WORKSPACE}/quality-gate-comment.md"
     fi
   fi
 
+  if [ -n "${SONAR_PROJECT_NAME:-}" ]; then
+    echo "_SonarCloud: [new-code dashboard for \`${BRANCH_NAME:-}\`](https://sonarcloud.io/summary/new_code?id=${SONAR_PROJECT_NAME}&branch=${BRANCH_NAME:-})_"
+    echo ""
+  fi
+
   if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] || [ "${GITHUB_EVENT_NAME:-}" = "pull_request_target" ]; then
     echo "_See the [Actions run]($RUN_URL) for full logs._"
   fi

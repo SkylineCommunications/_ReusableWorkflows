@@ -11,7 +11,7 @@ if ([string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
 $prBody = if ($null -ne $env:PR_BODY) { $env:PR_BODY } else { '' }
 $actor = if ($null -ne $env:ACTOR) { $env:ACTOR } else { '' }
 $labelsJson = if ($null -ne $env:LABELS_JSON) { $env:LABELS_JSON } else { '[]' }
-$commentHeader = if ($null -ne $env:COMMENT_HEADER) { $env:COMMENT_HEADER } else { 'skyline-rn-task' }
+$commentHeader = if ($null -ne $env:COMMENT_HEADER) { $env:COMMENT_HEADER } else { 'skyline-references' }
 
 $errors = [System.Collections.Generic.List[string]]::new()
 $allRns = [System.Collections.Generic.List[string]]::new()
@@ -144,7 +144,7 @@ function Write-ValidationComment {
         [AllowEmptyCollection()][string[]]$Tasks
     )
 
-    $commentFile = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath 'rn-task-validation-comment.md'
+    $commentFile = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath 'references-validation-comment.md'
     $isDependabot = $script:actor -eq 'dependabot[bot]'
     if ($Status -eq 'failed') {
         $statusIcon = '❌'
@@ -157,7 +157,7 @@ function Write-ValidationComment {
     $content = [System.Collections.Generic.List[string]]::new()
 
     $content.Add("<!-- ${script:commentHeader} -->")
-    $content.Add("## PR RN/Task Validation: ${statusIcon} ${headingText}")
+    $content.Add("## PR References Validation: ${statusIcon} ${headingText}")
     $content.Add('')
     $content.Add('| Item | Value |')
     $content.Add('| --- | :---: |')
