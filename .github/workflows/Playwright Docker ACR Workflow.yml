@@ -83,12 +83,11 @@ jobs:
         id: resolve-liveservice
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
         with:
-          # Hardcoded LiveService federated-credential identity (distinct from CI/CD).
-          # resolve-oidc honors these explicit ids before the Skyline-managed defaults.
-          # TODO: replace placeholders with the real LiveService app registration values.
-          client-id: REPLACE_WITH_LIVESERVICE_CLIENT_ID
+          # LiveService OIDC identity for pushing test images to the LiveService ACR.
+          # Federated credentials enforce that only workflows from _ReusableWorkflows can authenticate.
+          client-id: 2ea5c4d5-d267-4b09-b3aa-e199386e0ea4
           tenant-id: 5f175691-8d1c-4932-b7c8-ce990839ac40
-          subscription-id: REPLACE_WITH_LIVESERVICE_SUBSCRIPTION_ID
+          subscription-id: 7886331d-2dce-4c81-9d63-10bb793a5408
           repository-owner: ${{ github.repository_owner }}
           is-fork: ${{ steps.detect-fork.outputs.is-fork }}
 
@@ -185,28 +184,28 @@ jobs:
           tenant-id: ${{ needs.check_oidc.outputs.liveservice-tenant-id }}
           subscription-id: ${{ needs.check_oidc.outputs.liveservice-subscription-id }}
 
-      - name: Load ACR secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
-        with:
-          # Hardcoded LiveService Key Vault name (secrets read via the LiveService OIDC identity).
-          # TODO: replace placeholder with the real LiveService Key Vault name.
-          vault-name: REPLACE_WITH_LIVESERVICE_VAULT_NAME
-          use-oidc: ${{ needs.check_oidc.outputs.liveservice-use-oidc }}
-          secret-names: |
-            liveservicetests-acr-login-server
-            liveservicetests-acr-username
-            liveservicetests-acr-password
-          overrides: |
-            LIVESERVICETESTS_ACR_LOGIN_SERVER=${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
-            LIVESERVICETESTS_ACR_USERNAME=${{ secrets.LIVESERVICETESTS_ACR_USERNAME }}
-            LIVESERVICETESTS_ACR_PASSWORD=${{ secrets.LIVESERVICETESTS_ACR_PASSWORD }}
+      - name: Log in to ACR via OIDC
+        if: needs.check_oidc.outputs.liveservice-use-oidc == 'true'
+        run: az acr login --name liveservicetests
+        shell: bash
 
-      - name: Log in to ACR
+      - name: Log in to ACR via explicit secrets
+        if: needs.check_oidc.outputs.liveservice-use-oidc != 'true'
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
-          username: ${{ env.LIVESERVICETESTS_ACR_USERNAME }}
-          password: ${{ env.LIVESERVICETESTS_ACR_PASSWORD }}
+          registry: ${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
+          username: ${{ secrets.LIVESERVICETESTS_ACR_USERNAME }}
+          password: ${{ secrets.LIVESERVICETESTS_ACR_PASSWORD }}
+
+      - name: Set ACR login server
+        id: set-acr
+        run: |
+          if [[ "${{ needs.check_oidc.outputs.liveservice-use-oidc }}" == "true" ]]; then
+            echo "login-server=liveservicetests-cjcdb2cybdh4eyfu.azurecr.io" >> "$GITHUB_OUTPUT"
+          else
+            echo "login-server=${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -220,7 +219,7 @@ jobs:
           build-args: |
             PROJECT_PATH=${{ inputs.project-path }}
           tags: |
-            ${{ env.LIVESERVICETESTS_ACR_LOGIN_SERVER }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
-            ${{ inputs.include-sha-tag && format('{0}/{1}:{2}', env.LIVESERVICETESTS_ACR_LOGIN_SERVER, inputs.image-name, github.sha) || '' }}
+            ${{ steps.set-acr.outputs.login-server }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
+            ${{ inputs.include-sha-tag && format('{0}/{1}:{2}', steps.set-acr.outputs.login-server, inputs.image-name, github.sha) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
