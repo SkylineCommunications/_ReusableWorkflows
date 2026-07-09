@@ -555,7 +555,7 @@ jobs:
 
       - name: Build Debian packages
         id: package-debian
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/package-debian@DxMSupport
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/package-debian@main
         with:
           projects: ${{ inputs.dxm-projects-ubuntu }}
           version: ${{ needs.determine_version.outputs.version }}
