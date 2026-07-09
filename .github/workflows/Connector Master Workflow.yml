@@ -179,7 +179,7 @@ jobs:
   # Keep the enterprise custom property `Workflow-Repo-Type` in sync: a connector repo is always
   # `Connector`. Runs only on the repository's default branch (feature branches / PRs / tags never
   # flip the governance type) and only for Skyline-managed repos where OIDC (and thus the Key Vault
-  # token) is available. The write identity is the org-owner classic PAT `reusable-workflow-token`;
+  # token) is available. The write identity is the org-owner classic PAT `reusable-workflows-token`;
   # the default GITHUB_TOKEN cannot write it.
   set_repo_type:
     name: Set Repo Type
@@ -205,10 +205,10 @@ jobs:
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
-            reusable-workflow-token
+            reusable-workflows-token
 
       - name: Set repo type
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/set-repo-type@WorkflowRepoType
         with:
           repo-types: Connector
-          token: ${{ env.REUSABLE_WORKFLOW_TOKEN }}
+          token: ${{ env.REUSABLE_WORKFLOWS_TOKEN }}

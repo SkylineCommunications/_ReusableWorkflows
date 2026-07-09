@@ -234,7 +234,7 @@ jobs:
   # the conditional governance rulesets stay correct. Runs only on the repository's default branch
   # (feature branches / PRs / tags never flip the governance type) and only for Skyline-managed,
   # non-fork repos where OIDC (and thus the Key Vault token) is available. The write identity is the
-  # org-owner classic PAT `reusable-workflow-token`; the default GITHUB_TOKEN cannot write it.
+  # org-owner classic PAT `reusable-workflows-token`; the default GITHUB_TOKEN cannot write it.
   set_repo_type:
     name: Set Repo Type
     needs: [check_oidc, discover_projects]
@@ -260,7 +260,7 @@ jobs:
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
-            reusable-workflow-token
+            reusable-workflows-token
 
       - name: Compute repo types
         id: map
@@ -282,7 +282,7 @@ jobs:
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/set-repo-type@WorkflowRepoType
         with:
           repo-types: ${{ steps.map.outputs.repo-types }}
-          token: ${{ env.REUSABLE_WORKFLOW_TOKEN }}
+          token: ${{ env.REUSABLE_WORKFLOWS_TOKEN }}
 
   ci:
     name: CI
