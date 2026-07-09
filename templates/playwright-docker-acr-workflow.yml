@@ -19,8 +19,8 @@ jobs:
       # ============================================
       
       dockerfile-path: 'Dockerfile'
-      dotnet-version: '8.x'
-    secrets:
-      LIVESERVICETESTS_ACR_LOGIN_SERVER: ${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
-      LIVESERVICETESTS_ACR_USERNAME: ${{ secrets.LIVESERVICETESTS_ACR_USERNAME }}
-      LIVESERVICETESTS_ACR_PASSWORD: ${{ secrets.LIVESERVICETESTS_ACR_PASSWORD }}
+    secrets: inherit
+    # secrets:
+    #   LIVESERVICETESTS_ACR_LOGIN_SERVER: ${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
+    #   LIVESERVICETESTS_ACR_USERNAME: ${{ secrets.LIVESERVICETESTS_ACR_USERNAME }}
+    #   LIVESERVICETESTS_ACR_PASSWORD: ${{ secrets.LIVESERVICETESTS_ACR_PASSWORD }}

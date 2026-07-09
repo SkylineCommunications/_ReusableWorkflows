@@ -16,11 +16,6 @@ on:
         type: string
         default: 'Dockerfile'
         description: 'Path to Dockerfile relative to repository root'
-      dotnet-version:
-        required: false
-        type: string
-        default: '8.x'
-        description: '.NET SDK version to use'
       image-tag:
         required: false
         type: string
@@ -33,62 +28,191 @@ on:
         description: '(Advanced) Also tag image with commit SHA for traceability. Increases storage usage.'
     secrets:
       LIVESERVICETESTS_ACR_LOGIN_SERVER:
-        required: true
-        description: 'Azure Container Registry login server (e.g. liveservicetests-xyz.azurecr.io)'
+        required: false
+        description: 'ACR login server. Optional override; loaded from the LiveService Key Vault when omitted.'
       LIVESERVICETESTS_ACR_USERNAME:
-        required: true
-        description: 'Azure Container Registry username'
+        required: false
+        description: 'ACR username. Optional override; loaded from the LiveService Key Vault when omitted.'
       LIVESERVICETESTS_ACR_PASSWORD:
-        required: true
-        description: 'Azure Container Registry password'
+        required: false
+        description: 'ACR password. Optional override; loaded from the LiveService Key Vault when omitted.'
 
 jobs:
-  build-and-push:
+  validate_trigger:
+    name: Validate Trigger
     runs-on: ubuntu-latest
-    
+    steps:
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+
+  check_oidc:
+    name: Check OIDC
+    needs: [validate_trigger]
+    runs-on: ubuntu-latest
+    outputs:
+      cicd-client-id: ${{ steps.resolve-cicd.outputs.client-id }}
+      cicd-tenant-id: ${{ steps.resolve-cicd.outputs.tenant-id }}
+      cicd-subscription-id: ${{ steps.resolve-cicd.outputs.subscription-id }}
+      cicd-use-oidc: ${{ steps.resolve-cicd.outputs.use-oidc }}
+      liveservice-client-id: ${{ steps.resolve-liveservice.outputs.client-id }}
+      liveservice-tenant-id: ${{ steps.resolve-liveservice.outputs.tenant-id }}
+      liveservice-subscription-id: ${{ steps.resolve-liveservice.outputs.subscription-id }}
+      liveservice-use-oidc: ${{ steps.resolve-liveservice.outputs.use-oidc }}
+    steps:
+      - name: Detect forked pull request
+        id: detect-fork
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$REPOSITORY" ]]; then
+            echo "is-fork=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-fork=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve CI/CD OIDC parameters
+        id: resolve-cicd
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        with:
+          repository-owner: ${{ github.repository_owner }}
+          is-fork: ${{ steps.detect-fork.outputs.is-fork }}
+
+      - name: Resolve LiveService OIDC parameters
+        id: resolve-liveservice
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        with:
+          # Hardcoded LiveService federated-credential identity (distinct from CI/CD).
+          # resolve-oidc honors these explicit ids before the Skyline-managed defaults.
+          # TODO: replace placeholders with the real LiveService app registration values.
+          client-id: REPLACE_WITH_LIVESERVICE_CLIENT_ID
+          tenant-id: 5f175691-8d1c-4932-b7c8-ce990839ac40
+          subscription-id: REPLACE_WITH_LIVESERVICE_SUBSCRIPTION_ID
+          repository-owner: ${{ github.repository_owner }}
+          is-fork: ${{ steps.detect-fork.outputs.is-fork }}
+
+  publish:
+    name: Publish test project
+    needs: [check_oidc]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Validate image name
-        run: |
-          if [[ "${{ inputs.image-name }}" =~ [A-Z] ]]; then
-            echo "❌ Error: image-name must be lowercase for Azure Container Registry"
-            echo "Got: ${{ inputs.image-name }}"
-            exit 1
-          fi
-        shell: bash
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - name: Azure Login (CI/CD)
+        if: needs.check_oidc.outputs.cicd-use-oidc == 'true'
+        uses: azure/login@v3
         with:
-          dotnet-version: ${{ inputs.dotnet-version }}
+          client-id: ${{ needs.check_oidc.outputs.cicd-client-id }}
+          tenant-id: ${{ needs.check_oidc.outputs.cicd-tenant-id }}
+          subscription-id: ${{ needs.check_oidc.outputs.cicd-subscription-id }}
 
-      - name: Add Skyline NuGet feed
-        run: |
-          dotnet nuget add source "https://nuget.pkg.github.com/SkylineCommunications/index.json" \
-            --name github \
-            --username ${{ github.actor }} \
-            --password ${{ secrets.GITHUB_TOKEN }} \
-            --store-password-in-clear-text
+      - name: Load NuGet secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.cicd-use-oidc }}
+          secret-names: |
+            azure-token
+            skylinecommunications-github-token
+            skylinecommunicationscore-github-token
+
+      - name: Setup Skyline NuGet sources
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+        with:
+          skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
+          skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
+          azure-token: ${{ env.AZURE_TOKEN }}
 
       - name: Publish test project
+        env:
+          PROJECT_PATH: ${{ inputs.project-path }}
         run: |
-          dotnet publish ${{ inputs.project-path }}/${{ inputs.project-path }}.csproj \
-            -c Release -o ./publish/tests
+          dotnet publish "$PROJECT_PATH/$PROJECT_PATH.csproj" -c Release -o ./publish/tests
+
+      - name: Upload published tests
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-tests-publish
+          path: publish/tests
+          retention-days: 1
+          if-no-files-found: error
+
+  build-and-push:
+    name: Build and Push
+    needs: [check_oidc, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Validate image name
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+        run: |
+          if [[ "$IMAGE_NAME" =~ [A-Z] ]]; then
+            echo "::error::image-name must be lowercase for Azure Container Registry"
+            echo "Got: $IMAGE_NAME"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Download published tests
+        uses: actions/download-artifact@v8
+        with:
+          name: playwright-tests-publish
+          path: publish/tests
+
+      - name: Azure Login (LiveService)
+        if: needs.check_oidc.outputs.liveservice-use-oidc == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ needs.check_oidc.outputs.liveservice-client-id }}
+          tenant-id: ${{ needs.check_oidc.outputs.liveservice-tenant-id }}
+          subscription-id: ${{ needs.check_oidc.outputs.liveservice-subscription-id }}
+
+      - name: Load ACR secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          # Hardcoded LiveService Key Vault name (secrets read via the LiveService OIDC identity).
+          # TODO: replace placeholder with the real LiveService Key Vault name.
+          vault-name: REPLACE_WITH_LIVESERVICE_VAULT_NAME
+          use-oidc: ${{ needs.check_oidc.outputs.liveservice-use-oidc }}
+          secret-names: |
+            liveservicetests-acr-login-server
+            liveservicetests-acr-username
+            liveservicetests-acr-password
+          overrides: |
+            LIVESERVICETESTS_ACR_LOGIN_SERVER=${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
+            LIVESERVICETESTS_ACR_USERNAME=${{ secrets.LIVESERVICETESTS_ACR_USERNAME }}
+            LIVESERVICETESTS_ACR_PASSWORD=${{ secrets.LIVESERVICETESTS_ACR_PASSWORD }}
 
       - name: Log in to ACR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
-          registry: ${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
-          username: ${{ secrets.LIVESERVICETESTS_ACR_USERNAME }}
-          password: ${{ secrets.LIVESERVICETESTS_ACR_PASSWORD }}
+          registry: ${{ env.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
+          username: ${{ env.LIVESERVICETESTS_ACR_USERNAME }}
+          password: ${{ env.LIVESERVICETESTS_ACR_PASSWORD }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ inputs.dockerfile-path }}
@@ -96,7 +220,7 @@ jobs:
           build-args: |
             PROJECT_PATH=${{ inputs.project-path }}
           tags: |
-            ${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
-            ${{ inputs.include-sha-tag && format('{0}/{1}:{2}', secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER, inputs.image-name, github.sha) || '' }}
+            ${{ env.LIVESERVICETESTS_ACR_LOGIN_SERVER }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
+            ${{ inputs.include-sha-tag && format('{0}/{1}:{2}', env.LIVESERVICETESTS_ACR_LOGIN_SERVER, inputs.image-name, github.sha) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
