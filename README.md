@@ -131,16 +131,17 @@ image — that's a separate, follow-up step (see below).
 
 ### Calling it from a team repo
 
+**Templates available at:** [`SkylineCommunications/platform-delivery-deployments`](https://github.com/SkylineCommunications/platform-delivery-deployments/tree/main/templates/playwright-docker-acr)
+
+Copy the workflow template, Dockerfile, and .dockerignore from the templates directory to your repo. See the [templates README](https://github.com/SkylineCommunications/platform-delivery-deployments/blob/main/templates/playwright-docker-acr/README.md) for quick start instructions.
+
 Example based on `SLC-RT-DaaS/.github/workflows/docker-image.yml`:
 
 ```yaml
 name: Build and Push Playwright Tests
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger - customize as needed
 
 jobs:
   build-and-push:
@@ -152,14 +153,16 @@ jobs:
       dotnet-version: '8.x'
       image-tag: 'latest'
       include-sha-tag: false
-    secrets:
-      LIVESERVICETESTS_ACR_LOGIN_SERVER: ${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
-      LIVESERVICETESTS_ACR_USERNAME: ${{ secrets.LIVESERVICETESTS_ACR_USERNAME }}
-      LIVESERVICETESTS_ACR_PASSWORD: ${{ secrets.LIVESERVICETESTS_ACR_PASSWORD }}
+    # SkylineCommunications repos: omit secrets (uses OIDC)
+    # External repos: pass ACR credentials explicitly
+    # secrets:
+    #   LIVESERVICETESTS_ACR_LOGIN_SERVER: ${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
+    #   LIVESERVICETESTS_ACR_USERNAME: ${{ secrets.LIVESERVICETESTS_ACR_USERNAME }}
+    #   LIVESERVICETESTS_ACR_PASSWORD: ${{ secrets.LIVESERVICETESTS_ACR_PASSWORD }}
 ```
 
-`LIVESERVICETESTS_ACR_LOGIN_SERVER` / `_USERNAME` / `_PASSWORD` are the
-team's ACR credentials, stored as repo secrets and passed through unchanged.
+**For SkylineCommunications repos:** No secrets needed — the workflow uses OIDC to
+authenticate automatically. **For external repos or custom ACR:** Pass explicit credentials as shown in the commented section above.
 
 ### Next step: deploying your image
 
