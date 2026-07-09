@@ -186,7 +186,7 @@ jobs:
 
       - name: Log in to ACR via OIDC
         if: needs.check_oidc.outputs.liveservice-use-oidc == 'true'
-        run: az acr login --name liveservicetests-cjcdb2cybdh4eyfu
+        run: az acr login --name liveservicetests --resource-group rg-live-service-tests
         shell: bash
 
       - name: Log in to ACR via explicit secrets
