@@ -257,5 +257,5 @@ jobs:
           jq -r --arg keep "$keep_digest" '.[] | select(.digest != $keep) | .digest' <<< "$manifests" |
           while IFS= read -r digest; do
             [[ -z "$digest" ]] && continue
-            az acr repository delete --name "$ACR_NAME" --repository "$IMAGE_NAME" --digest "$digest" --yes "${acr_auth_args[@]}"
+            az acr repository delete --name "$ACR_NAME" --image "$IMAGE_NAME@$digest" --yes "${acr_auth_args[@]}"
           done
