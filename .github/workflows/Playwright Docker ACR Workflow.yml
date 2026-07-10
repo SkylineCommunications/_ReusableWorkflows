@@ -135,7 +135,7 @@ jobs:
         env:
           PROJECT_PATH: ${{ inputs.project-path }}
         run: |
-          dotnet publish "$PROJECT_PATH/$PROJECT_PATH.csproj" -c Release -o ./publish/tests --self-contained false
+          dotnet publish "$PROJECT_PATH/$PROJECT_PATH.csproj" -c Release -o ./publish/tests
 
       - name: Upload published tests
         uses: actions/upload-artifact@v7
