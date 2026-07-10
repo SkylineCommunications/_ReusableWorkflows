@@ -200,11 +200,16 @@ jobs:
 
       - name: Set ACR login server
         id: set-acr
+        env:
+          USE_OIDC: ${{ needs.check_oidc.outputs.liveservice-use-oidc }}
+          ACR_LOGIN_SERVER: ${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}
         run: |
-          if [[ "${{ needs.check_oidc.outputs.liveservice-use-oidc }}" == "true" ]]; then
+          echo "registry-name=liveservicetests" >> "$GITHUB_OUTPUT"
+
+          if [[ "$USE_OIDC" == "true" ]]; then
             echo "login-server=liveservicetests-cjcdb2cybdh4eyfu.azurecr.io" >> "$GITHUB_OUTPUT"
           else
-            echo "login-server=${{ secrets.LIVESERVICETESTS_ACR_LOGIN_SERVER }}" >> "$GITHUB_OUTPUT"
+            echo "login-server=$ACR_LOGIN_SERVER" >> "$GITHUB_OUTPUT"
           fi
         shell: bash
 
@@ -224,3 +229,33 @@ jobs:
             ${{ inputs.include-sha-tag && format('{0}/{1}:{2}', steps.set-acr.outputs.login-server, inputs.image-name, github.sha) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Keep only current ACR manifest
+        env:
+          ACR_NAME: ${{ steps.set-acr.outputs.registry-name }}
+          ACR_USERNAME: ${{ secrets.LIVESERVICETESTS_ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.LIVESERVICETESTS_ACR_PASSWORD }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+          IMAGE_TAG: ${{ inputs.image-tag }}
+          USE_OIDC: ${{ needs.check_oidc.outputs.liveservice-use-oidc }}
+        run: |
+          set -euo pipefail
+
+          acr_auth_args=()
+          if [[ "$USE_OIDC" != "true" ]]; then
+            acr_auth_args+=(--username "$ACR_USERNAME" --password "$ACR_PASSWORD")
+          fi
+
+          manifests="$(az acr manifest list-metadata --registry "$ACR_NAME" --name "$IMAGE_NAME" --orderby time_desc --output json "${acr_auth_args[@]}")"
+          keep_digest="$(jq -r --arg tag "$IMAGE_TAG" '.[] | select((.tags // []) | index($tag)) | .digest' <<< "$manifests" | head -n 1)"
+
+          if [[ -z "$keep_digest" ]]; then
+            echo "::error::Could not find pushed tag '$IMAGE_TAG' in ACR repository '$IMAGE_NAME'."
+            exit 1
+          fi
+
+          jq -r --arg keep "$keep_digest" '.[] | select(.digest != $keep) | .digest' <<< "$manifests" |
+          while IFS= read -r digest; do
+            [[ -z "$digest" ]] && continue
+            az acr repository delete --name "$ACR_NAME" --repository "$IMAGE_NAME" --digest "$digest" --yes "${acr_auth_args[@]}"
+          done
