@@ -1001,6 +1001,78 @@ jobs:
           path: _SignedInstallers
 
   # ════════════════════════════════════════════════════════════════
+  # DxM Release (on tag only)
+  # Pre-release tags publish to QA; stable tags publish to QA and production.
+  # ════════════════════════════════════════════════════════════════
+
+  upload_dxms:
+    name: Upload DxM Installers (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag' && needs.package_windows.outputs.has-msi == 'true' && needs.check_oidc.outputs.use-oidc == 'true'
+    needs: [package_windows, check_oidc]
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON(contains(github.ref_name, '-') && '["qa"]' || '["qa","prod"]') }}
+    steps:
+      - name: Azure Login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ needs.check_oidc.outputs.client-id }}
+          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+      - name: Load DxM release secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+          secret-names: |
+            azure-token
+            skylinecommunications-github-token
+            skylinecommunicationscore-github-token
+            dxm-release-service-secret-${{ matrix.environment }}
+            dxm-release-artifact-access-key-${{ matrix.environment }}
+
+      - uses: actions/checkout@v7
+
+      - name: Setup Skyline NuGet sources
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+        with:
+          skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
+          skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
+          azure-token: ${{ env.AZURE_TOKEN }}
+
+      - name: Install DxM release tool
+        run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxmRelease --global --prerelease
+        shell: bash
+
+      - name: Download signed installers
+        uses: actions/download-artifact@v8
+        with:
+          name: SignedInstallers
+          path: _SignedInstallers
+
+      - name: Publish DxM installers
+        env:
+          RELEASE_ENVIRONMENT: ${{ matrix.environment }}
+        run: |
+          environment_suffix="${RELEASE_ENVIRONMENT^^}"
+          service_secret_name="DXM_RELEASE_SERVICE_SECRET_${environment_suffix}"
+          artifact_access_key_name="DXM_RELEASE_ARTIFACT_ACCESS_KEY_${environment_suffix}"
+
+          dataminer-dxm-release \
+            --dxm-id-file dxm-id-file.json \
+            --path-to-installers _SignedInstallers \
+            --secret "${!service_secret_name}" \
+            --environment "$RELEASE_ENVIRONMENT" \
+            --artifact-storage-access-key "${!artifact_access_key_name}"
+        shell: bash
+
+  # ════════════════════════════════════════════════════════════════
   # NuGet Push (on tag only)
   # ════════════════════════════════════════════════════════════════
 
