@@ -695,14 +695,26 @@ jobs:
             sed -i 's#</Project>#  <ItemGroup><Content Include="appsettings.json" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>\n</Project>#' "$svc/$svc.csproj"
             mkdir -p "$svc/packaging/Debian/content/DEBIAN"
             lower=$(echo "$svc" | tr '[:upper:]' '[:lower:]')
+            # Service name is derived from the systemd unit filename, NOT the project
+            # folder name, so give the unit a deliberately different name.
+            unit="dataminer-$lower"
+            mkdir -p "$svc/packaging/Debian/content/lib/systemd/system"
             {
-              echo "Package: $lower"
+              echo "[Unit]"
+              echo "Description=Test service $svc"
+              echo "[Service]"
+              echo "ExecStart=/opt/skyline-communications/$unit/$svc"
+              echo "[Install]"
+              echo "WantedBy=multi-user.target"
+            } > "$svc/packaging/Debian/content/lib/systemd/system/$unit.service"
+            {
+              echo "Package: $unit"
               echo "Version: <VERSION>"
               echo "Architecture: amd64"
               echo "Maintainer: Skyline Communications <devops@skyline.be>"
               echo "Description: Test service $svc"
             } > "$svc/packaging/Debian/content/DEBIAN/control"
-            echo "/etc/skyline-communications/$svc/appsettings.json" > "$svc/packaging/Debian/content/DEBIAN/conffiles"
+            echo "/etc/skyline-communications/$unit/appsettings.json" > "$svc/packaging/Debian/content/DEBIAN/conffiles"
           done
 
       - name: Invoke composite (pre-release version, no SBOM)
@@ -720,13 +732,13 @@ jobs:
         run: |
           ls -l deb-output
           test "$PACKAGE_COUNT" = "2"
-          test -f "deb-output/SvcOne_1.2.3~beta.1.deb"
-          test -f "deb-output/SvcTwo_1.2.3~beta.1.deb"
-          version=$(dpkg-deb --field "deb-output/SvcOne_1.2.3~beta.1.deb" Version)
+          test -f "deb-output/dataminer-svcone_1.2.3~beta.1.deb"
+          test -f "deb-output/dataminer-svctwo_1.2.3~beta.1.deb"
+          version=$(dpkg-deb --field "deb-output/dataminer-svcone_1.2.3~beta.1.deb" Version)
           test "$version" = "1.2.3~beta.1"
-          dpkg-deb --contents "deb-output/SvcOne_1.2.3~beta.1.deb" | grep -q 'opt/skyline-communications/SvcOne/'
-          dpkg-deb --contents "deb-output/SvcOne_1.2.3~beta.1.deb" | grep -q 'etc/skyline-communications/SvcOne/appsettings.json'
-          dpkg-deb --contents "deb-output/SvcTwo_1.2.3~beta.1.deb" | grep -q 'opt/skyline-communications/SvcTwo/'
+          dpkg-deb --contents "deb-output/dataminer-svcone_1.2.3~beta.1.deb" | grep -q 'opt/skyline-communications/dataminer-svcone/'
+          dpkg-deb --contents "deb-output/dataminer-svcone_1.2.3~beta.1.deb" | grep -q 'etc/skyline-communications/dataminer-svcone/appsettings.json'
+          dpkg-deb --contents "deb-output/dataminer-svctwo_1.2.3~beta.1.deb" | grep -q 'opt/skyline-communications/dataminer-svctwo/'
 
   remove-wix-projects:
     name: remove-wix-projects
