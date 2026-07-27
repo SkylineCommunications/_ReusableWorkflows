@@ -74,7 +74,7 @@ on:
         required: false
 
 env:
-  VERSION_APPPACKAGEINSTALLER: '4.0.0'
+  VERSION_APPPACKAGEINSTALLER: '4.1.0'
 
 jobs:
 
