@@ -1058,8 +1058,10 @@ jobs:
       - name: Publish DxM installers
         env:
           RELEASE_ENVIRONMENT: ${{ matrix.environment }}
+          DEBUG_FLAG: ${{ inputs.debug }}
         run: |
           dataminer-dxm-release \
+            --debug $DEBUG_FLAG \
             --dxm-id-file dxm-id-file.json \
             --path-to-installers _SignedInstallers \
             --environment "$RELEASE_ENVIRONMENT"
