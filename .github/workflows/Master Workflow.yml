@@ -1026,7 +1026,7 @@ jobs:
           tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
-      - name: Load DxM release secrets
+      - name: Load package feed secrets
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
@@ -1034,8 +1034,6 @@ jobs:
             azure-token
             skylinecommunications-github-token
             skylinecommunicationscore-github-token
-            dxm-release-service-secret-${{ matrix.environment }}
-            dxm-release-artifact-access-key-${{ matrix.environment }}
 
       - uses: actions/checkout@v7
 
@@ -1060,16 +1058,10 @@ jobs:
         env:
           RELEASE_ENVIRONMENT: ${{ matrix.environment }}
         run: |
-          environment_suffix="${RELEASE_ENVIRONMENT^^}"
-          service_secret_name="DXM_RELEASE_SERVICE_SECRET_${environment_suffix}"
-          artifact_access_key_name="DXM_RELEASE_ARTIFACT_ACCESS_KEY_${environment_suffix}"
-
           dataminer-dxm-release \
             --dxm-id-file dxm-id-file.json \
             --path-to-installers _SignedInstallers \
-            --secret "${!service_secret_name}" \
-            --environment "$RELEASE_ENVIRONMENT" \
-            --artifact-storage-access-key "${!artifact_access_key_name}"
+            --environment "$RELEASE_ENVIRONMENT"
         shell: bash
 
   # ════════════════════════════════════════════════════════════════
