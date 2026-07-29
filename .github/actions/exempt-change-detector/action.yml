@@ -1,0 +1,37 @@
+name: Exempt Change Detector
+description: >
+  Classifies a pull request as an "exempt change" when every changed file matches one of the
+  configured glob patterns (by default GitHub configuration and unit-test projects). Exempt PRs
+  are allowed to omit the task id and can have a predefined RN auto-added by the caller workflow.
+
+inputs:
+  changed-files:
+    description: Newline-separated list of file paths changed in the pull request.
+    required: true
+  patterns:
+    description: >
+      Newline-separated glob patterns. A pull request is exempt only when every changed file matches
+      at least one pattern. Supports '*', '?', and '**' (including '**/' for zero or more segments).
+    required: false
+    default: |
+      .github/**
+      **/*Tests/**
+      **/*.Tests/**
+
+outputs:
+  exempt:
+    description: >
+      'true' when at least one file changed and every changed file matches a pattern; otherwise 'false'.
+      An empty change set is never exempt.
+    value: ${{ steps.classify.outputs.exempt }}
+
+runs:
+  using: composite
+  steps:
+    - name: Classify changed files
+      id: classify
+      shell: pwsh
+      env:
+        CHANGED_FILES: ${{ inputs.changed-files }}
+        PATTERNS: ${{ inputs.patterns }}
+      run: '& "$env:GITHUB_ACTION_PATH/exempt-change-detector.ps1"'
