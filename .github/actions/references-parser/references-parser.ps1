@@ -8,10 +8,16 @@ if ([string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
     throw 'GITHUB_WORKSPACE must be set.'
 }
 
-$prBody = if ($null -ne $env:PR_BODY) { $env:PR_BODY } else { '' }
+$prBody = ''
+if (-not [string]::IsNullOrEmpty($env:PR_BODY_FILE) -and (Test-Path -LiteralPath $env:PR_BODY_FILE -PathType Leaf)) {
+    $prBody = Get-Content -LiteralPath $env:PR_BODY_FILE -Raw
+} elseif ($null -ne $env:PR_BODY) {
+    $prBody = $env:PR_BODY
+}
 $actor = if ($null -ne $env:ACTOR) { $env:ACTOR } else { '' }
 $labelsJson = if ($null -ne $env:LABELS_JSON) { $env:LABELS_JSON } else { '[]' }
 $commentHeader = if ($null -ne $env:COMMENT_HEADER) { $env:COMMENT_HEADER } else { 'skyline-references' }
+$isExempt = ($env:EXEMPT -eq 'true')
 
 $errors = [System.Collections.Generic.List[string]]::new()
 $allRns = [System.Collections.Generic.List[string]]::new()
@@ -166,6 +172,9 @@ function Write-ValidationComment {
     if ($isDependabot) {
         $content.Add('| Dependabot RN-only mode | Yes |')
     }
+    if ($script:isExempt) {
+        $content.Add('| Exempt change (workflow/tests) — task not required | Yes |')
+    }
     $content.Add('')
 
     if ($script:errors.Count -gt 0) {
@@ -217,7 +226,7 @@ if ($referencesFound) {
         Add-ValidationError -Message 'At least one RN id is required.'
     }
 
-    if ($actor -ne 'dependabot[bot]' -and $tasks.Count -eq 0) {
+    if ($actor -ne 'dependabot[bot]' -and -not $isExempt -and $tasks.Count -eq 0) {
         Add-ValidationError -Message 'At least one task id is required for non-Dependabot PRs.'
     }
 }

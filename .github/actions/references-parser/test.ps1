@@ -55,6 +55,8 @@ function Invoke-ParserCase {
         [Parameter(Mandatory)][string]$ExpectedChangeType,
         [Parameter(Mandatory)][string]$ExpectedRnsJson,
         [Parameter(Mandatory)][string]$ExpectedTasksJson,
+        [string]$Exempt = 'false',
+        [switch]$UseBodyFile,
         [string[]]$ExpectedCommentContains = @(),
         [string[]]$ExpectedCommentMissing = @()
     )
@@ -67,8 +69,16 @@ function Invoke-ParserCase {
     $summaryFile = Join-Path -Path $caseDirectory -ChildPath 'summary.md'
 
     $env:PR_BODY = $Body
+    $env:PR_BODY_FILE = ''
+    if ($UseBodyFile) {
+        $bodyFile = Join-Path -Path $caseDirectory -ChildPath 'body.md'
+        Set-Content -Path $bodyFile -Value $Body -Encoding utf8 -NoNewline
+        $env:PR_BODY = 'THIS SHOULD BE IGNORED'
+        $env:PR_BODY_FILE = $bodyFile
+    }
     $env:ACTOR = $Actor
     $env:LABELS_JSON = $LabelsJson
+    $env:EXEMPT = $Exempt
     $env:COMMENT_HEADER = 'skyline-references'
     $env:GITHUB_OUTPUT = $outputFile
     $env:GITHUB_STEP_SUMMARY = $summaryFile
@@ -159,6 +169,16 @@ try {
         '**Tasks**',
         '- [DCP35](https://collaboration.dataminer.services/task/35)'
     )
+
+    # Exempt-mode cases (workflow/unit-test only PRs relax the task requirement to RN-only).
+    Invoke-ParserCase -Name '21 exempt rn only' -Body "References: [RN46090]" -Actor 'human' -LabelsJson '[]' -Exempt 'true' -ExpectedStatus 'passed' -ExpectedChangeType 'Patch' -ExpectedRnsJson '["RN46090"]' -ExpectedTasksJson '[]'
+    Invoke-ParserCase -Name '22 exempt rn and task' -Body "References: [RN12] [DCP35]" -Actor 'human' -LabelsJson '[]' -Exempt 'true' -ExpectedStatus 'passed' -ExpectedChangeType 'Patch' -ExpectedRnsJson '["RN12"]' -ExpectedTasksJson '["DCP35"]'
+    Invoke-ParserCase -Name '23 exempt still requires rn' -Body "References: [DCP35]" -Actor 'human' -LabelsJson '[]' -Exempt 'true' -ExpectedStatus 'failed' -ExpectedChangeType '-' -ExpectedRnsJson '-' -ExpectedTasksJson '-'
+    Invoke-ParserCase -Name '24 non-exempt still requires task' -Body "References: [RN12]" -Actor 'human' -LabelsJson '[]' -Exempt 'false' -ExpectedStatus 'failed' -ExpectedChangeType '-' -ExpectedRnsJson '-' -ExpectedTasksJson '-'
+    Invoke-ParserCase -Name '25 exempt comment row' -Body "References: [RN46090]" -Actor 'human' -LabelsJson '[]' -Exempt 'true' -ExpectedStatus 'passed' -ExpectedChangeType 'Patch' -ExpectedRnsJson '["RN46090"]' -ExpectedTasksJson '[]' -ExpectedCommentContains @(
+        '| Exempt change (workflow/tests) — task not required | Yes |'
+    ) -ExpectedCommentMissing @('**Tasks**')
+    Invoke-ParserCase -Name '26 body file overrides pr-body' -Body "References: [RN12] [DCP35]" -Actor 'human' -LabelsJson '[]' -UseBodyFile -ExpectedStatus 'passed' -ExpectedChangeType 'Patch' -ExpectedRnsJson '["RN12"]' -ExpectedTasksJson '["DCP35"]'
 
     Write-Output 'All references-parser cases passed.'
 } finally {

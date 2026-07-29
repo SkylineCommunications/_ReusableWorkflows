@@ -6,14 +6,27 @@ description: >
 
 inputs:
   pr-body:
-    description: The pull request description markdown.
-    required: true
+    description: The pull request description markdown. Ignored when pr-body-file is set and exists.
+    required: false
+    default: ''
+  pr-body-file:
+    description: >
+      Optional path to a file containing the pull request description. When set and the file exists,
+      its contents override pr-body. Used to parse a freshly fetched (possibly auto-edited) body.
+    required: false
+    default: ''
   actor:
     description: The pull request author login. Used for the dependabot[bot] task exception.
     required: true
   labels-json:
     description: JSON array of pull request label names. Used to resolve Change-Type.
     required: true
+  exempt:
+    description: >
+      When 'true', the change is exempt (workflow or unit-test only) and no task id is required
+      (an RN id is still required). Any other value keeps the standard task requirement.
+    required: false
+    default: 'false'
 
 outputs:
   status:
@@ -40,7 +53,9 @@ runs:
       shell: pwsh
       env:
         PR_BODY: ${{ inputs.pr-body }}
+        PR_BODY_FILE: ${{ inputs.pr-body-file }}
         ACTOR: ${{ inputs.actor }}
         LABELS_JSON: ${{ inputs.labels-json }}
+        EXEMPT: ${{ inputs.exempt }}
         COMMENT_HEADER: skyline-references
       run: '& "$env:GITHUB_ACTION_PATH/references-parser.ps1"'

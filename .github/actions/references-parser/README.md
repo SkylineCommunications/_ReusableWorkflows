@@ -8,9 +8,11 @@ The action finds the `References:` line (e.g. `References: [RN44205] [DCP284603]
 
 | Input | Required | Description |
 | --- | --- | --- |
-| `pr-body` | yes | Pull request description markdown. |
+| `pr-body` | no | Pull request description markdown. Ignored when `pr-body-file` is set and the file exists. |
+| `pr-body-file` | no | Path to a file containing the PR description. Overrides `pr-body` when set. Used to parse a freshly fetched (possibly auto-edited) body. |
 | `actor` | yes | Pull request author login. Only `dependabot[bot]` may omit task ids. |
 | `labels-json` | yes | JSON array of PR label names. Used to resolve `Change-Type`. |
+| `exempt` | no | When `'true'`, the change is workflow/unit-test only and the task id is not required (an RN is still required). Defaults to `'false'`. |
 
 ## Outputs
 
@@ -31,6 +33,7 @@ The action finds the `References:` line (e.g. `References: [RN44205] [DCP284603]
 - Ids may appear in any order; duplicates are de-duplicated.
 - Regular PRs require at least one RN and at least one task.
 - `dependabot[bot]` PRs require an RN only; a human on a `dependabot/*` branch is not exempt.
+- Exempt PRs (`exempt: 'true'`, set by the caller for workflow/unit-test only changes) require an RN only.
 - At most one `Change-Type:*` label is allowed. Valid values are `Patch`, `Minor`, and `Major`.
 
 ## Usage
