@@ -1002,7 +1002,8 @@ jobs:
 
   # ════════════════════════════════════════════════════════════════
   # DxM Release (on tag only)
-  # Pre-release tags publish to QA; stable tags publish to QA and production.
+  # Add future non-production targets (test1/test2/test3) to both arrays below.
+  # Production remains stable-only.
   # ════════════════════════════════════════════════════════════════
 
   upload_dxms:
@@ -1017,7 +1018,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: ${{ fromJSON(contains(github.ref_name, '-') && '["qa"]' || '["qa","prod"]') }}
+        environment: ${{ fromJSON(contains(github.ref_name, '-') && '["dev","qa"]' || '["dev","qa","prod"]') }}
     steps:
       - name: Azure Login
         uses: azure/login@v3
