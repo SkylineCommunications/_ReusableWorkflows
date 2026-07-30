@@ -875,17 +875,27 @@ jobs:
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
           CONFIGURATION: ${{ inputs.configuration }}
         run: |
-          # Rebuild ONLY the WiX projects so the MSI is built from the signed DLLs/EXEs.
-          # BuildProjectReferences=false keeps the referenced projects from being
-          # recompiled (which would overwrite the signatures).
-          $solutionDir = Split-Path "$env:SOLUTION_PATH" -Parent
-          $wixProjects = dotnet sln "$env:SOLUTION_PATH" list | Select-String '\.wixproj' | ForEach-Object { $_.ToString().Trim() }
-          foreach ($wixProject in $wixProjects) {
-            dotnet build (Join-Path $solutionDir ($wixProject -replace '\\', '/')) `
+          # Preserve the original solution's configuration/platform mappings while
+          # limiting the rebuild to WiX projects. Building the solution ensures WiX
+          # uses the same output paths as the initial solution build.
+          $solutionPath = (Resolve-Path "$env:SOLUTION_PATH").Path
+          $solutionDir = Split-Path $solutionPath -Parent
+          $temporarySolutionPath = Join-Path $solutionDir ".wix-build-$([guid]::NewGuid())$(Split-Path $solutionPath -Extension)"
+
+          Copy-Item $solutionPath $temporarySolutionPath
+          try {
+            $nonWixProjects = dotnet sln "$temporarySolutionPath" list | Select-Object -Skip 2 | Where-Object { $_ -and $_ -notlike '*.wixproj' }
+            foreach ($nonWixProject in $nonWixProjects) {
+              dotnet sln "$temporarySolutionPath" remove (Join-Path $solutionDir ($nonWixProject -replace '\\', '/'))
+            }
+
+            dotnet build "$temporarySolutionPath" `
               -p:Version="$env:VERSION" `
               -p:ProductVersion="$env:NUMERIC_VERSION" `
               -p:BuildProjectReferences=false `
               --configuration "$env:CONFIGURATION"
+          } finally {
+            Remove-Item $temporarySolutionPath -Force -ErrorAction SilentlyContinue
           }
         shell: pwsh
 
