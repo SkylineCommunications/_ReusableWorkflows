@@ -1056,7 +1056,7 @@ jobs:
           azure-token: ${{ env.AZURE_TOKEN }}
 
       - name: Install DxM release tool
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxmRelease --global --prerelease
+        run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxmRelease --global --version 2.*
         shell: bash
 
       - name: Download signed installers
