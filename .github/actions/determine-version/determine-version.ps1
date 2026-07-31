@@ -49,9 +49,33 @@ $numericVersion = '{0}.{1}.{2}.{3}' -f `
     ([long]$match.Groups[3].Value % 65535), `
     ($fourthField % 65535)
 
-Write-Host "Determined version '$version' and numeric-version '$numericVersion' (ref-type: $refType, run-number: $runNumber)."
+# Windows Installer evaluates major.minor.build and ignores a fourth field. We retain
+# that fourth field for prerelease/branch identification in our package conventions,
+# while stable three-part tags use the natural three-field ProductVersion.
+# MSI limits differ from assembly metadata: major/minor <= 255 and build <= 65535.
+$productMajor = [long]$match.Groups[1].Value
+$productMinor = [long]$match.Groups[2].Value
+$productBuild = [long]$match.Groups[3].Value
+$isStableThreePartTag = $refType -eq 'tag' -and -not $version.Contains('-') -and -not $match.Groups[4].Success
+$productVersion = if ($isStableThreePartTag) {
+    '{0}.{1}.{2}' -f $productMajor, $productMinor, $productBuild
+} elseif ($refType -eq 'tag') {
+    $numericFourthField = $numericVersion.Split('.')[3]
+    '{0}.{1}.{2}.{3}' -f $productMajor, $productMinor, $productBuild, $numericFourthField
+} else {
+    $numericVersion
+}
+$productVersionValid = if ($refType -eq 'tag') {
+    $productMajor -le 255 -and $productMinor -le 255 -and $productBuild -le 65535
+} else {
+    $true
+}
+
+Write-Host "Determined version '$version', numeric-version '$numericVersion', and product-version '$productVersion' (valid: $($productVersionValid.ToString().ToLowerInvariant()), ref-type: $refType, run-number: $runNumber)."
 
 @(
     "version=$version"
     "numeric-version=$numericVersion"
+    "product-version=$productVersion"
+    "product-version-valid=$($productVersionValid.ToString().ToLowerInvariant())"
 ) | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8

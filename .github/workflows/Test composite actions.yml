@@ -635,7 +635,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run 18-case version corpus
+      - name: Run 23-case version corpus
         shell: pwsh
         run: ./.github/actions/determine-version/test.ps1
 
@@ -644,8 +644,16 @@ jobs:
         uses: ./.github/actions/determine-version
         with:
           ref-type: tag
-          ref-name: 1.4.0-dev-myfeature.42
+          ref-name: 1.4.0-a1b2c3d4.42
           run-number: 99
+
+      - name: Stable tag build smoke test
+        id: stable-tag-build
+        uses: ./.github/actions/determine-version
+        with:
+          ref-type: tag
+          ref-name: 1.4.0
+          run-number: 100
 
       - name: Branch build smoke test
         id: branch-build
@@ -659,13 +667,23 @@ jobs:
         env:
           TAG_VERSION: ${{ steps.tag-build.outputs.version }}
           TAG_NUMERIC: ${{ steps.tag-build.outputs.numeric-version }}
+          TAG_PRODUCT: ${{ steps.tag-build.outputs.product-version }}
+          TAG_PRODUCT_VALID: ${{ steps.tag-build.outputs.product-version-valid }}
+          STABLE_NUMERIC: ${{ steps.stable-tag-build.outputs.numeric-version }}
+          STABLE_PRODUCT: ${{ steps.stable-tag-build.outputs.product-version }}
           BRANCH_VERSION: ${{ steps.branch-build.outputs.version }}
           BRANCH_NUMERIC: ${{ steps.branch-build.outputs.numeric-version }}
+          BRANCH_PRODUCT: ${{ steps.branch-build.outputs.product-version }}
         run: |
-          test "$TAG_VERSION" = "1.4.0-dev-myfeature.42"
+          test "$TAG_VERSION" = "1.4.0-a1b2c3d4.42"
           test "$TAG_NUMERIC" = "1.4.0.99"
+          test "$TAG_PRODUCT" = "1.4.0.99"
+          test "$TAG_PRODUCT_VALID" = "true"
+          test "$STABLE_NUMERIC" = "1.4.0.100"
+          test "$STABLE_PRODUCT" = "1.4.0"
           test "$BRANCH_VERSION" = "0.0.70000"
           test "$BRANCH_NUMERIC" = "0.0.4465.4465"
+          test "$BRANCH_PRODUCT" = "0.0.4465.4465"
 
   set-repo-type:
     name: set-repo-type

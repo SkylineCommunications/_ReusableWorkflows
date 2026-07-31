@@ -41,7 +41,9 @@ function Invoke-Case {
         [AllowEmptyString()][string]$RefName,
         [Parameter(Mandatory)][string]$RunNumber,
         [Parameter(Mandatory)][string]$ExpectedVersion,
-        [Parameter(Mandatory)][string]$ExpectedNumericVersion
+        [Parameter(Mandatory)][string]$ExpectedNumericVersion,
+        [Parameter(Mandatory)][string]$ExpectedProductVersion,
+        [bool]$ExpectedProductVersionValid = $true
     )
 
     $outputFile = Join-Path -Path $script:temporaryDirectory -ChildPath "$([System.Guid]::NewGuid()).txt"
@@ -57,9 +59,13 @@ function Invoke-Case {
 
         $version = Get-OutputValue -Name 'version' -Path $outputFile
         $numericVersion = Get-OutputValue -Name 'numeric-version' -Path $outputFile
+        $productVersion = Get-OutputValue -Name 'product-version' -Path $outputFile
+        $productVersionValid = Get-OutputValue -Name 'product-version-valid' -Path $outputFile
 
         Assert-Equal -Actual $version -Expected $ExpectedVersion -Label "${Name} (version)"
         Assert-Equal -Actual $numericVersion -Expected $ExpectedNumericVersion -Label "${Name} (numeric-version)"
+        Assert-Equal -Actual $productVersion -Expected $ExpectedProductVersion -Label "${Name} (product-version)"
+        Assert-Equal -Actual $productVersionValid -Expected $ExpectedProductVersionValid.ToString().ToLowerInvariant() -Label "${Name} (product-version-valid)"
 
         Write-Host "PASS: ${Name}"
     } catch {
@@ -103,26 +109,33 @@ function Invoke-FailureCase {
 
 try {
     # Branch builds keep the legacy 0.0.<run-number> in all modes.
-    Invoke-Case -Name 'Branch build'                       -RefType 'branch' -RefName 'dev/my-feature'            -RunNumber '42'    -ExpectedVersion '0.0.42'                 -ExpectedNumericVersion '0.0.42.42'
-    Invoke-Case -Name 'Branch build, large run number'     -RefType 'branch' -RefName 'main'                      -RunNumber '70000' -ExpectedVersion '0.0.70000'              -ExpectedNumericVersion '0.0.4465.4465'
+    Invoke-Case -Name 'Branch build'                       -RefType 'branch' -RefName 'dev/my-feature'            -RunNumber '42'    -ExpectedVersion '0.0.42'                 -ExpectedNumericVersion '0.0.42.42'     -ExpectedProductVersion '0.0.42.42'
+    Invoke-Case -Name 'Branch build, large run number'     -RefType 'branch' -RefName 'main'                      -RunNumber '70000' -ExpectedVersion '0.0.70000'              -ExpectedNumericVersion '0.0.4465.4465' -ExpectedProductVersion '0.0.4465.4465'
 
     # Tag builds use the tag name; numeric-version strips the suffix + appends the run number.
-    Invoke-Case -Name 'Final release tag'                  -RefType 'tag'    -RefName '1.2.3'                     -RunNumber '7'     -ExpectedVersion '1.2.3'                  -ExpectedNumericVersion '1.2.3.7'
-    Invoke-Case -Name 'Pre-release tag'                    -RefType 'tag'    -RefName '1.4.0-dev-myfeature.42'    -RunNumber '99'    -ExpectedVersion '1.4.0-dev-myfeature.42' -ExpectedNumericVersion '1.4.0.99'
-    Invoke-Case -Name 'Build-metadata tag'                 -RefType 'tag'    -RefName '2.3.1+build.5'             -RunNumber '3'     -ExpectedVersion '2.3.1+build.5'          -ExpectedNumericVersion '2.3.1.3'
-    Invoke-Case -Name 'Pre-release + metadata tag'         -RefType 'tag'    -RefName '1.2.3-rc.1+meta'           -RunNumber '8'     -ExpectedVersion '1.2.3-rc.1+meta'        -ExpectedNumericVersion '1.2.3.8'
-    Invoke-Case -Name 'Leading v prefix tolerated'         -RefType 'tag'    -RefName 'v1.2.3'                    -RunNumber '5'     -ExpectedVersion 'v1.2.3'                 -ExpectedNumericVersion '1.2.3.5'
+    Invoke-Case -Name 'Final release tag'                  -RefType 'tag'    -RefName '1.2.3'                     -RunNumber '7'     -ExpectedVersion '1.2.3'                  -ExpectedNumericVersion '1.2.3.7'      -ExpectedProductVersion '1.2.3'
+    Invoke-Case -Name 'Pre-release tag'                    -RefType 'tag'    -RefName '1.4.0-a1b2c3d4.42'         -RunNumber '99'    -ExpectedVersion '1.4.0-a1b2c3d4.42'      -ExpectedNumericVersion '1.4.0.99'      -ExpectedProductVersion '1.4.0.99'
+    Invoke-Case -Name 'Build-metadata tag'                 -RefType 'tag'    -RefName '2.3.1+build.5'             -RunNumber '3'     -ExpectedVersion '2.3.1+build.5'          -ExpectedNumericVersion '2.3.1.3'      -ExpectedProductVersion '2.3.1'
+    Invoke-Case -Name 'Pre-release + metadata tag'         -RefType 'tag'    -RefName '1.2.3-rc.1+meta'           -RunNumber '8'     -ExpectedVersion '1.2.3-rc.1+meta'        -ExpectedNumericVersion '1.2.3.8'       -ExpectedProductVersion '1.2.3.8'
+    Invoke-Case -Name 'Leading v prefix tolerated'         -RefType 'tag'    -RefName 'v1.2.3'                    -RunNumber '5'     -ExpectedVersion 'v1.2.3'                 -ExpectedNumericVersion '1.2.3.5'      -ExpectedProductVersion '1.2.3'
 
     # 4-part cores (e.g. date-based tags) keep their own 4th field — the run number is not appended.
-    Invoke-Case -Name 'Four-part date tag'                 -RefType 'tag'    -RefName '2026.07.08.230'            -RunNumber '44'    -ExpectedVersion '2026.07.08.230'         -ExpectedNumericVersion '2026.7.8.230'
-    Invoke-Case -Name 'Four-part tag keeps 4th field'      -RefType 'tag'    -RefName '1.2.3.4'                   -RunNumber '99'    -ExpectedVersion '1.2.3.4'                -ExpectedNumericVersion '1.2.3.4'
-    Invoke-Case -Name 'Four-part tag wraps 4th field'      -RefType 'tag'    -RefName '1.2.3.70000'               -RunNumber '7'     -ExpectedVersion '1.2.3.70000'            -ExpectedNumericVersion '1.2.3.4465'
+    Invoke-Case -Name 'Four-part date tag'                 -RefType 'tag'    -RefName '2026.07.08.230'            -RunNumber '44'    -ExpectedVersion '2026.07.08.230'         -ExpectedNumericVersion '2026.7.8.230'  -ExpectedProductVersion '2026.7.8.230' -ExpectedProductVersionValid $false
+    Invoke-Case -Name 'Four-part tag keeps 4th field'      -RefType 'tag'    -RefName '1.2.3.4'                   -RunNumber '99'    -ExpectedVersion '1.2.3.4'                -ExpectedNumericVersion '1.2.3.4'       -ExpectedProductVersion '1.2.3.4'
+    Invoke-Case -Name 'Four-part tag wraps 4th field'      -RefType 'tag'    -RefName '1.2.3.70000'               -RunNumber '7'     -ExpectedVersion '1.2.3.70000'            -ExpectedNumericVersion '1.2.3.4465'    -ExpectedProductVersion '1.2.3.4465'
 
     # Fields must be < 65535 (assembly-metadata max 65534): wrap-around % 65535, never a clamp.
-    Invoke-Case -Name 'Run number 65534 fits'              -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '65534' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.65534'
-    Invoke-Case -Name 'Run number wraps at 65535'          -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '65535' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.0'
-    Invoke-Case -Name 'Run number 65536 wraps to 1'        -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '65536' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.1'
-    Invoke-Case -Name 'Run number above 65536'             -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '70000' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.4465'
+    Invoke-Case -Name 'Run number 65534 fits'              -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '65534' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.65534'  -ExpectedProductVersion '1.0.0'
+    Invoke-Case -Name 'Run number wraps at 65535'          -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '65535' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.0'      -ExpectedProductVersion '1.0.0'
+    Invoke-Case -Name 'Run number 65536 wraps to 1'        -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '65536' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.1'      -ExpectedProductVersion '1.0.0'
+    Invoke-Case -Name 'Run number above 65536'             -RefType 'tag'    -RefName '1.0.0'                     -RunNumber '70000' -ExpectedVersion '1.0.0'                  -ExpectedNumericVersion '1.0.0.4465'   -ExpectedProductVersion '1.0.0'
+
+    # Windows Installer ProductVersion bounds: major/minor <= 255; build <= 65535.
+    Invoke-Case -Name 'ProductVersion maximum fields'      -RefType 'tag'    -RefName '255.255.65535'             -RunNumber '1'     -ExpectedVersion '255.255.65535'          -ExpectedNumericVersion '255.255.0.1'   -ExpectedProductVersion '255.255.65535'
+    Invoke-Case -Name 'Prerelease ProductVersion maximum' -RefType 'tag'    -RefName '255.255.65535-rc.1'        -RunNumber '2'     -ExpectedVersion '255.255.65535-rc.1'     -ExpectedNumericVersion '255.255.0.2'   -ExpectedProductVersion '255.255.65535.2'
+    Invoke-Case -Name 'ProductVersion major out of range'  -RefType 'tag'    -RefName '256.1.1'                   -RunNumber '1'     -ExpectedVersion '256.1.1'                -ExpectedNumericVersion '256.1.1.1'     -ExpectedProductVersion '256.1.1'       -ExpectedProductVersionValid $false
+    Invoke-Case -Name 'ProductVersion minor out of range'  -RefType 'tag'    -RefName '1.256.1'                   -RunNumber '1'     -ExpectedVersion '1.256.1'                -ExpectedNumericVersion '1.256.1.1'     -ExpectedProductVersion '1.256.1'       -ExpectedProductVersionValid $false
+    Invoke-Case -Name 'ProductVersion build out of range'  -RefType 'tag'    -RefName '1.1.65536'                 -RunNumber '1'     -ExpectedVersion '1.1.65536'              -ExpectedNumericVersion '1.1.1.1'       -ExpectedProductVersion '1.1.65536'     -ExpectedProductVersionValid $false
 
     # Failure cases: tags that have no major.minor.patch[.build] core cannot yield a numeric-version.
     Invoke-FailureCase -Name 'Non-SemVer tag rejected'     -RefType 'tag'    -RefName 'release-1'                 -RunNumber '1'
