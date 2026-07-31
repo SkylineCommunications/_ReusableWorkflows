@@ -13,13 +13,13 @@ bumping from the same final version.
 | --- | --- | --- |
 | `change-type` | no | The bump to apply: `Patch`, `Minor`, or `Major`. Empty resolves to `Patch`. |
 | `mode` | no | `release` (bare version) or `prerelease` (suffix appended). Defaults to `release`. |
-| `suffix` | no | Pre-release suffix body (e.g. `dev-myfeature.42`). Used only when `mode` is `prerelease`. |
+| `suffix` | no | Pre-release suffix body (e.g. `a1b2c3d4.42`). Used only when `mode` is `prerelease`. |
 
 ## Outputs
 
 | Output | Description |
 | --- | --- |
-| `version` | The computed version, e.g. `1.4.0` or `1.4.0-dev-myfeature.42`. |
+| `version` | The computed version, e.g. `1.4.0` or `1.4.0-a1b2c3d4.42`. |
 | `latest-tag` | The latest final tag the bump was computed from, or empty when none exists. |
 
 ## Rules
@@ -39,7 +39,7 @@ bumping from the same final version.
   with:
     change-type: ${{ steps.references.outputs.change-type }}
     mode: prerelease
-    suffix: dev-myfeature.42
+    suffix: a1b2c3d4.42
 ```
 
 The checkout that precedes this action must fetch tags (`fetch-depth: 0`) so the base tag can be
