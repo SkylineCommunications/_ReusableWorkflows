@@ -221,6 +221,8 @@ jobs:
     outputs:
       version: ${{ steps.determine-version.outputs.version }}
       numeric-version: ${{ steps.determine-version.outputs.numeric-version }}
+      product-version: ${{ steps.determine-version.outputs.product-version }}
+      product-version-valid: ${{ steps.determine-version.outputs.product-version-valid }}
     steps:
       - name: Determine version
         id: determine-version
@@ -438,6 +440,15 @@ jobs:
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@main
         with:
           repository: ${{ github.repository }}
+
+      - name: Validate MSI ProductVersion
+        if: needs.discover_projects.outputs.has-wix-projects == 'true' && needs.determine_version.outputs.product-version-valid != 'true'
+        env:
+          PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
+        run: |
+          echo "::error::MSI ProductVersion '$PRODUCT_VERSION' is out of range. Major and minor must be <= 255; build must be <= 65535."
+          exit 1
+        shell: bash
 
       # ──────────────────────────────────────────────────────────────
       # B. SonarCloud analysis (skipped for Dependabot)
@@ -758,12 +769,13 @@ jobs:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
+          PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
           CONFIGURATION: ${{ inputs.configuration }}
           DEBUG_FLAG: ${{ inputs.debug }}
         run: |
           # NuGet/DataMiner packaging uses the full (suffix-bearing) version; assemblies and
-          # the WiX MSI ProductVersion use the strict 4-field numeric version (WiX projects
-          # reference it as $(ProductVersion) in <Package Version="...">).
+          # assemblies use the strict 4-field numeric version. WiX uses the dedicated
+          # ProductVersion (three fields for stable SemVer tags).
           # DefineConstants comes from the job-level env var so the WiX projects can keep
           # their own preprocessor constants (a -p: global would clobber them).
           dotnet build "$SOLUTION_PATH" \
@@ -771,7 +783,7 @@ jobs:
             -p:PackageVersion="$VERSION" \
             -p:AssemblyVersion="$NUMERIC_VERSION" \
             -p:FileVersion="$NUMERIC_VERSION" \
-            -p:ProductVersion="$NUMERIC_VERSION" \
+            -p:ProductVersion="$PRODUCT_VERSION" \
             --configuration "$CONFIGURATION" \
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" \
             -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" \
@@ -828,6 +840,7 @@ jobs:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
+          PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
           CONFIGURATION: ${{ inputs.configuration }}
         run: |
           $wixProjectDirs = dotnet sln "$env:SOLUTION_PATH" list | Select-String '\.wixproj' | ForEach-Object { Split-Path -Path $_.ToString().Trim() -Parent }
@@ -840,7 +853,7 @@ jobs:
             -p:PackageVersion="$env:VERSION" `
             -p:AssemblyVersion="$env:NUMERIC_VERSION" `
             -p:FileVersion="$env:NUMERIC_VERSION" `
-            -p:ProductVersion="$env:NUMERIC_VERSION" `
+            -p:ProductVersion="$env:PRODUCT_VERSION" `
             -p:GeneratePackageOnBuild=false `
             -p:GenerateDataMinerPackage=false `
             --configuration "$env:CONFIGURATION"
@@ -873,6 +886,7 @@ jobs:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
+          PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
           CONFIGURATION: ${{ inputs.configuration }}
         run: |
           # Preserve the original solution's configuration/platform mappings while
@@ -891,7 +905,7 @@ jobs:
 
             dotnet build "$temporarySolutionPath" `
               -p:Version="$env:VERSION" `
-              -p:ProductVersion="$env:NUMERIC_VERSION" `
+              -p:ProductVersion="$env:PRODUCT_VERSION" `
               -p:BuildProjectReferences=false `
               --configuration "$env:CONFIGURATION"
           } finally {
@@ -1009,6 +1023,73 @@ jobs:
         with:
           name: SignedInstallers
           path: _SignedInstallers
+
+  # ════════════════════════════════════════════════════════════════
+  # DxM Release (on tag only)
+  # Add future non-production targets (test1/test2/test3) to both arrays below.
+  # Production remains stable-only.
+  # ════════════════════════════════════════════════════════════════
+
+  upload_dxms:
+    name: Upload DxM Installers (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag' && needs.package_windows.outputs.has-msi == 'true' && needs.check_oidc.outputs.use-oidc == 'true'
+    needs: [package_windows, check_oidc]
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON(contains(github.ref_name, '-') && '["dev","qa"]' || '["dev","qa","prod"]') }}
+    steps:
+      - name: Azure Login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ needs.check_oidc.outputs.client-id }}
+          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+      - name: Load package feed secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+          secret-names: |
+            azure-token
+            skylinecommunications-github-token
+            skylinecommunicationscore-github-token
+
+      - uses: actions/checkout@v7
+
+      - name: Setup Skyline NuGet sources
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+        with:
+          skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
+          skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
+          azure-token: ${{ env.AZURE_TOKEN }}
+
+      - name: Install DxM release tool
+        run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxmRelease --global --version 2.*
+        shell: bash
+
+      - name: Download signed installers
+        uses: actions/download-artifact@v8
+        with:
+          name: SignedInstallers
+          path: _SignedInstallers
+
+      - name: Publish DxM installers
+        env:
+          RELEASE_ENVIRONMENT: ${{ matrix.environment }}
+          DEBUG_FLAG: ${{ inputs.debug }}
+        run: |
+          dataminer-dxm-release \
+            --debug $DEBUG_FLAG \
+            --dxm-id-file dxm-id-file.json \
+            --path-to-installers _SignedInstallers \
+            --environment "$RELEASE_ENVIRONMENT"
+        shell: bash
 
   # ════════════════════════════════════════════════════════════════
   # NuGet Push (on tag only)

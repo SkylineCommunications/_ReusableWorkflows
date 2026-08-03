@@ -15,13 +15,13 @@ inputs:
     required: false
     default: release
   suffix:
-    description: The pre-release suffix body (e.g. dev-myfeature.42). Used only when mode is prerelease.
+    description: The pre-release suffix body (e.g. a1b2c3d4.42). Used only when mode is prerelease.
     required: false
     default: ""
 
 outputs:
   version:
-    description: The computed version, e.g. 1.4.0 or 1.4.0-dev-myfeature.42.
+    description: The computed version, e.g. 1.4.0 or 1.4.0-a1b2c3d4.42.
     value: ${{ steps.compute.outputs.version }}
   latest-tag:
     description: The latest final tag the bump was computed from, or empty when no final tag exists.
