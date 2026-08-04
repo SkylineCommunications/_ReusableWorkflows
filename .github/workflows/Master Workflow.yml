@@ -1069,8 +1069,8 @@ jobs:
           skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
           azure-token: ${{ env.AZURE_TOKEN }}
 
-      - name: Install DxM release tool
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxmRelease --global --version 2.*
+      - name: Install DxM storage tool
+        run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxMStorage --global
         shell: bash
 
       - name: Download signed installers
@@ -1082,13 +1082,14 @@ jobs:
       - name: Publish DxM installers
         env:
           RELEASE_ENVIRONMENT: ${{ matrix.environment }}
-          DEBUG_FLAG: ${{ inputs.debug }}
+          RELEASE_VERSION: ${{ github.ref_name }}
         run: |
-          dataminer-dxm-release \
-            --debug $DEBUG_FLAG \
+          dataminer-dxm-storage publish \
+            --credential-mode azure-cli \
+            --environment "$RELEASE_ENVIRONMENT" \
             --dxm-id-file dxm-id-file.json \
             --path-to-installers _SignedInstallers \
-            --environment "$RELEASE_ENVIRONMENT"
+            --version "$RELEASE_VERSION"
         shell: bash
 
   # ════════════════════════════════════════════════════════════════
