@@ -264,9 +264,6 @@ jobs:
             foreach ($catalogFile in $catalogFiles) {
               $fullPath = "${{ github.workspace }}/$catalogFile"
 
-              # Use yq (a real YAML parser, preinstalled on GitHub-hosted runners) instead of
-              # regex/text-scraping. The "id"/"title" fields are the tool's documented, stable contract:
-              # https://docs.dataminer.services/user-guide/Cloud_Platform/Catalog/Register_Catalog_Item.html#manifest-file
               $catalogId = (yq eval '.id // ""' $fullPath) | Out-String | ForEach-Object { $_.Trim() }
               $title = (yq eval '.title // ""' $fullPath) | Out-String | ForEach-Object { $_.Trim() }
 
@@ -275,7 +272,6 @@ jobs:
                 continue
               }
 
-              # Derive the containing project folder name, shown alongside the title for context.
               $catalogDir = Split-Path $catalogFile -Parent
               if (-not [string]::IsNullOrWhiteSpace($catalogDir) -and (Split-Path $catalogDir -Leaf) -eq "CatalogInformation") {
                 $catalogDir = Split-Path $catalogDir -Parent
@@ -285,7 +281,6 @@ jobs:
               $displayName = if ([string]::IsNullOrWhiteSpace($title)) { $projectName } else { $title }
               $url = "https://catalog.dataminer.services/details/$catalogId"
 
-              Write-Host "Catalog item updated: $displayName ($projectName) -> $url"
               $links.Add("- [$displayName]($url) ``$projectName``")
             }
 
