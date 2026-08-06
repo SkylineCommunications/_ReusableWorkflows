@@ -263,23 +263,28 @@ jobs:
 
             foreach ($catalogFile in $catalogFiles) {
               $fullPath = "${{ github.workspace }}/$catalogFile"
-              $content = Get-Content -Path $fullPath -Raw
 
-              # Top-level (non-indented) "id:" and "title:" keys, with optional surrounding quotes.
-              $idMatch = [regex]::Match($content, '(?m)^id:\s*[''"]?([0-9a-fA-F-]{36})[''"]?\s*$')
-              $titleMatch = [regex]::Match($content, '(?m)^title:\s*[''"]?(.+?)[''"]?\s*$')
+              # Use yq (a real YAML parser, preinstalled on GitHub-hosted runners) instead of
+              # regex/text-scraping. The "id" field is the tool's documented, stable contract:
+              # https://docs.dataminer.services/user-guide/Cloud_Platform/Catalog/Register_Catalog_Item.html#manifest-file
+              $catalogId = (yq eval '.id // ""' $fullPath) | Out-String | ForEach-Object { $_.Trim() }
 
-              if (-not $idMatch.Success) {
+              if ([string]::IsNullOrWhiteSpace($catalogId)) {
                 Write-Host "::warning::Could not find a catalog ID in $catalogFile, skipping link generation."
                 continue
               }
 
-              $catalogId = $idMatch.Groups[1].Value
-              $title = if ($titleMatch.Success) { $titleMatch.Groups[1].Value } else { $catalogId }
+              # Use the catalog item's containing project folder name rather than its "title" field.
+              $catalogDir = Split-Path $catalogFile -Parent
+              if (-not [string]::IsNullOrWhiteSpace($catalogDir) -and (Split-Path $catalogDir -Leaf) -eq "CatalogInformation") {
+                $catalogDir = Split-Path $catalogDir -Parent
+              }
+              $projectName = if ([string]::IsNullOrWhiteSpace($catalogDir)) { "${{ github.event.repository.name }}" } else { Split-Path $catalogDir -Leaf }
+
               $url = "https://catalog.dataminer.services/details/$catalogId"
 
-              Write-Host "Catalog item updated: $title -> $url"
-              $links.Add("- [$title]($url)")
+              Write-Host "Catalog item updated: $projectName -> $url"
+              $links.Add("- [$projectName]($url)")
             }
 
             if ($links.Count -gt 0) {
