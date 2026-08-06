@@ -281,7 +281,7 @@ jobs:
               $displayName = if ([string]::IsNullOrWhiteSpace($title)) { $projectName } else { $title }
               $url = "https://catalog.dataminer.services/details/$catalogId"
 
-              $links.Add("- [$displayName]($url) ``$projectName``")
+              $links.Add("- [$displayName | Catalog | dataminer.services]($url) ``Project[$projectName]``")
             }
 
             if ($links.Count -gt 0) {
