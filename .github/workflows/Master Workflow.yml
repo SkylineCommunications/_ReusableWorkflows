@@ -1070,7 +1070,7 @@ jobs:
           azure-token: ${{ env.AZURE_TOKEN }}
 
       - name: Install DxM storage tool
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxMStorage --global --version '0.0.*'
+        run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxMStorage --global --version '1.*'
         shell: bash
 
       - name: Download signed installers
