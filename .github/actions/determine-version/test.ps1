@@ -43,6 +43,7 @@ function Invoke-Case {
         [Parameter(Mandatory)][string]$ExpectedVersion,
         [Parameter(Mandatory)][string]$ExpectedNumericVersion,
         [Parameter(Mandatory)][string]$ExpectedProductVersion,
+        [AllowEmptyString()][string]$ExpectedInformationalVersion = '',
         [bool]$ExpectedProductVersionValid = $true
     )
 
@@ -58,11 +59,14 @@ function Invoke-Case {
         & $script:scriptPath | Out-Null
 
         $version = Get-OutputValue -Name 'version' -Path $outputFile
+        $informationalVersion = Get-OutputValue -Name 'informational-version' -Path $outputFile
         $numericVersion = Get-OutputValue -Name 'numeric-version' -Path $outputFile
         $productVersion = Get-OutputValue -Name 'product-version' -Path $outputFile
         $productVersionValid = Get-OutputValue -Name 'product-version-valid' -Path $outputFile
 
         Assert-Equal -Actual $version -Expected $ExpectedVersion -Label "${Name} (version)"
+        $expectedInformational = if ([string]::IsNullOrEmpty($ExpectedInformationalVersion)) { $ExpectedVersion } else { $ExpectedInformationalVersion }
+        Assert-Equal -Actual $informationalVersion -Expected $expectedInformational -Label "${Name} (informational-version)"
         Assert-Equal -Actual $numericVersion -Expected $ExpectedNumericVersion -Label "${Name} (numeric-version)"
         Assert-Equal -Actual $productVersion -Expected $ExpectedProductVersion -Label "${Name} (product-version)"
         Assert-Equal -Actual $productVersionValid -Expected $ExpectedProductVersionValid.ToString().ToLowerInvariant() -Label "${Name} (product-version-valid)"
@@ -112,9 +116,10 @@ try {
     Invoke-Case -Name 'Branch build'                       -RefType 'branch' -RefName 'dev/my-feature'            -RunNumber '42'    -ExpectedVersion '0.0.42'                 -ExpectedNumericVersion '0.0.42.42'     -ExpectedProductVersion '0.0.42.42'
     Invoke-Case -Name 'Branch build, large run number'     -RefType 'branch' -RefName 'main'                      -RunNumber '70000' -ExpectedVersion '0.0.70000'              -ExpectedNumericVersion '0.0.4465.4465' -ExpectedProductVersion '0.0.4465.4465'
 
-    # Tag builds use the tag name; numeric-version strips the suffix + appends the run number.
+    # Tag builds use the tag name for Version and InformationalVersion; numeric-version strips the suffix + appends the run number.
     Invoke-Case -Name 'Final release tag'                  -RefType 'tag'    -RefName '1.2.3'                     -RunNumber '7'     -ExpectedVersion '1.2.3'                  -ExpectedNumericVersion '1.2.3.7'      -ExpectedProductVersion '1.2.3'
-    Invoke-Case -Name 'Pre-release tag'                    -RefType 'tag'    -RefName '1.4.0-a1b2c3d4.42'         -RunNumber '99'    -ExpectedVersion '1.4.0-a1b2c3d4.42'      -ExpectedNumericVersion '1.4.0.99'      -ExpectedProductVersion '1.4.0.99'
+    Invoke-Case -Name 'Manual pre-release tag'             -RefType 'tag'    -RefName '1.4.0-userSuffix'          -RunNumber '98'    -ExpectedVersion '1.4.0-userSuffix'       -ExpectedNumericVersion '1.4.0.98'     -ExpectedProductVersion '1.4.0.98'
+    Invoke-Case -Name 'Pre-release tag'                    -RefType 'tag'    -RefName '1.4.0-123.42.a1b2c3d4'     -RunNumber '99'    -ExpectedVersion '1.4.0-123.42.a1b2c3d4'  -ExpectedNumericVersion '1.4.0.99'      -ExpectedProductVersion '1.4.0.99'
     Invoke-Case -Name 'Build-metadata tag'                 -RefType 'tag'    -RefName '2.3.1+build.5'             -RunNumber '3'     -ExpectedVersion '2.3.1+build.5'          -ExpectedNumericVersion '2.3.1.3'      -ExpectedProductVersion '2.3.1'
     Invoke-Case -Name 'Pre-release + metadata tag'         -RefType 'tag'    -RefName '1.2.3-rc.1+meta'           -RunNumber '8'     -ExpectedVersion '1.2.3-rc.1+meta'        -ExpectedNumericVersion '1.2.3.8'       -ExpectedProductVersion '1.2.3.8'
     Invoke-Case -Name 'Leading v prefix tolerated'         -RefType 'tag'    -RefName 'v1.2.3'                    -RunNumber '5'     -ExpectedVersion 'v1.2.3'                 -ExpectedNumericVersion '1.2.3.5'      -ExpectedProductVersion '1.2.3'

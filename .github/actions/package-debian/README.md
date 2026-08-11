@@ -22,6 +22,8 @@ from the publish output → substitute `<VERSION>` in `DEBIAN/control` → fix p
 | --- | --- | --- |
 | `projects` | yes | Comma-separated DxM project paths (relative to the repo root). |
 | `version` | yes | Canonical build version (from `determine-version`). Debian-normalised here: `x.y.z-suffix` → `x.y.z~suffix` (dashes in the suffix removed, dots preserved). |
+| `informational-version` | no | Exact assembly informational version. Defaults to `version`. Automatic source-revision appending is disabled. |
+| `numeric-version` | no | Strict four-field value used for `AssemblyVersion` and `FileVersion`. |
 | `generate-sbom` | no | `'true'` ⇒ generate an SBOM per project (requires the `dataminer-sbom` tool on the PATH; full releases only). Default `'false'`. |
 | `configuration` | no | `dotnet publish` configuration. Default `Release`. |
 | `output-directory` | no | Directory receiving the `.deb` files. Default `output`. |
@@ -40,6 +42,8 @@ from the publish output → substitute `<VERSION>` in `DEBIAN/control` → fix p
   with:
     projects: ${{ inputs.dxm-projects-ubuntu }}
     version: ${{ needs.determine_version.outputs.version }}
+    informational-version: ${{ needs.determine_version.outputs.informational-version }}
+    numeric-version: ${{ needs.determine_version.outputs.numeric-version }}
     generate-sbom: ${{ !contains(github.ref_name, '-') }}
 ```
 
@@ -48,5 +52,6 @@ from the publish output → substitute `<VERSION>` in `DEBIAN/control` → fix p
 Covered by the `package-debian` job in
 [`../../workflows/Test composite actions.yml`](../../workflows/Test%20composite%20actions.yml),
 which scaffolds two console projects with Debian skeletons and asserts the built `.deb`s
-(name, `~`-normalised version, publish output and conffile contents). `dpkg-deb` requires a
+(name, `~`-normalised version, publish output, conffile contents, and managed assembly versions).
+`dpkg-deb` requires a
 Linux runner, so there is no local `test.ps1`.

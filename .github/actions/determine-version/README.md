@@ -1,9 +1,10 @@
 # determine-version
 
-Determines the **single canonical build version** shared by every job in the Master Workflow, a
-strict 4-field numeric companion for assemblies, and an MSI-specific ProductVersion.
+Determines the **single canonical build version** shared by every job in the Master Workflow, an exact
+informational version, a strict 4-field numeric companion for assemblies, and an MSI-specific
+ProductVersion.
 
-- **Tag builds** use the tag name verbatim (e.g. `2.3.1`, `1.4.0-a1b2c3d4.42`).
+- **Tag builds** use the tag name verbatim (e.g. `2.3.1`, `1.4.0-123.42.a1b2c3d4`).
 - **Branch builds** keep the legacy `0.0.<run-number>` in all modes.
 
 ## Inputs
@@ -19,6 +20,7 @@ strict 4-field numeric companion for assemblies, and an MSI-specific ProductVers
 | Output | Suffix allowed? | Description |
 | --- | :--: | --- |
 | `version` | ✔ | Full SemVer — for MSBuild `Version` / `PackageVersion`, NuGet, `.dmapp` / Catalog, `.deb` (after its own `~` normalisation), DxM release. |
+| `informational-version` | ✔ | Exact `AssemblyInformationalVersion`, equal to `version`; builds disable automatic source-revision appending. |
 | `numeric-version` | ✘ | Strict 4-field `major.minor.patch.<build>` (every field wrapped `% 65535`) — for `AssemblyVersion` / `FileVersion`. `<build>` = the run number, or the version's own 4th field when it already has one. |
 | `product-version` | ✘ | Stable three-part tags use `major.minor.build`; prereleases, branches, and explicit four-part tags retain `numeric-version`'s fourth field for Skyline release classification. |
 | `product-version-valid` | — | `true` when MSI limits are met: major/minor ≤ 255 and build ≤ 65,535. |
@@ -39,9 +41,12 @@ strict 4-field numeric companion for assemblies, and an MSI-specific ProductVers
   fails the action with a clear error — such a version could not build anyway.
 - Stable three-part tags use the normalized three-field numeric core (`1.2.3`). Pre-release tags
   cannot carry their SemVer suffix in ProductVersion, so they use the suffix-free four-field
-  `numeric-version` (`1.2.3-sha.run` → `1.2.3.<workflow-run>`). Branch builds and explicit legacy
+  `numeric-version` (`1.2.3-pr.run.sha` → `1.2.3.<workflow-run>`). Branch builds and explicit legacy
   four-part tags also retain that fourth field. Skyline tooling uses this shape to distinguish a
   prerelease/non-final package from a stable release.
+- `informational-version` preserves the public version exactly, including a manual user suffix or the
+  automatic `PR.RUN.SHA` suffix. The Master Workflow passes
+  `IncludeSourceRevisionInInformationalVersion=false` so the SDK does not append another commit hash.
 - MSI limits are independent from assembly limits: **major ≤ 255, minor ≤ 255, build ≤ 65,535**.
   `product-version-valid` exposes the result. The Master Workflow fails clearly on an invalid value
   only when a WiX project exists, so a non-MSI repository may still use a date-style tag such as

@@ -22,8 +22,11 @@ inputs:
 
 outputs:
   version:
-    description: The full SemVer version — the tag name on tag builds (e.g. `2.3.1`, `1.4.0-a1b2c3d4.42`), `0.0.<run-number>` on branch builds.
+    description: The full SemVer version — the tag name on tag builds (e.g. `2.3.1`, `1.4.0-123.42.a1b2c3d4`), `0.0.<run-number>` on branch builds.
     value: ${{ steps.determine.outputs.version }}
+  informational-version:
+    description: The exact assembly informational version, equal to `version` without an automatically appended source revision.
+    value: ${{ steps.determine.outputs.informational-version }}
   numeric-version:
     description: Strict 4-field `major.minor.patch.<build>` version with any pre-release/build suffix stripped; `<build>` is the run number, or the version's own 4th field when it already has one; every field is wrapped into the valid assembly-metadata range (`% 65535`, max 65534).
     value: ${{ steps.determine.outputs.numeric-version }}

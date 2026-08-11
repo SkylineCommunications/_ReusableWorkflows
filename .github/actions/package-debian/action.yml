@@ -13,6 +13,14 @@ inputs:
   version:
     description: The canonical build version (from `determine-version`). Normalised for Debian (`x.y.z-suffix` → `x.y.z~suffix`).
     required: true
+  informational-version:
+    description: Exact assembly informational version. Defaults to `version` when empty.
+    required: false
+    default: ''
+  numeric-version:
+    description: Optional strict four-field AssemblyVersion and FileVersion.
+    required: false
+    default: ''
   generate-sbom:
     description: When `true`, generate an SBOM into `usr/share/doc/skyline-communications-<project>` (requires the `dataminer-sbom` tool; full releases only).
     required: false
@@ -40,6 +48,8 @@ runs:
       env:
         PROJECTS: ${{ inputs.projects }}
         VERSION: ${{ inputs.version }}
+        INFORMATIONAL_VERSION: ${{ inputs.informational-version }}
+        NUMERIC_VERSION: ${{ inputs.numeric-version }}
         GENERATE_SBOM: ${{ inputs.generate-sbom }}
         CONFIGURATION: ${{ inputs.configuration }}
         OUTPUT_DIR: ${{ inputs.output-directory }}

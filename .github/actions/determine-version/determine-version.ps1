@@ -24,6 +24,7 @@ if ($refType -eq 'tag') {
 } else {
     $version = "0.0.$runNumber"
 }
+$informationalVersion = $version
 
 # numeric-version: strip any pre-release/build suffix (-… / +…) down to the numeric core,
 # then ensure 4 fields. A 3-field core (major.minor.patch — SemVer tags) gets the run
@@ -71,10 +72,11 @@ $productVersionValid = if ($refType -eq 'tag') {
     $true
 }
 
-Write-Host "Determined version '$version', numeric-version '$numericVersion', and product-version '$productVersion' (valid: $($productVersionValid.ToString().ToLowerInvariant()), ref-type: $refType, run-number: $runNumber)."
+Write-Host "Determined version '$version', informational-version '$informationalVersion', numeric-version '$numericVersion', and product-version '$productVersion' (valid: $($productVersionValid.ToString().ToLowerInvariant()), ref-type: $refType, run-number: $runNumber)."
 
 @(
     "version=$version"
+    "informational-version=$informationalVersion"
     "numeric-version=$numericVersion"
     "product-version=$productVersion"
     "product-version-valid=$($productVersionValid.ToString().ToLowerInvariant())"
