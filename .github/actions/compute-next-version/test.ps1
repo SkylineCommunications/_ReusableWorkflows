@@ -82,7 +82,7 @@ try {
     Invoke-Case -Name 'Major bump on 1.3.5'              -Tags @('1.3.5')                -ChangeType 'Major' -Mode 'release'    -Suffix ''         -ExpectedVersion '2.0.0'            -ExpectedLatestTag '1.3.5'
     Invoke-Case -Name 'Patch bump, no tags'              -Tags @()                       -ChangeType 'Patch' -Mode 'release'    -Suffix ''         -ExpectedVersion '0.0.1'            -ExpectedLatestTag ''
     Invoke-Case -Name 'Minor bump ignores pre-release'   -Tags @('1.3.5', '1.4.0-dev.1') -ChangeType 'Minor' -Mode 'release'    -Suffix ''         -ExpectedVersion '1.4.0'            -ExpectedLatestTag '1.3.5'
-    Invoke-Case -Name 'Minor pre-release with suffix'    -Tags @('1.3.5')                -ChangeType 'Minor' -Mode 'prerelease' -Suffix 'a1b2c3d4.42' -ExpectedVersion '1.4.0-a1b2c3d4.42' -ExpectedLatestTag '1.3.5'
+    Invoke-Case -Name 'Minor pre-release with suffix'    -Tags @('1.3.5')                -ChangeType 'Minor' -Mode 'prerelease' -Suffix '123.42.a1b2c3d4' -ExpectedVersion '1.4.0-123.42.a1b2c3d4' -ExpectedLatestTag '1.3.5'
     Invoke-Case -Name 'Empty change-type defaults Patch' -Tags @('1.3.5')                -ChangeType ''      -Mode 'release'    -Suffix ''         -ExpectedVersion '1.3.6'            -ExpectedLatestTag '1.3.5'
 
     # Extra guards beyond the plan corpus.

@@ -220,6 +220,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.determine-version.outputs.version }}
+      informational-version: ${{ steps.determine-version.outputs.informational-version }}
       numeric-version: ${{ steps.determine-version.outputs.numeric-version }}
       product-version: ${{ steps.determine-version.outputs.product-version }}
       product-version-valid: ${{ steps.determine-version.outputs.product-version-valid }}
@@ -524,6 +525,8 @@ jobs:
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
+          INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
+          NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
           CONFIGURATION: ${{ inputs.configuration }}
           DEBUG_FLAG: ${{ inputs.debug }}
         run: |
@@ -534,6 +537,10 @@ jobs:
           dotnet build "$SOLUTION_PATH" \
             -p:Version="$VERSION" \
             -p:PackageVersion="$VERSION" \
+            -p:AssemblyVersion="$NUMERIC_VERSION" \
+            -p:FileVersion="$NUMERIC_VERSION" \
+            -p:InformationalVersion="$INFORMATIONAL_VERSION" \
+            -p:IncludeSourceRevisionInInformationalVersion=false \
             --configuration "$CONFIGURATION" \
             -p:SkylineDataMinerSdkDebug="$DEBUG_FLAG" \
             -p:GeneratePackageOnBuild=false \
@@ -636,6 +643,8 @@ jobs:
         with:
           projects: ${{ inputs.dxm-projects-ubuntu }}
           version: ${{ needs.determine_version.outputs.version }}
+          informational-version: ${{ needs.determine_version.outputs.informational-version }}
+          numeric-version: ${{ needs.determine_version.outputs.numeric-version }}
           generate-sbom: ${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
           configuration: ${{ inputs.configuration }}
           output-directory: output
@@ -768,14 +777,15 @@ jobs:
           OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.OVERRIDE_CATALOG_DOWNLOAD_TOKEN }}
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
+          INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
           PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
           CONFIGURATION: ${{ inputs.configuration }}
           DEBUG_FLAG: ${{ inputs.debug }}
         run: |
-          # NuGet/DataMiner packaging uses the full (suffix-bearing) version; assemblies and
-          # assemblies use the strict 4-field numeric version. WiX uses the dedicated
-          # ProductVersion (three fields for stable SemVer tags).
+          # NuGet/DataMiner packaging uses the full (suffix-bearing) version; managed
+          # assemblies use the exact informational version and strict 4-field numeric
+          # versions. WiX uses the dedicated ProductVersion (three fields for stable tags).
           # DefineConstants comes from the job-level env var so the WiX projects can keep
           # their own preprocessor constants (a -p: global would clobber them).
           dotnet build "$SOLUTION_PATH" \
@@ -783,6 +793,8 @@ jobs:
             -p:PackageVersion="$VERSION" \
             -p:AssemblyVersion="$NUMERIC_VERSION" \
             -p:FileVersion="$NUMERIC_VERSION" \
+            -p:InformationalVersion="$INFORMATIONAL_VERSION" \
+            -p:IncludeSourceRevisionInInformationalVersion=false \
             -p:ProductVersion="$PRODUCT_VERSION" \
             --configuration "$CONFIGURATION" \
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" \
@@ -839,6 +851,7 @@ jobs:
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
+          INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
           PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
           CONFIGURATION: ${{ inputs.configuration }}
@@ -853,6 +866,8 @@ jobs:
             -p:PackageVersion="$env:VERSION" `
             -p:AssemblyVersion="$env:NUMERIC_VERSION" `
             -p:FileVersion="$env:NUMERIC_VERSION" `
+            -p:InformationalVersion="$env:INFORMATIONAL_VERSION" `
+            -p:IncludeSourceRevisionInInformationalVersion=false `
             -p:ProductVersion="$env:PRODUCT_VERSION" `
             -p:GeneratePackageOnBuild=false `
             -p:GenerateDataMinerPackage=false `

@@ -10,6 +10,8 @@
 # Env (set by action.yml):
 #   PROJECTS      : comma-separated project paths relative to the repo root.
 #   VERSION       : canonical build version (Debian-normalised here: x.y.z-suffix -> x.y.z~suffix).
+#   INFORMATIONAL_VERSION : exact assembly informational version; defaults to VERSION.
+#   NUMERIC_VERSION       : optional strict 4-field AssemblyVersion/FileVersion.
 #   GENERATE_SBOM : 'true' => generate SBOM into usr/share/doc/skyline-communications-<name>.
 #   CONFIGURATION : dotnet publish configuration.
 #   OUTPUT_DIR    : directory receiving the built .deb files.
@@ -28,6 +30,7 @@ if [[ -z "${VERSION:-}" ]]; then
 fi
 configuration="${CONFIGURATION:-Release}"
 output_dir="${OUTPUT_DIR:-output}"
+informational_version="${INFORMATIONAL_VERSION:-$VERSION}"
 
 # --- Debian version normalisation -------------------------------------------------
 # Pre-release x.y.z-suffix -> x.y.z~suffix (dashes inside the suffix removed; '~' sorts
@@ -89,7 +92,24 @@ for project in "${projects[@]}"; do
 
   # 2. Publish self-contained for linux-x64 into opt/skyline-communications/<name>.
   publish_dir="$content/opt/skyline-communications/$service_name"
-  dotnet publish "$project" -c "$configuration" -r linux-x64 --self-contained true -o "$publish_dir"
+  publish_args=(
+    "$project"
+    -c "$configuration"
+    -r linux-x64
+    --self-contained true
+    -o "$publish_dir"
+    -p:Version="$VERSION"
+    -p:PackageVersion="$VERSION"
+    -p:InformationalVersion="$informational_version"
+    -p:IncludeSourceRevisionInInformationalVersion=false
+  )
+  if [[ -n "${NUMERIC_VERSION:-}" ]]; then
+    publish_args+=(
+      -p:AssemblyVersion="$NUMERIC_VERSION"
+      -p:FileVersion="$NUMERIC_VERSION"
+    )
+  fi
+  dotnet publish "${publish_args[@]}"
 
   # 3. SBOM (full releases only): usr/share/doc/skyline-communications-<name>,
   #    matching the Azure reusable pipelines.

@@ -635,7 +635,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run 23-case version corpus
+      - name: Run 24-case version corpus
         shell: pwsh
         run: ./.github/actions/determine-version/test.ps1
 
@@ -644,7 +644,7 @@ jobs:
         uses: ./.github/actions/determine-version
         with:
           ref-type: tag
-          ref-name: 1.4.0-a1b2c3d4.42
+          ref-name: 1.4.0-123.42.a1b2c3d4
           run-number: 99
 
       - name: Stable tag build smoke test
@@ -666,22 +666,28 @@ jobs:
       - name: Assert composite outputs
         env:
           TAG_VERSION: ${{ steps.tag-build.outputs.version }}
+          TAG_INFORMATIONAL: ${{ steps.tag-build.outputs.informational-version }}
           TAG_NUMERIC: ${{ steps.tag-build.outputs.numeric-version }}
           TAG_PRODUCT: ${{ steps.tag-build.outputs.product-version }}
           TAG_PRODUCT_VALID: ${{ steps.tag-build.outputs.product-version-valid }}
           STABLE_NUMERIC: ${{ steps.stable-tag-build.outputs.numeric-version }}
+          STABLE_INFORMATIONAL: ${{ steps.stable-tag-build.outputs.informational-version }}
           STABLE_PRODUCT: ${{ steps.stable-tag-build.outputs.product-version }}
           BRANCH_VERSION: ${{ steps.branch-build.outputs.version }}
+          BRANCH_INFORMATIONAL: ${{ steps.branch-build.outputs.informational-version }}
           BRANCH_NUMERIC: ${{ steps.branch-build.outputs.numeric-version }}
           BRANCH_PRODUCT: ${{ steps.branch-build.outputs.product-version }}
         run: |
-          test "$TAG_VERSION" = "1.4.0-a1b2c3d4.42"
+          test "$TAG_VERSION" = "1.4.0-123.42.a1b2c3d4"
+          test "$TAG_INFORMATIONAL" = "1.4.0-123.42.a1b2c3d4"
           test "$TAG_NUMERIC" = "1.4.0.99"
           test "$TAG_PRODUCT" = "1.4.0.99"
           test "$TAG_PRODUCT_VALID" = "true"
           test "$STABLE_NUMERIC" = "1.4.0.100"
+          test "$STABLE_INFORMATIONAL" = "1.4.0"
           test "$STABLE_PRODUCT" = "1.4.0"
           test "$BRANCH_VERSION" = "0.0.70000"
+          test "$BRANCH_INFORMATIONAL" = "0.0.70000"
           test "$BRANCH_NUMERIC" = "0.0.4465.4465"
           test "$BRANCH_PRODUCT" = "0.0.4465.4465"
 
@@ -741,6 +747,8 @@ jobs:
         with:
           projects: ${{ runner.temp }}/deb-demo/SvcOne, ${{ runner.temp }}/deb-demo/SvcTwo
           version: 1.2.3-beta.1
+          informational-version: 1.2.3-beta.1
+          numeric-version: 1.2.3.77
           generate-sbom: 'false'
           output-directory: deb-output
 
@@ -757,6 +765,27 @@ jobs:
           dpkg-deb --contents "deb-output/dataminer-svcone_1.2.3~beta.1.deb" | grep -q 'opt/skyline-communications/dataminer-svcone/'
           dpkg-deb --contents "deb-output/dataminer-svcone_1.2.3~beta.1.deb" | grep -q 'etc/skyline-communications/dataminer-svcone/appsettings.json'
           dpkg-deb --contents "deb-output/dataminer-svctwo_1.2.3~beta.1.deb" | grep -q 'opt/skyline-communications/dataminer-svctwo/'
+
+      - name: Assert managed assembly versions in Debian package
+        shell: pwsh
+        run: |
+          $extractPath = Join-Path $env:RUNNER_TEMP 'deb-extract'
+          & dpkg-deb --extract 'deb-output/dataminer-svcone_1.2.3~beta.1.deb' $extractPath
+          if ($LASTEXITCODE -ne 0) { throw "dpkg-deb extraction failed with exit code $LASTEXITCODE." }
+
+          $assemblyPath = Join-Path $extractPath 'opt/skyline-communications/dataminer-svcone/SvcOne.dll'
+          $assemblyName = [System.Reflection.AssemblyName]::GetAssemblyName($assemblyPath)
+          if ($assemblyName.Version.ToString() -ne '1.2.3.77') {
+            throw "Unexpected AssemblyVersion: $($assemblyName.Version)."
+          }
+
+          $fileInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($assemblyPath)
+          if ($fileInfo.FileVersion -ne '1.2.3.77') {
+            throw "Unexpected FileVersion: $($fileInfo.FileVersion)."
+          }
+          if ($fileInfo.ProductVersion -ne '1.2.3-beta.1') {
+            throw "Unexpected InformationalVersion: $($fileInfo.ProductVersion)."
+          }
 
   remove-wix-projects:
     name: remove-wix-projects
