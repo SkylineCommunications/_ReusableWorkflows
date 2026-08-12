@@ -6,6 +6,12 @@ projects) do not require a task id and can have a predefined RN auto-added by th
 the mandatory PR-validation gate and the commit-metadata ruleset stay satisfied without manual RN/Task
 administration.
 
+The Core DxM validation caller currently uses `RN46090` for this purpose. It is a validation-only
+reference: it remains in PR and squash-commit metadata, while the full-release collaboration workflow
+and ReleaseTracker server sync exclude it from Release Note mutations. The automatic-release workflow
+also uses this classification to skip its merge tag when all changed files are exempt. Explicit real RNs
+and mixed/source file changes remain actionable; an explicitly requested prerelease is unaffected.
+
 ## Inputs
 
 | Input | Required | Description |
