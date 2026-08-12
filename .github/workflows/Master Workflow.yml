@@ -310,28 +310,44 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: Azure Login
-        uses: azure/login@v3
-        if: needs.check_oidc.outputs.use-oidc == 'true'
-        with:
-          client-id: ${{ needs.check_oidc.outputs.client-id }}
-          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
-          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+      - name: Enable long paths
+        run: git config --global core.longpaths true
 
-      - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
-        with:
-          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
-          secret-names: |
-            azure-token
-            sonar-token
-            skylinecommunications-github-token
-            skylinecommunicationscore-github-token
-            ${{ needs.discover_projects.outputs.has-dataminer-projects == 'true' && 'dataminer-token' || '' }}
-          overrides: |
-            AZURE_TOKEN=${{ secrets.AZURE_TOKEN }}
-            SONAR_TOKEN=${{ secrets.SONAR_TOKEN }}
-            DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
+      - parallel:
+          - name: Azure Login
+            uses: azure/login@v3
+            if: needs.check_oidc.outputs.use-oidc == 'true'
+            with:
+              client-id: ${{ needs.check_oidc.outputs.client-id }}
+              tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+              subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+          - name: Checkout
+            uses: actions/checkout@v7
+            with:
+              fetch-depth: 0
+
+      - parallel:
+          - name: Load secrets
+            uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+            with:
+              use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+              secret-names: |
+                azure-token
+                sonar-token
+                skylinecommunications-github-token
+                skylinecommunicationscore-github-token
+                ${{ needs.discover_projects.outputs.has-dataminer-projects == 'true' && 'dataminer-token' || '' }}
+              overrides: |
+                AZURE_TOKEN=${{ secrets.AZURE_TOKEN }}
+                SONAR_TOKEN=${{ secrets.SONAR_TOKEN }}
+                DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
+
+          - name: Cache and Install Mono
+            if: runner.os == 'Linux'
+            uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+            with:
+              packages: mono-complete
 
       - name: Validate inputs
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@main
@@ -343,19 +359,6 @@ jobs:
           has-dataminer-projects: ${{ needs.discover_projects.outputs.has-dataminer-projects }}
           check-sonar: ${{ github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true' }}
           check-dataminer: ${{ github.ref_type == 'tag' && needs.discover_projects.outputs.has-dataminer-projects == 'true' }}
-
-      - name: Enable long paths
-        run: git config --global core.longpaths true
-
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Cache and Install Mono
-        if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
-        with:
-          packages: mono-complete
       
       # Skyline-managed repos register BOTH organizations' GitHub Packages feeds
       # (cross-org restore needs the Key Vault tokens - the default GITHUB_TOKEN only
@@ -594,15 +597,19 @@ jobs:
     name: Package Ubuntu Services
     runs-on: ubuntu-latest
     if: needs.check_oidc.outputs.is-fork != 'true' && github.actor != 'dependabot[bot]' && needs.discover_projects.outputs.has-ubuntu-dxm == 'true'
-    needs: [ci, check_oidc, discover_projects, determine_version]
+    needs: [check_oidc, discover_projects, determine_version]
     steps:
-      - name: Azure Login
-        uses: azure/login@v3
-        if: needs.check_oidc.outputs.use-oidc == 'true'
-        with:
-          client-id: ${{ needs.check_oidc.outputs.client-id }}
-          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
-          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+      - parallel:
+          - name: Azure Login
+            uses: azure/login@v3
+            if: needs.check_oidc.outputs.use-oidc == 'true'
+            with:
+              client-id: ${{ needs.check_oidc.outputs.client-id }}
+              tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+              subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+          - name: Checkout
+            uses: actions/checkout@v7
 
       - name: Load secrets
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
@@ -614,8 +621,6 @@ jobs:
             skylinecommunicationscore-github-token
           overrides: |
             AZURE_TOKEN=${{ secrets.AZURE_TOKEN }}
-
-      - uses: actions/checkout@v7
 
       - name: Setup Skyline NuGet sources
         if: needs.check_oidc.outputs.is-skyline-managed == 'true'
@@ -668,7 +673,7 @@ jobs:
     name: Package & Sign (Windows)
     runs-on: windows-latest
     if: needs.check_oidc.outputs.is-fork != 'true' && github.actor != 'dependabot[bot]'
-    needs: [ci, check_oidc, discover_projects, determine_version]
+    needs: [check_oidc, discover_projects, determine_version]
     env:
       # Environment variable instead of -p:DefineConstants — a global property would
       # override the WiX projects' own DefineConstants (used for preprocessor variables
@@ -680,13 +685,23 @@ jobs:
       has-dataminer-packages: ${{ steps.detect-artifacts.outputs.has-dataminer-packages }}
       has-msi: ${{ steps.detect-artifacts.outputs.has-msi }}
     steps:
-      - name: Azure Login
-        uses: azure/login@v3
-        if: needs.check_oidc.outputs.use-oidc == 'true'
-        with:
-          client-id: ${{ needs.check_oidc.outputs.client-id }}
-          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
-          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+        shell: bash
+
+      - parallel:
+          - name: Azure Login
+            uses: azure/login@v3
+            if: needs.check_oidc.outputs.use-oidc == 'true'
+            with:
+              client-id: ${{ needs.check_oidc.outputs.client-id }}
+              tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+              subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+          - name: Checkout
+            uses: actions/checkout@v7
+            with:
+              fetch-depth: 0
 
       - name: Load secrets
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
@@ -705,14 +720,6 @@ jobs:
           overrides: |
             AZURE_TOKEN=${{ secrets.AZURE_TOKEN }}
             DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
-
-      - name: Enable long paths
-        run: git config --global core.longpaths true
-        shell: bash
-
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Setup Skyline NuGet sources
         if: needs.check_oidc.outputs.is-skyline-managed == 'true'
@@ -928,56 +935,57 @@ jobs:
           }
         shell: pwsh
 
-      - name: Sign installers
-        if: needs.check_oidc.outputs.use-oidc == 'true' && needs.discover_projects.outputs.has-wix-projects == 'true'
-        env:
-          AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
-        run: |
-          sign code azure-key-vault "**/bin/**/*.msi" \
-            --publisher-name "Skyline Communications" \
-            --description "Skyline Signing" \
-            --description-url "https://www.skyline.be/" \
-            --azure-key-vault-certificate "$SIGNING_KEY_VAULT_CERTIFICATE" \
-            --azure-key-vault-url "$SIGNING_KEY_VAULT_URL" \
-            --output "_SignedInstallers"
-        shell: bash
+      - parallel:
+          - name: Sign installers
+            if: needs.check_oidc.outputs.use-oidc == 'true' && needs.discover_projects.outputs.has-wix-projects == 'true'
+            env:
+              AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
+              AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
+              AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
+            run: |
+              sign code azure-key-vault "**/bin/**/*.msi" \
+                --publisher-name "Skyline Communications" \
+                --description "Skyline Signing" \
+                --description-url "https://www.skyline.be/" \
+                --azure-key-vault-certificate "$SIGNING_KEY_VAULT_CERTIFICATE" \
+                --azure-key-vault-url "$SIGNING_KEY_VAULT_URL" \
+                --output "_SignedInstallers"
+            shell: bash
 
-      - name: Sign NuGet packages
-        if: needs.check_oidc.outputs.use-oidc == 'true'
-        env:
-          AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
-        run: |
-          if compgen -G "_NuGetOutput/*.nupkg" > /dev/null; then
-            sign code azure-key-vault "_NuGetOutput/**/*.nupkg" \
-              --publisher-name "Skyline Communications" \
-              --description "Skyline Signing" \
-              --description-url "https://www.skyline.be/" \
-              --azure-key-vault-certificate "$SIGNING_KEY_VAULT_CERTIFICATE" \
-              --azure-key-vault-url "$SIGNING_KEY_VAULT_URL" \
-              --output "_SignedNuGetResults"
-          else
-            echo "No NuGet packages to sign."
-          fi
-        shell: bash
+          - name: Sign NuGet packages
+            if: needs.check_oidc.outputs.use-oidc == 'true'
+            env:
+              AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
+              AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
+              AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
+            run: |
+              if compgen -G "_NuGetOutput/*.nupkg" > /dev/null; then
+                sign code azure-key-vault "_NuGetOutput/**/*.nupkg" \
+                  --publisher-name "Skyline Communications" \
+                  --description "Skyline Signing" \
+                  --description-url "https://www.skyline.be/" \
+                  --azure-key-vault-certificate "$SIGNING_KEY_VAULT_CERTIFICATE" \
+                  --azure-key-vault-url "$SIGNING_KEY_VAULT_URL" \
+                  --output "_SignedNuGetResults"
+              else
+                echo "No NuGet packages to sign."
+              fi
+            shell: bash
 
-      - name: Sign DataMiner packages
-        if: needs.check_oidc.outputs.use-oidc == 'true' && needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        env:
-          AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
-          AZURE_KEY_VAULT_URL: ${{ env.SIGNING_KEY_VAULT_URL }}
-          AZURE_KEY_VAULT_CERTIFICATE: ${{ env.SIGNING_KEY_VAULT_CERTIFICATE }}
-          DEBUG_FLAG: ${{ inputs.debug }}
-        run: |
-          dataminer-package-signature sign dmapp `
-            --package-location "$env:GITHUB_WORKSPACE" `
-            --debug $env:DEBUG_FLAG
-        shell: pwsh
+          - name: Sign DataMiner packages
+            if: needs.check_oidc.outputs.use-oidc == 'true' && needs.discover_projects.outputs.has-dataminer-projects == 'true'
+            env:
+              AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
+              AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
+              AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
+              AZURE_KEY_VAULT_URL: ${{ env.SIGNING_KEY_VAULT_URL }}
+              AZURE_KEY_VAULT_CERTIFICATE: ${{ env.SIGNING_KEY_VAULT_CERTIFICATE }}
+              DEBUG_FLAG: ${{ inputs.debug }}
+            run: |
+              dataminer-package-signature sign dmapp `
+                --package-location "$env:GITHUB_WORKSPACE" `
+                --debug $env:DEBUG_FLAG
+            shell: pwsh
 
       - name: Fall back to unsigned artifacts (signing not available)
         if: needs.check_oidc.outputs.use-oidc != 'true'
@@ -1012,32 +1020,33 @@ jobs:
           echo "has-msi=$([ "$msi_count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
         shell: bash
 
-      - name: Upload signed NuGet packages
-        if: steps.detect-artifacts.outputs.has-nuget-packages == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: SignedNugetPackages
-          path: _SignedNuGetResults
+      - parallel:
+          - name: Upload signed NuGet packages
+            if: steps.detect-artifacts.outputs.has-nuget-packages == 'true'
+            uses: actions/upload-artifact@v7
+            with:
+              name: SignedNugetPackages
+              path: _SignedNuGetResults
 
-      - name: Upload signed DataMiner packages
-        if: steps.detect-artifacts.outputs.has-dataminer-packages == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: SignedDataMinerPackages
-          path: |
-            **/bin/${{ inputs.configuration }}/*.dmapp
-            **/bin/${{ inputs.configuration }}/*.dmtest
-            **/bin/${{ inputs.configuration }}/*.zip
-            **/bin/${{ inputs.configuration }}/**/*.dmapp
-            **/bin/${{ inputs.configuration }}/**/*.dmtest
-            **/bin/${{ inputs.configuration }}/**/*.zip
+          - name: Upload signed DataMiner packages
+            if: steps.detect-artifacts.outputs.has-dataminer-packages == 'true'
+            uses: actions/upload-artifact@v7
+            with:
+              name: SignedDataMinerPackages
+              path: |
+                **/bin/${{ inputs.configuration }}/*.dmapp
+                **/bin/${{ inputs.configuration }}/*.dmtest
+                **/bin/${{ inputs.configuration }}/*.zip
+                **/bin/${{ inputs.configuration }}/**/*.dmapp
+                **/bin/${{ inputs.configuration }}/**/*.dmtest
+                **/bin/${{ inputs.configuration }}/**/*.zip
 
-      - name: Upload signed installers
-        if: steps.detect-artifacts.outputs.has-msi == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: SignedInstallers
-          path: _SignedInstallers
+          - name: Upload signed installers
+            if: steps.detect-artifacts.outputs.has-msi == 'true'
+            uses: actions/upload-artifact@v7
+            with:
+              name: SignedInstallers
+              path: _SignedInstallers
 
   # ════════════════════════════════════════════════════════════════
   # DxM Release (on tag only)
@@ -1049,7 +1058,7 @@ jobs:
     name: Upload DxM Installers (${{ matrix.environment }})
     runs-on: ubuntu-latest
     if: github.ref_type == 'tag' && needs.package_windows.outputs.has-msi == 'true' && needs.check_oidc.outputs.use-oidc == 'true'
-    needs: [package_windows, check_oidc]
+    needs: [ci, package_windows, check_oidc]
     permissions:
       contents: read
       id-token: write
@@ -1059,12 +1068,16 @@ jobs:
       matrix:
         environment: ${{ fromJSON(contains(github.ref_name, '-') && '["dev","qa"]' || '["dev","qa","prod"]') }}
     steps:
-      - name: Azure Login
-        uses: azure/login@v3
-        with:
-          client-id: ${{ needs.check_oidc.outputs.client-id }}
-          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
-          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+      - parallel:
+          - name: Azure Login
+            uses: azure/login@v3
+            with:
+              client-id: ${{ needs.check_oidc.outputs.client-id }}
+              tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+              subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+          - name: Checkout
+            uses: actions/checkout@v7
 
       - name: Load package feed secrets
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
@@ -1075,8 +1088,6 @@ jobs:
             skylinecommunications-github-token
             skylinecommunicationscore-github-token
 
-      - uses: actions/checkout@v7
-
       - name: Setup Skyline NuGet sources
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
         with:
@@ -1084,15 +1095,16 @@ jobs:
           skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
           azure-token: ${{ env.AZURE_TOKEN }}
 
-      - name: Install DxM storage tool
-        run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxMStorage --global --version '1.*'
-        shell: bash
+      - parallel:
+          - name: Install DxM storage tool
+            run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxMStorage --global --version '1.*'
+            shell: bash
 
-      - name: Download signed installers
-        uses: actions/download-artifact@v8
-        with:
-          name: SignedInstallers
-          path: _SignedInstallers
+          - name: Download signed installers
+            uses: actions/download-artifact@v8
+            with:
+              name: SignedInstallers
+              path: _SignedInstallers
 
       - name: Publish DxM installers
         env:
@@ -1117,8 +1129,16 @@ jobs:
     name: Push NuGet Packages
     if: github.ref_type == 'tag' && needs.package_windows.outputs.has-nuget-packages == 'true'
     runs-on: ubuntu-latest
-    needs: [package_windows, check_oidc]
+    needs: [ci, package_windows, check_oidc]
     steps:
+      - name: Download Signed NuGet
+        id: download-signed-nuget
+        uses: actions/download-artifact@v8
+        with:
+          name: SignedNugetPackages
+          path: _SignedNuGetResults
+        background: true
+
       - name: Azure Login
         uses: azure/login@v3
         if: needs.check_oidc.outputs.use-oidc == 'true'
@@ -1136,11 +1156,8 @@ jobs:
           overrides: |
             NUGET_API_KEY_GITHUB=${{ secrets.NUGET_API_KEY }}
 
-      - name: Download Signed NuGet
-        uses: actions/download-artifact@v8
-        with:
-          name: SignedNugetPackages
-          path: _SignedNuGetResults
+      - name: Wait for signed NuGet download
+        wait: download-signed-nuget
 
       - name: Find NuGet packages
         id: findcreatednuget
@@ -1187,15 +1204,24 @@ jobs:
     name: Upload to Catalog
     runs-on: windows-latest
     if: github.ref_type == 'tag' && needs.discover_projects.outputs.has-dataminer-projects == 'true' && needs.package_windows.outputs.has-dataminer-packages == 'true'
-    needs: [package_windows, check_oidc, discover_projects]
+    needs: [ci, package_windows, check_oidc, discover_projects]
     steps:
-      - name: Azure Login
-        uses: azure/login@v3
-        if: needs.check_oidc.outputs.use-oidc == 'true'
-        with:
-          client-id: ${{ needs.check_oidc.outputs.client-id }}
-          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
-          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+      - name: Enable long paths
+        run: git config --global core.longpaths true
+
+      - parallel:
+          - name: Azure Login
+            uses: azure/login@v3
+            if: needs.check_oidc.outputs.use-oidc == 'true'
+            with:
+              client-id: ${{ needs.check_oidc.outputs.client-id }}
+              tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+              subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+          - name: Checkout
+            uses: actions/checkout@v7
+            with:
+              fetch-depth: 0
 
       - name: Load catalog upload secrets
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
@@ -1205,45 +1231,6 @@ jobs:
             dataminer-token
           overrides: |
             DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
-
-      - name: Enable long paths
-        run: git config --global core.longpaths true
-
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Download signed artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: SignedDataMinerPackages
-          path: downloaded_artifacts
-
-      - name: Restore artifact contents to bin folders
-        run: |
-          Write-Output "Restoring DataMiner package files to original structure..."
-
-          $downloadRoot = Resolve-Path "downloaded_artifacts"
-          $workspaceRoot = Resolve-Path "."
-
-          Get-ChildItem -Path $downloadRoot -Recurse -File | Where-Object { $_.Extension -in '.zip', '.dmapp', '.dmtest' } | ForEach-Object {
-              $archiveFile = $_.FullName
-              $relativePath = $archiveFile.Substring($downloadRoot.Path.Length + 1) -replace '\\', '/'
-              $targetPath = Join-Path $workspaceRoot $relativePath
-
-              $targetFolder = Split-Path $targetPath
-              if (-not (Test-Path $targetFolder)) {
-                  New-Item -ItemType Directory -Path $targetFolder -Force | Out-Null
-              }
-
-              Move-Item -Path $archiveFile -Destination $targetPath -Force
-              Write-Output "Moved $relativePath to workspace root"
-          }
-
-          Write-Output "Removing downloaded_artifacts folder..."
-          Remove-Item -Path $downloadRoot -Recurse -Force
-          Write-Output "Cleanup complete."
-        shell: pwsh
 
       - name: Find Version Comment
         id: findVersionComment
@@ -1279,9 +1266,46 @@ jobs:
             echo "versionComment=$ESCAPED_VERSION_COMMENT" >> $GITHUB_OUTPUT
           fi
         shell: bash
+        background: true
 
-      - name: Update msbuild-sdks in global.json
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
+      - parallel:
+          - name: Download signed artifacts
+            uses: actions/download-artifact@v8
+            with:
+              name: SignedDataMinerPackages
+              path: downloaded_artifacts
+
+          - name: Update msbuild-sdks in global.json
+            uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
+
+      - name: Wait for version comment
+        wait: findVersionComment
+
+      - name: Restore artifact contents to bin folders
+        run: |
+          Write-Output "Restoring DataMiner package files to original structure..."
+
+          $downloadRoot = Resolve-Path "downloaded_artifacts"
+          $workspaceRoot = Resolve-Path "."
+
+          Get-ChildItem -Path $downloadRoot -Recurse -File | Where-Object { $_.Extension -in '.zip', '.dmapp', '.dmtest' } | ForEach-Object {
+              $archiveFile = $_.FullName
+              $relativePath = $archiveFile.Substring($downloadRoot.Path.Length + 1) -replace '\\', '/'
+              $targetPath = Join-Path $workspaceRoot $relativePath
+
+              $targetFolder = Split-Path $targetPath
+              if (-not (Test-Path $targetFolder)) {
+                  New-Item -ItemType Directory -Path $targetFolder -Force | Out-Null
+              }
+
+              Move-Item -Path $archiveFile -Destination $targetPath -Force
+              Write-Output "Moved $relativePath to workspace root"
+          }
+
+          Write-Output "Removing downloaded_artifacts folder..."
+          Remove-Item -Path $downloadRoot -Recurse -Force
+          Write-Output "Cleanup complete."
+        shell: pwsh
 
       - name: Publish To Catalog
         shell: pwsh
