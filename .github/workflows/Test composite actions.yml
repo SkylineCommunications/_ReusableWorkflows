@@ -887,7 +887,9 @@ jobs:
           $remainingProjects = dotnet sln $env:REMAINING_SOLUTION_PATH list
           $wixProjects = dotnet sln $env:WIX_SOLUTION_PATH list
           $dataMinerPackageProjects = dotnet sln $env:DATAMINER_PACKAGE_SOLUTION_PATH list
-          if ($remainingProjects -notmatch 'Plain.csproj' -or $wixProjects -notmatch 'Installer.wixproj' -or $dataMinerPackageProjects -notmatch 'Package.csproj') {
+          if (($remainingProjects -join "`n") -notmatch 'Plain.csproj' -or
+              ($wixProjects -join "`n") -notmatch 'Installer.wixproj' -or
+              ($dataMinerPackageProjects -join "`n") -notmatch 'Package.csproj') {
             throw 'Unexpected partition membership.'
           }
 
