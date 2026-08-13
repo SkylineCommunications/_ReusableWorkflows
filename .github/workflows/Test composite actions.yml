@@ -831,6 +831,66 @@ jobs:
             exit 1
           fi
 
+  partition-solution-projects:
+    name: partition-solution-projects
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run offline test corpus
+        shell: pwsh
+        run: ./.github/actions/partition-solution-projects/test.ps1
+
+      - name: Scaffold a mixed solution
+        id: scaffold
+        shell: pwsh
+        run: |
+          $demoDirectory = Join-Path $env:RUNNER_TEMP 'partition-demo'
+          dotnet new sln --name Demo --output $demoDirectory
+          $solutionPath = Get-ChildItem -Path $demoDirectory -File | Where-Object { $_.Extension -in '.sln', '.slnx' } | Select-Object -First 1 -ExpandProperty FullName
+
+          $projects = @{
+            'Plain/Plain.csproj' = '<Project Sdk="Microsoft.NET.Sdk"></Project>'
+            'Installer/Installer.wixproj' = '<Project Sdk="WixToolset.Sdk/6.0.0"></Project>'
+            'Package/Package.csproj' = '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><GenerateDataMinerPackage>true</GenerateDataMinerPackage></PropertyGroup></Project>'
+          }
+
+          foreach ($project in $projects.GetEnumerator()) {
+            $projectPath = Join-Path $demoDirectory $project.Key
+            New-Item -Path (Split-Path $projectPath -Parent) -ItemType Directory -Force | Out-Null
+            Set-Content -Path $projectPath -Value $project.Value
+            dotnet sln $solutionPath add $projectPath
+          }
+
+          "solution-path=$solutionPath" >> $env:GITHUB_OUTPUT
+
+      - name: Invoke composite smoke test
+        id: partition
+        uses: ./.github/actions/partition-solution-projects
+        with:
+          solution-path: ${{ steps.scaffold.outputs.solution-path }}
+
+      - name: Assert partitions
+        shell: pwsh
+        env:
+          REMAINING_SOLUTION_PATH: ${{ steps.partition.outputs.remaining-solution-path }}
+          REMAINING_COUNT: ${{ steps.partition.outputs.remaining-count }}
+          WIX_SOLUTION_PATH: ${{ steps.partition.outputs.wix-solution-path }}
+          WIX_COUNT: ${{ steps.partition.outputs.wix-count }}
+          DATAMINER_PACKAGE_SOLUTION_PATH: ${{ steps.partition.outputs.dataminer-package-solution-path }}
+          DATAMINER_PACKAGE_COUNT: ${{ steps.partition.outputs.dataminer-package-count }}
+        run: |
+          if ($env:REMAINING_COUNT -ne '1' -or $env:WIX_COUNT -ne '1' -or $env:DATAMINER_PACKAGE_COUNT -ne '1') {
+            throw 'Unexpected partition counts.'
+          }
+
+          $remainingProjects = dotnet sln $env:REMAINING_SOLUTION_PATH list
+          $wixProjects = dotnet sln $env:WIX_SOLUTION_PATH list
+          $dataMinerPackageProjects = dotnet sln $env:DATAMINER_PACKAGE_SOLUTION_PATH list
+          if ($remainingProjects -notmatch 'Plain.csproj' -or $wixProjects -notmatch 'Installer.wixproj' -or $dataMinerPackageProjects -notmatch 'Package.csproj') {
+            throw 'Unexpected partition membership.'
+          }
+
   quality-gate-summary:
     name: quality-gate-summary
     runs-on: ubuntu-latest
