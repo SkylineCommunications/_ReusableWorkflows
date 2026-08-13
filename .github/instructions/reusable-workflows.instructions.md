@@ -20,6 +20,42 @@ This file applies when editing workflows under `.github/workflows/` or composite
 - **Secrets travel via `env:`, never `with:`.** Never log secrets.
 - **Job-scoped `permissions:`** — start from the least set the job needs (`contents: read` minimum) and add only what is required.
 
+### Catalog workflow compatibility
+
+When editing [`Update Catalog Details Workflow.yml`](../workflows/Update%20Catalog%20Details%20Workflow.yml):
+
+- Keep DataMiner project detection exactly aligned with [`Master Workflow.yml`](../workflows/Master%20Workflow.yml): scan every `*.csproj`, parse it as XML, and treat the repository as a DataMiner SDK scenario when any project contains a `DataMinerType` element. Do not introduce a different SDK-detection heuristic without updating Master Workflow as well.
+- In the DataMiner SDK scenario, process each package manifest under a `CatalogInformation` directory. SDK package manifests are guaranteed to use this location.
+- In the legacy connector/automation scenario, preserve the existing root `catalog.yml` / `manifest.yml` behavior.
+- Catalog generation through `github-to-catalog-yaml` and the commit/push of `.githubtocatalog/auto-generated-catalog.yml` are legacy-only operations. Skip all of them for the DataMiner SDK scenario.
+- Before changing permissions, inspect the permissions required by each actual step and action. Do not add scopes such as `actions: write` based only on artifact upload or other assumptions; keep the smallest verified set and use job-level permissions.
+
+### Workflow validation checklist
+
+After editing a reusable workflow:
+
+1. Run the editor diagnostics or an available YAML/workflow validator and fix structural errors before reviewing warnings.
+2. Check that every job-level mapping (`name`, `runs-on`, `needs`, `permissions`, `steps`) is aligned consistently.
+3. Verify both relevant branches when conditional behavior is changed: legacy connector/automation and DataMiner SDK multi-package repositories.
+4. Confirm that skipped steps cannot be referenced as though they produced outputs in the active branch.
+5. Review the final diff for unrelated changes and confirm permissions remain least-privilege.
+
+### Script and tool validation
+
+- PowerShell comparison operators applied to arrays return the matching or non-matching elements, not one Boolean result. Join command output before using `-match` or `-notmatch`, or use an explicit predicate such as `Where-Object`.
+- Some command-line tools return a failure code when a glob matches no files. Before invoking a tool for an optional artifact type, explicitly check whether matching files exist. Do not suppress failures from an invocation that had actual inputs.
+- A composite action's smoke test must exercise the same invocation path used by its workflow caller, including the composite interface, outputs, and command-output parsing. An offline script test alone does not validate the workflow wrapper.
+
+### Partitioned build ordering
+
+- When a later build stage consumes signed outputs from an earlier stage, pass `BuildProjectReferences=false` to the later build. Otherwise MSBuild can rebuild a dependency and replace its signed output.
+- Treat artifact staging directories as explicit contracts between build stages. Verify that required artifacts exist before starting the consuming stage.
+- Preserve every solution format accepted by the caller when introducing solution manipulation. `solution-filter-name` can resolve to `.sln`, `.slnx`, or `.slnf`; tests for `.slnf` must also verify that its backing solution remains unchanged.
+
+### Documentation sync
+
+For important changes to reusable workflows or their behavior, check whether the corresponding documentation in `C:\GitHub\dataminer-docs\develop\CICD\GitHub\GitHubReusableWorkflows` also needs to be updated. Before finishing, ask the user whether they will make the documentation changes themselves or want guidance through making them. Do not require documentation changes for minor, internal, or non-user-visible workflow updates.
+
 ## Referencing composite actions from inside this repo
 
 ```yaml

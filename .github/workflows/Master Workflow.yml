@@ -661,8 +661,8 @@ jobs:
           path: output/*.deb
 
   # ════════════════════════════════════════════════════════════════
-  # Windows packaging & signing: build all shippable artifacts and
-  # sign everything in one place — DLL/EXE → WiX rebuild → MSI → NuGet → dmapp.
+  # Windows packaging & signing: remaining projects → signed DLL/EXE → WiX/MSI
+  # → staged installers → DataMiner packages → NuGet/DataMiner signing.
   # Runs on every ref except fork PRs (no secrets) and Dependabot, so packaging
   # problems surface before the release tag; the upload jobs below consume the
   # signed artifacts and remain tag-only.
@@ -779,10 +779,17 @@ jobs:
         with:
           repository: ${{ github.repository }}
 
-      - name: Build all artifacts (packaging on, WiX included)
+      - name: Partition solution projects
+        id: partition
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/partition-solution-projects@ReorderPackaging
+        with:
+          solution-path: ${{ needs.discover_projects.outputs.solution-path }}
+
+      - name: Build remaining projects
+        if: steps.partition.outputs.remaining-count != '0'
         env:
           OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.OVERRIDE_CATALOG_DOWNLOAD_TOKEN }}
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
+          SOLUTION_PATH: ${{ steps.partition.outputs.remaining-solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
           INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
@@ -807,11 +814,151 @@ jobs:
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" \
             -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" \
             -p:SkylineDataMinerSdkDebug="$DEBUG_FLAG" \
-            -p:PackageOutputPath="${GITHUB_WORKSPACE}/_NuGetOutput"
+            -p:PackageOutputPath="${GITHUB_WORKSPACE}/_NuGetOutput" \
+            -p:GenerateDataMinerPackage=false \
+            -p:BuildProjectReferences=false
+        shell: bash
+
+      - name: Sign assemblies
+        if: >-
+          needs.check_oidc.outputs.use-oidc == 'true' &&
+          steps.partition.outputs.remaining-count != '0' &&
+          (steps.partition.outputs.wix-count != '0' || steps.partition.outputs.dataminer-package-count != '0')
+        env:
+          AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
+        run: |
+          # Sign in place so later package builds consume the signed binaries.
+          for extension in dll exe; do
+            if [[ -z "$(find . -type f -path '*/bin/*' -name "*.$extension" -print -quit)" ]]; then
+              echo "No .$extension build outputs to sign."
+              continue
+            fi
+
+            pattern="**/bin/**/*.$extension"
+            sign code azure-key-vault "$pattern" \
+              --publisher-name "Skyline Communications" \
+              --description "Skyline Signing" \
+              --description-url "https://www.skyline.be/" \
+              --azure-key-vault-certificate "$SIGNING_KEY_VAULT_CERTIFICATE" \
+              --azure-key-vault-url "$SIGNING_KEY_VAULT_URL"
+          done
+        shell: bash
+
+      - name: Generate SBOM files for WiX installers
+        if: steps.partition.outputs.wix-count != '0' && github.ref_type == 'tag' && !contains(github.ref_name, '-')
+        env:
+          PACKAGE_VERSION: ${{ needs.determine_version.outputs.version }}
+        run: |
+          dataminer-sbom generate \
+            --solution-path "$GITHUB_WORKSPACE" \
+            --package-version "$PACKAGE_VERSION" \
+            --package-supplier "Skyline Communications" \
+            --output "$GITHUB_WORKSPACE/SBOM"
+        shell: bash
+
+      - name: Inject SBOM into WiX projects
+        if: steps.partition.outputs.wix-count != '0' && github.ref_type == 'tag' && !contains(github.ref_name, '-')
+        env:
+          WIX_SOLUTION_PATH: ${{ steps.partition.outputs.wix-solution-path }}
+        run: |
+          $solutionDirectory = Split-Path -Parent $env:WIX_SOLUTION_PATH
+          $wixProjectDirs = dotnet sln "$env:WIX_SOLUTION_PATH" list |
+            Select-String '\.wixproj' |
+            ForEach-Object { Split-Path -Parent (Join-Path $solutionDirectory $_.ToString().Trim()) }
+          foreach ($wixProjectDir in $wixProjectDirs) {
+            add-file --WixProjDirectory "$wixProjectDir" --includeFilesDirectory "$env:GITHUB_WORKSPACE/SBOM"
+          }
+        shell: pwsh
+
+      - name: Build WiX projects
+        if: steps.partition.outputs.wix-count != '0'
+        env:
+          SOLUTION_PATH: ${{ steps.partition.outputs.wix-solution-path }}
+          VERSION: ${{ needs.determine_version.outputs.version }}
+          INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
+          NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
+          PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
+          CONFIGURATION: ${{ inputs.configuration }}
+        run: |
+          dotnet build "$env:SOLUTION_PATH" `
+            -p:Version="$env:VERSION" `
+            -p:PackageVersion="$env:VERSION" `
+            -p:AssemblyVersion="$env:NUMERIC_VERSION" `
+            -p:FileVersion="$env:NUMERIC_VERSION" `
+            -p:InformationalVersion="$env:INFORMATIONAL_VERSION" `
+            -p:IncludeSourceRevisionInInformationalVersion=false `
+            -p:ProductVersion="$env:PRODUCT_VERSION" `
+            -p:GeneratePackageOnBuild=false `
+            -p:GenerateDataMinerPackage=false `
+            -p:BuildProjectReferences=false `
+            --configuration "$env:CONFIGURATION"
+        shell: pwsh
+
+      - name: Sign installers
+        if: needs.check_oidc.outputs.use-oidc == 'true' && steps.partition.outputs.wix-count != '0'
+        env:
+          AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
+        run: |
+          sign code azure-key-vault "**/bin/**/*.msi" \
+            --publisher-name "Skyline Communications" \
+            --description "Skyline Signing" \
+            --description-url "https://www.skyline.be/" \
+            --azure-key-vault-certificate "$SIGNING_KEY_VAULT_CERTIFICATE" \
+            --azure-key-vault-url "$SIGNING_KEY_VAULT_URL" \
+            --output "_SignedInstallers"
+        shell: bash
+
+      - name: Stage unsigned installers
+        if: needs.check_oidc.outputs.use-oidc != 'true' && steps.partition.outputs.wix-count != '0'
+        run: |
+          echo "::warning::OIDC is not available - MSI installers are packaged UNSIGNED."
+          mkdir -p _SignedInstallers
+          find . -type f -name '*.msi' -path '*/bin/*' -not -path './_SignedInstallers/*' -exec cp {} _SignedInstallers/ \;
+        shell: bash
+
+      - name: Verify staged installers
+        if: steps.partition.outputs.wix-count != '0'
+        run: |
+          if [ ! -d "_SignedInstallers" ] || [ -z "$(find _SignedInstallers -type f -name '*.msi' -print -quit)" ]; then
+            echo "::error::WiX projects were built, but no MSI exists in _SignedInstallers."
+            exit 1
+          fi
+        shell: bash
+
+      - name: Build DataMiner package projects
+        if: steps.partition.outputs.dataminer-package-count != '0'
+        env:
+          OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.OVERRIDE_CATALOG_DOWNLOAD_TOKEN }}
+          SOLUTION_PATH: ${{ steps.partition.outputs.dataminer-package-solution-path }}
+          VERSION: ${{ needs.determine_version.outputs.version }}
+          INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
+          NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
+          PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
+          CONFIGURATION: ${{ inputs.configuration }}
+          DEBUG_FLAG: ${{ inputs.debug }}
+        run: |
+          dotnet build "$SOLUTION_PATH" \
+            -p:Version="$VERSION" \
+            -p:PackageVersion="$VERSION" \
+            -p:AssemblyVersion="$NUMERIC_VERSION" \
+            -p:FileVersion="$NUMERIC_VERSION" \
+            -p:InformationalVersion="$INFORMATIONAL_VERSION" \
+            -p:IncludeSourceRevisionInInformationalVersion=false \
+            -p:ProductVersion="$PRODUCT_VERSION" \
+            --configuration "$CONFIGURATION" \
+            -p:CatalogPublishKeyName="DATAMINER_TOKEN" \
+            -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" \
+            -p:SkylineDataMinerSdkDebug="$DEBUG_FLAG" \
+            -p:PackageOutputPath="${GITHUB_WORKSPACE}/_NuGetOutput" \
+            -p:BuildProjectReferences=false
         shell: bash
 
       - name: Create package name
-        if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
+        if: steps.partition.outputs.dataminer-package-count != '0'
         id: packageName
         env:
           REPO: ${{ github.repository }}
@@ -822,7 +969,7 @@ jobs:
         shell: pwsh
 
       - name: Add SBOM to DataMiner packages
-        if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
+        if: steps.partition.outputs.dataminer-package-count != '0'
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           PACKAGE_NAME: ${{ steps.packageName.outputs.name }}
@@ -841,117 +988,7 @@ jobs:
           done
         shell: bash
 
-      - name: Generate SBOM files for WiX installers
-        if: needs.discover_projects.outputs.has-wix-projects == 'true' && github.ref_type == 'tag' && !contains(github.ref_name, '-')
-        env:
-          PACKAGE_VERSION: ${{ needs.determine_version.outputs.version }}
-        run: |
-          dataminer-sbom generate \
-            --solution-path "$GITHUB_WORKSPACE" \
-            --package-version "$PACKAGE_VERSION" \
-            --package-supplier "Skyline Communications" \
-            --output "$GITHUB_WORKSPACE/SBOM"
-        shell: bash
-
-      - name: Inject SBOM into WiX projects and rebuild
-        if: needs.discover_projects.outputs.has-wix-projects == 'true' && github.ref_type == 'tag' && !contains(github.ref_name, '-')
-        env:
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-          VERSION: ${{ needs.determine_version.outputs.version }}
-          INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
-          NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
-          PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
-          CONFIGURATION: ${{ inputs.configuration }}
-        run: |
-          $wixProjectDirs = dotnet sln "$env:SOLUTION_PATH" list | Select-String '\.wixproj' | ForEach-Object { Split-Path -Path $_.ToString().Trim() -Parent }
-          foreach ($wixProjectDir in $wixProjectDirs) {
-            add-file --WixProjDirectory "$wixProjectDir" --includeFilesDirectory "$env:GITHUB_WORKSPACE/SBOM"
-          }
-          # Rebuild so the MSI contains the SBOM.
-          dotnet build "$env:SOLUTION_PATH" `
-            -p:Version="$env:VERSION" `
-            -p:PackageVersion="$env:VERSION" `
-            -p:AssemblyVersion="$env:NUMERIC_VERSION" `
-            -p:FileVersion="$env:NUMERIC_VERSION" `
-            -p:InformationalVersion="$env:INFORMATIONAL_VERSION" `
-            -p:IncludeSourceRevisionInInformationalVersion=false `
-            -p:ProductVersion="$env:PRODUCT_VERSION" `
-            -p:GeneratePackageOnBuild=false `
-            -p:GenerateDataMinerPackage=false `
-            --configuration "$env:CONFIGURATION"
-        shell: pwsh
-
-      - name: Sign assemblies (before the MSI is rebuilt)
-        if: needs.check_oidc.outputs.use-oidc == 'true' && needs.discover_projects.outputs.has-wix-projects == 'true'
-        env:
-          AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
-        run: |
-          # In-place Authenticode signing (no --output) so the WiX rebuild below
-          # bundles the signed binaries into the MSI. Two invocations on purpose:
-          # brace patterns like *.{dll,exe} are NOT expanded (bash doesn't expand
-          # braces inside quotes, and the sign tool's globber has no brace support).
-          for pattern in "**/bin/**/*.dll" "**/bin/**/*.exe"; do
-            sign code azure-key-vault "$pattern" \
-              --publisher-name "Skyline Communications" \
-              --description "Skyline Signing" \
-              --description-url "https://www.skyline.be/" \
-              --azure-key-vault-certificate "$SIGNING_KEY_VAULT_CERTIFICATE" \
-              --azure-key-vault-url "$SIGNING_KEY_VAULT_URL"
-          done
-        shell: bash
-
-      - name: Rebuild WiX projects with signed binaries
-        if: needs.check_oidc.outputs.use-oidc == 'true' && needs.discover_projects.outputs.has-wix-projects == 'true'
-        env:
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
-          VERSION: ${{ needs.determine_version.outputs.version }}
-          NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
-          PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
-          CONFIGURATION: ${{ inputs.configuration }}
-        run: |
-          # Preserve the original solution's configuration/platform mappings while
-          # limiting the rebuild to WiX projects. Building the solution ensures WiX
-          # uses the same output paths as the initial solution build.
-          $solutionPath = (Resolve-Path "$env:SOLUTION_PATH").Path
-          $solutionDir = Split-Path $solutionPath -Parent
-          $temporarySolutionPath = Join-Path $solutionDir ".wix-build-$([guid]::NewGuid())$(Split-Path $solutionPath -Extension)"
-
-          Copy-Item $solutionPath $temporarySolutionPath
-          try {
-            $nonWixProjects = dotnet sln "$temporarySolutionPath" list | Select-Object -Skip 2 | Where-Object { $_ -and $_ -notlike '*.wixproj' }
-            foreach ($nonWixProject in $nonWixProjects) {
-              dotnet sln "$temporarySolutionPath" remove (Join-Path $solutionDir ($nonWixProject -replace '\\', '/'))
-            }
-
-            dotnet build "$temporarySolutionPath" `
-              -p:Version="$env:VERSION" `
-              -p:ProductVersion="$env:PRODUCT_VERSION" `
-              -p:BuildProjectReferences=false `
-              --configuration "$env:CONFIGURATION"
-          } finally {
-            Remove-Item $temporarySolutionPath -Force -ErrorAction SilentlyContinue
-          }
-        shell: pwsh
-
       - parallel:
-          - name: Sign installers
-            if: needs.check_oidc.outputs.use-oidc == 'true' && needs.discover_projects.outputs.has-wix-projects == 'true'
-            env:
-              AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
-              AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
-              AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
-            run: |
-              sign code azure-key-vault "**/bin/**/*.msi" \
-                --publisher-name "Skyline Communications" \
-                --description "Skyline Signing" \
-                --description-url "https://www.skyline.be/" \
-                --azure-key-vault-certificate "$SIGNING_KEY_VAULT_CERTIFICATE" \
-                --azure-key-vault-url "$SIGNING_KEY_VAULT_URL" \
-                --output "_SignedInstallers"
-            shell: bash
-
           - name: Sign NuGet packages
             if: needs.check_oidc.outputs.use-oidc == 'true'
             env:
@@ -973,7 +1010,7 @@ jobs:
             shell: bash
 
           - name: Sign DataMiner packages
-            if: needs.check_oidc.outputs.use-oidc == 'true' && needs.discover_projects.outputs.has-dataminer-projects == 'true'
+            if: needs.check_oidc.outputs.use-oidc == 'true' && steps.partition.outputs.dataminer-package-count != '0'
             env:
               AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
               AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
@@ -987,17 +1024,32 @@ jobs:
                 --debug $env:DEBUG_FLAG
             shell: pwsh
 
-      - name: Fall back to unsigned artifacts (signing not available)
+      - name: Fall back to unsigned NuGet packages
         if: needs.check_oidc.outputs.use-oidc != 'true'
         run: |
-          echo "::warning::OIDC is not available - artifacts are packaged UNSIGNED."
+          echo "::warning::OIDC is not available - NuGet and DataMiner packages remain UNSIGNED."
           if compgen -G "_NuGetOutput/*.nupkg" > /dev/null; then
             mkdir -p _SignedNuGetResults
             cp _NuGetOutput/*.nupkg _SignedNuGetResults/
           fi
-          mkdir -p _SignedInstallers
-          find . -type f -name '*.msi' -path '*/bin/*' -not -path './_SignedInstallers/*' -exec cp {} _SignedInstallers/ \;
         shell: bash
+
+      - name: Clean up partition solutions
+        if: always()
+        env:
+          REMAINING_SOLUTION_PATH: ${{ steps.partition.outputs.remaining-solution-path }}
+          WIX_SOLUTION_PATH: ${{ steps.partition.outputs.wix-solution-path }}
+          DATAMINER_PACKAGE_SOLUTION_PATH: ${{ steps.partition.outputs.dataminer-package-solution-path }}
+        run: |
+          @(
+            $env:REMAINING_SOLUTION_PATH,
+            $env:WIX_SOLUTION_PATH,
+            $env:DATAMINER_PACKAGE_SOLUTION_PATH
+          ) | Where-Object { $_ } | ForEach-Object {
+            Remove-Item -LiteralPath $_ -Force -ErrorAction SilentlyContinue
+          }
+          exit 0
+        shell: pwsh
 
       - name: Detect produced artifacts
         id: detect-artifacts

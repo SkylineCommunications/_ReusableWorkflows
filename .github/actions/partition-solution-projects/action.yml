@@ -1,0 +1,40 @@
+name: Partition solution projects
+description: >
+  Copies a solution into remaining, WiX, and DataMiner package partitions
+  without modifying the source solution.
+
+inputs:
+  solution-path:
+    description: Path to the source solution file (`.sln`, `.slnx`, or `.slnf`) to partition.
+    required: true
+
+outputs:
+  remaining-solution-path:
+    description: Path to the copied solution containing all unclassified projects.
+    value: ${{ steps.partition.outputs.remaining-solution-path }}
+  remaining-count:
+    description: Number of projects in the remaining solution partition.
+    value: ${{ steps.partition.outputs.remaining-count }}
+  wix-solution-path:
+    description: Path to the copied solution containing only WiX projects.
+    value: ${{ steps.partition.outputs.wix-solution-path }}
+  wix-count:
+    description: Number of projects in the WiX solution partition.
+    value: ${{ steps.partition.outputs.wix-count }}
+  dataminer-package-solution-path:
+    description: Path to the copied solution containing only DataMiner package projects.
+    value: ${{ steps.partition.outputs.dataminer-package-solution-path }}
+  dataminer-package-count:
+    description: Number of projects in the DataMiner package solution partition.
+    value: ${{ steps.partition.outputs.dataminer-package-count }}
+
+runs:
+  using: composite
+  steps:
+    - name: Partition solution projects
+      id: partition
+      shell: pwsh
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        SOLUTION_PATH: ${{ inputs.solution-path }}
+      run: '& (Join-Path $env:ACTION_PATH "partition-solution-projects.ps1")'
