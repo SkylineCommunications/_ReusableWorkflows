@@ -781,7 +781,7 @@ jobs:
 
       - name: Partition solution projects
         id: partition
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/partition-solution-projects@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/partition-solution-projects@ReorderPackaging
         with:
           solution-path: ${{ needs.discover_projects.outputs.solution-path }}
 
