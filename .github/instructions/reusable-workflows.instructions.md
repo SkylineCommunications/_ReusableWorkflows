@@ -40,6 +40,18 @@ After editing a reusable workflow:
 4. Confirm that skipped steps cannot be referenced as though they produced outputs in the active branch.
 5. Review the final diff for unrelated changes and confirm permissions remain least-privilege.
 
+### Script and tool validation
+
+- PowerShell comparison operators applied to arrays return the matching or non-matching elements, not one Boolean result. Join command output before using `-match` or `-notmatch`, or use an explicit predicate such as `Where-Object`.
+- Some command-line tools return a failure code when a glob matches no files. Before invoking a tool for an optional artifact type, explicitly check whether matching files exist. Do not suppress failures from an invocation that had actual inputs.
+- A composite action's smoke test must exercise the same invocation path used by its workflow caller, including the composite interface, outputs, and command-output parsing. An offline script test alone does not validate the workflow wrapper.
+
+### Partitioned build ordering
+
+- When a later build stage consumes signed outputs from an earlier stage, pass `BuildProjectReferences=false` to the later build. Otherwise MSBuild can rebuild a dependency and replace its signed output.
+- Treat artifact staging directories as explicit contracts between build stages. Verify that required artifacts exist before starting the consuming stage.
+- Preserve every solution format accepted by the caller when introducing solution manipulation. `solution-filter-name` can resolve to `.sln`, `.slnx`, or `.slnf`; tests for `.slnf` must also verify that its backing solution remains unchanged.
+
 ### Documentation sync
 
 For important changes to reusable workflows or their behavior, check whether the corresponding documentation in `C:\GitHub\dataminer-docs\develop\CICD\GitHub\GitHubReusableWorkflows` also needs to be updated. Before finishing, ask the user whether they will make the documentation changes themselves or want guidance through making them. Do not require documentation changes for minor, internal, or non-user-visible workflow updates.
