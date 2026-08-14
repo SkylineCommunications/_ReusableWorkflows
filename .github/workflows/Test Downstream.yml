@@ -58,6 +58,12 @@ env:
           "DataMiner App Packages Master Workflow.yml",
           "Master Workflow.yml"
         ]
+      },
+      {
+        "repo": "SkylineCommunications/BOOST-DailyRegression-SharedLibrary",
+        "workflows": [
+          "Master Workflow.yml"
+        ]
       }
     ]
 
