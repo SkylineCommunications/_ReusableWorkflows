@@ -11,7 +11,10 @@ concurrency:
 # To add a new target repo:
 #   1. Add an entry to DOWNSTREAM_MAP below with the repo and its dependent workflow files
 #      (include transitive dependencies — e.g. if Connector Master calls Connector Master Legacy, list both)
-#   2. Create .github/workflows/test-downstream.yml in that repo (see receiver template)
+#   2. Create the receiver workflow in that repo: .github/workflows/pr-regression.yml,
+#      triggered by `repository_dispatch: types: [test-reusable-workflow]`, calling
+#      SkylineCommunications/BOOST-DailyRegression/.github/workflows/regression.yml@main
+#      with the caller workflow that is pinned to @test-downstream (e.g. pr-ci-cd.yml)
 #   3. Merge the receiver workflow to the target repo's default branch
 
 env:
