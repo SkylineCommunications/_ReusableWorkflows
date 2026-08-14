@@ -802,6 +802,13 @@ jobs:
           # versions. WiX uses the dedicated ProductVersion (three fields for stable tags).
           # DefineConstants comes from the job-level env var so the WiX projects can keep
           # their own preprocessor constants (a -p: global would clobber them).
+          # BuildProjectReferences is deliberately left at its default (true) here: a
+          # solution only encodes build order through ProjectSection(ProjectDependencies),
+          # which most solutions don't have, so ProjectReference resolution is the only
+          # thing that orders shared libraries before their consumers. Disabling it lets
+          # MSBuild compile consumers in parallel before the shared library exists
+          # (CS0006: Metadata file '...dll' could not be found). This is the first build
+          # of the job, so there are no signed assemblies to preserve yet.
           dotnet build "$SOLUTION_PATH" \
             -p:Version="$VERSION" \
             -p:PackageVersion="$VERSION" \
@@ -815,8 +822,7 @@ jobs:
             -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" \
             -p:SkylineDataMinerSdkDebug="$DEBUG_FLAG" \
             -p:PackageOutputPath="${GITHUB_WORKSPACE}/_NuGetOutput" \
-            -p:GenerateDataMinerPackage=false \
-            -p:BuildProjectReferences=false
+            -p:GenerateDataMinerPackage=false
         shell: bash
 
       - name: Sign assemblies
