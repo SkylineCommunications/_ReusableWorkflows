@@ -2,7 +2,7 @@ name: Sign assemblies
 description: >
   Authenticode-signs build output assemblies through Azure Key Vault, signing
   each unique file content only once and copying the signed result over its
-  byte-identical duplicates. Retries with backoff when Key Vault throttles.
+  byte-identical duplicates.
 
 inputs:
   root:
