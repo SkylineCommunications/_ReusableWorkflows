@@ -1,0 +1,66 @@
+name: Sign assemblies
+description: >
+  Authenticode-signs build output assemblies through Azure Key Vault, signing
+  each unique file content only once and copying the signed result over its
+  byte-identical duplicates.
+
+inputs:
+  root:
+    description: Root directory to scan for build outputs. Defaults to the current directory.
+    required: false
+    default: '.'
+  extensions:
+    description: Comma-separated list of file extensions to sign, without a leading dot.
+    required: false
+    default: 'dll,exe'
+  path-segment:
+    description: Directory segment a file must live under to be treated as a build output.
+    required: false
+    default: 'bin'
+  publisher-name:
+    description: Publisher name embedded in the signature.
+    required: false
+    default: 'Skyline Communications'
+  description:
+    description: Description embedded in the signature.
+    required: false
+    default: 'Skyline Signing'
+  description-url:
+    description: Description URL embedded in the signature.
+    required: false
+    default: 'https://www.skyline.be/'
+  dry-run:
+    description: When 'true', report what would be signed without calling the Sign CLI.
+    required: false
+    default: 'false'
+
+outputs:
+  files-total:
+    description: Number of build output files that matched the scan.
+    value: ${{ steps.sign.outputs.files-total }}
+  files-signed:
+    description: Number of unique file contents submitted to Azure Key Vault.
+    value: ${{ steps.sign.outputs.files-signed }}
+  files-copied:
+    description: Number of duplicate files that received a copy of an already signed file.
+    value: ${{ steps.sign.outputs.files-copied }}
+  batches:
+    description: Number of Sign CLI invocations used to sign the unique files.
+    value: ${{ steps.sign.outputs.batches }}
+
+runs:
+  using: composite
+  steps:
+    - name: Sign assemblies
+      id: sign
+      shell: pwsh
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        SIGN_ROOT: ${{ inputs.root }}
+        SIGN_EXTENSIONS: ${{ inputs.extensions }}
+        SIGN_PATH_SEGMENT: ${{ inputs.path-segment }}
+        SIGN_PUBLISHER_NAME: ${{ inputs.publisher-name }}
+        SIGN_DESCRIPTION: ${{ inputs.description }}
+        SIGN_DESCRIPTION_URL: ${{ inputs.description-url }}
+        SIGN_DRY_RUN: ${{ inputs.dry-run }}
+      run: '& (Join-Path $env:ACTION_PATH "sign-assemblies.ps1")'
