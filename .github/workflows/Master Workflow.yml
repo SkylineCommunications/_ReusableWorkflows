@@ -825,32 +825,24 @@ jobs:
             -p:GenerateDataMinerPackage=false
         shell: bash
 
+      # Signs in place so later package builds consume the signed binaries.
+      # Deduplicates by content hash first: solutions copy the same third-party
+      # assemblies into every project's bin folder, and signing each copy
+      # separately bursts past the per-vault Azure Key Vault rate limit
+      # (429 VaultRequestTypeLimitReached). Every path still ends up holding the
+      # signed bytes — the composite copies each signed file back over its
+      # byte-identical duplicates.
       - name: Sign assemblies
+        id: sign-assemblies
         if: >-
           needs.check_oidc.outputs.use-oidc == 'true' &&
           steps.partition.outputs.remaining-count != '0' &&
           (steps.partition.outputs.wix-count != '0' || steps.partition.outputs.dataminer-package-count != '0')
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sign-assemblies@main
         env:
           AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ env.SIGNING_CLIENT_SECRET }}
-        run: |
-          # Sign in place so later package builds consume the signed binaries.
-          for extension in dll exe; do
-            if [[ -z "$(find . -type f -path '*/bin/*' -name "*.$extension" -print -quit)" ]]; then
-              echo "No .$extension build outputs to sign."
-              continue
-            fi
-
-            pattern="**/bin/**/*.$extension"
-            sign code azure-key-vault "$pattern" \
-              --publisher-name "Skyline Communications" \
-              --description "Skyline Signing" \
-              --description-url "https://www.skyline.be/" \
-              --azure-key-vault-certificate "$SIGNING_KEY_VAULT_CERTIFICATE" \
-              --azure-key-vault-url "$SIGNING_KEY_VAULT_URL"
-          done
-        shell: bash
 
       - name: Generate SBOM files for WiX installers
         if: steps.partition.outputs.wix-count != '0' && github.ref_type == 'tag' && !contains(github.ref_name, '-')
