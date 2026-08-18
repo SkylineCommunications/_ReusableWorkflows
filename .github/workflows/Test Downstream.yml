@@ -4,9 +4,12 @@ on:
   issue_comment:
     types: [created]
 
+# Queued, not cancelled: an in-flight battery must keep the test-downstream tag
+# stable until its downstream runs finish. A newer queued run replaces older
+# pending ones (GitHub keeps at most one pending run per group).
 concurrency:
   group: test-downstream
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # To add a new target repo:
 #   1. Add an entry to DOWNSTREAM_MAP below with the repo and its dependent workflow files
@@ -67,6 +70,12 @@ env:
         "workflows": [
           "Master Workflow.yml"
         ]
+      },
+      {
+        "repo": "SkylineCommunications/BOOST-DailyRegression-MasterWorkflow",
+        "workflows": [
+          "Master Workflow.yml"
+        ]
       }
     ]
 
@@ -84,6 +93,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      statuses: write
 
     steps:
       - name: Check commenter permissions
@@ -118,7 +128,12 @@ jobs:
         run: |
           pr_json=$(gh pr view ${{ github.event.issue.number }} \
             --repo ${{ github.repository }} \
-            --json headRefOid,headRefName)
+            --json headRefOid,headRefName,isCrossRepository)
+
+          if [[ "$(echo "$pr_json" | jq -r '.isCrossRepository')" == "true" ]]; then
+            echo "::error::Fork PRs are not supported by the downstream battery. Push the branch to this repository and open an internal PR."
+            exit 1
+          fi
 
           head_sha=$(echo "$pr_json" | jq -r '.headRefOid')
           head_ref=$(echo "$pr_json" | jq -r '.headRefName')
@@ -127,34 +142,73 @@ jobs:
           echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
           echo "PR #${{ github.event.issue.number }}: branch=$head_ref sha=$head_sha"
 
-      - name: Get changed workflow files
+      - name: Set commit status to pending
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
+            -f state='pending' \
+            -f context='downstream-tests' \
+            -f description='Downstream test battery is running...' \
+            -f target_url='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            --silent
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          # Use a PAT with `workflow` scope so we can push changes
+          # under .github/workflows/. GITHUB_TOKEN cannot do this even
+          # with `contents: write` — GitHub explicitly blocks it.
+          token: ${{ secrets.DOWNSTREAM_PAT }}
+
+      - name: Map changed files to affected workflows
         id: changed-files
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          PR_NUMBER: ${{ github.event.issue.number }}
         run: |
-          changed=$(gh pr diff ${{ github.event.issue.number }} \
+          set -euo pipefail
+          changed_paths=$(gh pr diff "$PR_NUMBER" \
             --repo ${{ github.repository }} \
-            --name-only | grep '^\.github/workflows/' | xargs -I{} basename "{}" || true)
+            --name-only)
 
-          echo "Changed workflow files:"
-          echo "$changed"
+          changed_workflows=$(grep '^\.github/workflows/' <<<"$changed_paths" | xargs -r -I{} basename "{}" || true)
+
+          # A changed composite action affects every workflow referencing it, in
+          # either the cross-repo (actions/<name>@ref) or relative (./.github/actions/<name>) form.
+          changed_actions=$(grep -oP '^\.github/actions/\K[^/]+' <<<"$changed_paths" | sort -u || true)
+          consumer_workflows=""
+          if [[ -n "$changed_actions" ]]; then
+            while IFS= read -r action; do
+              [[ -z "$action" ]] && continue
+              consumers=$(git grep -lE "actions/${action}([@\"'[:space:]]|\$)" "$HEAD_SHA" -- '.github/workflows/*.yml' | cut -d: -f2- | xargs -r -I{} basename "{}" || true)
+              consumer_workflows+="$consumers"$'\n'
+            done <<<"$changed_actions"
+          fi
+
+          affected=$(printf '%s\n%s\n' "$changed_workflows" "$consumer_workflows" | sed '/^$/d' | sort -u)
+
+          echo "Affected workflow files:"
+          echo "$affected"
           echo "changed_workflows<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$changed" >> "$GITHUB_OUTPUT"
+          echo "$affected" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Determine target repos
         id: targets
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
+          CHANGED_WORKFLOWS: ${{ steps.changed-files.outputs.changed_workflows }}
         run: |
           command="$COMMENT_BODY"
-          changed_workflows="${{ steps.changed-files.outputs.changed_workflows }}"
 
           if [[ "$command" == "/test-all" ]]; then
-            target_repos=$(echo '${{ env.DOWNSTREAM_MAP }}' | jq -r '.[].repo')
+            target_repos=$(echo "$DOWNSTREAM_MAP" | jq -r '.[].repo')
           else
             # Filter DOWNSTREAM_MAP to repos whose workflows were changed
-            target_repos=$(echo '${{ env.DOWNSTREAM_MAP }}' | jq -r --arg changed "$changed_workflows" '
+            target_repos=$(echo "$DOWNSTREAM_MAP" | jq -r --arg changed "$CHANGED_WORKFLOWS" '
               # Split changed files into an array
               ($changed | split("\n") | map(select(. != ""))) as $changed_files |
               # Keep only entries where at least one workflow matches a changed file
@@ -180,12 +234,13 @@ jobs:
         if: steps.targets.outputs.has_targets == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
         run: |
           set -euo pipefail
           MARKER='<!-- sticky:test-downstream -->'
           {
             echo "$MARKER"
-            echo "ℹ️ **No downstream tests triggered** — the changed files in this PR don't affect any mapped reusable workflows."
+            echo "ℹ️ **No downstream tests triggered** — the changed files in this PR don't affect any mapped reusable workflows or composite actions."
           } > /tmp/pr-comment.md
 
           existing_id=$(gh api --paginate \
@@ -204,17 +259,16 @@ jobs:
                 --input - --silent
           fi
 
-      - uses: actions/checkout@v7
-        if: steps.targets.outputs.has_targets == 'true'
-        with:
-          fetch-depth: 0
-          # Use a PAT with `workflow` scope so we can push changes
-          # under .github/workflows/. GITHUB_TOKEN cannot do this even
-          # with `contents: write` — GitHub explicitly blocks it.
-          token: ${{ secrets.DOWNSTREAM_PAT }}
+          gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
+            -f state='success' \
+            -f context='downstream-tests' \
+            -f description='Not applicable — no mapped downstream consumers affected' \
+            -f target_url='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            --silent
 
       - name: Build self-consistent test commit and force-push tag
         if: steps.targets.outputs.has_targets == 'true'
+        id: build-tag
         env:
           HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
         run: |
@@ -254,15 +308,20 @@ jobs:
           git tag -f test-downstream
           git push -f origin test-downstream
 
+          echo "tag_sha=$(git rev-parse 'test-downstream^{commit}')" >> "$GITHUB_OUTPUT"
+
       - name: Dispatch to target repos
         if: steps.targets.outputs.has_targets == 'true'
         id: dispatch
         env:
           GH_TOKEN: ${{ secrets.DOWNSTREAM_PAT }}
           TARGET_REPOS: ${{ steps.targets.outputs.repos }}
+          TAG_SHA: ${{ steps.build-tag.outputs.tag_sha }}
+          CORRELATION_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "dispatch_time=$timestamp" >> "$GITHUB_OUTPUT"
+          echo "correlation_id=$CORRELATION_ID" >> "$GITHUB_OUTPUT"
 
           dispatched_repos=""
           for repo in $TARGET_REPOS; do
@@ -273,6 +332,8 @@ jobs:
               -f 'client_payload[pr_number]=${{ github.event.issue.number }}' \
               -f 'client_payload[source_repo]=${{ github.repository }}' \
               -f 'client_payload[head_sha]=${{ steps.pr-details.outputs.head_sha }}' \
+              -f "client_payload[tag_sha]=$TAG_SHA" \
+              -f "client_payload[correlation_id]=$CORRELATION_ID" \
               --silent
 
             dispatched_repos="${dispatched_repos}\n- [${repo}](https://github.com/${repo}/actions)"
@@ -321,10 +382,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.DOWNSTREAM_PAT }}
           TARGET_REPOS: ${{ steps.targets.outputs.repos }}
+          CORRELATION_ID: ${{ steps.dispatch.outputs.correlation_id }}
         run: |
           dispatch_time="${{ steps.dispatch.outputs.dispatch_time }}"
-          max_wait=1800  # 30 minutes
-          poll_interval=300 # 5 minutes
+          max_wait=5400  # 90 minutes — downstream BRANCH + RELEASE flows can exceed 30
+          discover_interval=60
+          poll_interval=120
           initial_wait=15
           elapsed=0
 
@@ -334,18 +397,27 @@ jobs:
 
           declare -A run_ids
 
-          # Phase 1: Find all run IDs
+          # Phase 1: Find all run IDs. Prefer receiver runs whose title carries our
+          # correlation id (set via run-name in the receivers); fall back to the
+          # newest repository_dispatch run since dispatch for receivers that
+          # don't embed it yet.
           echo "Looking for triggered workflow runs..."
-          for attempt in $(seq 1 10); do
+          for attempt in $(seq 1 20); do
             all_found=true
             for repo in $TARGET_REPOS; do
-              if [[ -n "${run_ids[$repo]}" ]]; then
+              if [[ -n "${run_ids[$repo]:-}" ]]; then
                 continue
               fi
 
-              run_id=$(gh api \
-                "repos/$repo/actions/runs?event=repository_dispatch&created=>=$dispatch_time&per_page=5" \
-                --jq '.workflow_runs[0].id // empty')
+              runs_json=$(gh api \
+                "repos/$repo/actions/runs?event=repository_dispatch&created=>=$dispatch_time&per_page=20")
+
+              run_id=$(echo "$runs_json" | jq -r \
+                ".workflow_runs[] | select(.display_title | contains(\"$CORRELATION_ID\")) | .id" | head -n1)
+
+              if [[ -z "$run_id" ]]; then
+                run_id=$(echo "$runs_json" | jq -r '.workflow_runs[0].id // empty')
+              fi
 
               if [[ -n "$run_id" ]]; then
                 echo "Found run $run_id for $repo"
@@ -359,9 +431,9 @@ jobs:
               break
             fi
 
-            echo "Not all runs found yet, waiting ${poll_interval}s... (attempt $attempt)"
-            sleep $poll_interval
-            elapsed=$((elapsed + poll_interval))
+            echo "Not all runs found yet, waiting ${discover_interval}s... (attempt $attempt)"
+            sleep $discover_interval
+            elapsed=$((elapsed + discover_interval))
 
             if (( elapsed >= max_wait )); then
               echo "Timeout waiting for runs to appear"
@@ -374,7 +446,7 @@ jobs:
           while (( elapsed < max_wait )); do
             all_done=true
             for repo in $TARGET_REPOS; do
-              run_id="${run_ids[$repo]}"
+              run_id="${run_ids[$repo]:-}"
               if [[ -z "$run_id" ]]; then
                 continue
               fi
@@ -399,7 +471,7 @@ jobs:
           result_table="| Repository | Status | Link |\n|---|---|---|"
           overall="success"
           for repo in $TARGET_REPOS; do
-            run_id="${run_ids[$repo]}"
+            run_id="${run_ids[$repo]:-}"
             if [[ -z "$run_id" ]]; then
               result_table="${result_table}\n| ${repo} | ⚠️ No run found | - |"
               overall="failure"
@@ -466,6 +538,28 @@ jobs:
                 "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
                 --input - --silent
           fi
+
+      - name: Finalize commit status
+        if: steps.targets.outputs.has_targets == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          OVERALL: ${{ steps.poll.outputs.overall }}
+        run: |
+          if [[ "$OVERALL" == "success" ]]; then
+            state='success'
+            description='All downstream tests passed'
+          else
+            state='failure'
+            description='Some downstream tests failed — see the PR comment for details'
+          fi
+
+          gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
+            -f state="$state" \
+            -f context='downstream-tests' \
+            -f description="$description" \
+            -f target_url='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            --silent
 
       - name: Set exit code
         if: steps.targets.outputs.has_targets == 'true' && steps.poll.outputs.overall != 'success'

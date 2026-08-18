@@ -82,6 +82,9 @@ jobs:
     with:
       connector-name: My Connector
       sonarcloud-project-name: my-org_my-connector
+      # Only needed when the repository contains more than one solution.
+      # SDK-style connectors only; accepts a .sln or .slnx file name.
+      # solution-filter-name: MyConnector.sln
     secrets: inherit
 ```
 
