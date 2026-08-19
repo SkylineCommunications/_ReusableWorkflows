@@ -67,7 +67,12 @@ pushes fan out zero redundant runs.
 3. The orchestrator posts progress to a sticky PR comment and finishes by
    setting the commit status. ❌ any receiver failed / no run found / timeout;
    ✅ all receivers green.
-4. Merging is possible only with the status green (when configured as a
+4. On transient failures (e.g. an Azure hiccup in one repo), comment `/retest`:
+   only the repos that failed in the previous battery are re-dispatched, and
+   the earlier successes carry over into the final result. `/retest` refuses to
+   run when the PR head moved since the previous battery (results would no
+   longer apply) or when no previous battery result exists on the PR.
+5. Merging is possible only with the status green (when configured as a
    required check).
 
 ## Diagnosing a failure
