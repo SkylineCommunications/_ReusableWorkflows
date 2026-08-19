@@ -392,6 +392,7 @@ jobs:
           TARGET_REPOS: ${{ steps.targets.outputs.repos }}
           TAG_SHA: ${{ steps.build-tag.outputs.tag_sha }}
           CORRELATION_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
         run: |
           timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "dispatch_time=$timestamp" >> "$GITHUB_OUTPUT"
@@ -405,7 +406,7 @@ jobs:
               -f event_type='test-reusable-workflow' \
               -f 'client_payload[pr_number]=${{ github.event.issue.number }}' \
               -f 'client_payload[source_repo]=${{ github.repository }}' \
-              -f 'client_payload[head_sha]=${{ steps.pr-details.outputs.head_sha }}' \
+              -f "client_payload[head_sha]=$HEAD_SHA" \
               -f "client_payload[tag_sha]=$TAG_SHA" \
               -f "client_payload[correlation_id]=$CORRELATION_ID" \
               --silent
