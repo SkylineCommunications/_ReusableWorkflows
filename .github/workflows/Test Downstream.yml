@@ -138,6 +138,18 @@ jobs:
             -f content='eyes' \
             --silent
 
+      # Collapse the processed command comment (kept for audit, hidden from the
+      # timeline) so repeated /test cycles don't clutter the PR conversation.
+      - name: Hide command comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_NODE_ID: ${{ github.event.comment.node_id }}
+        run: |
+          gh api graphql \
+            -f query='mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: RESOLVED}) { minimizedComment { isMinimized } } }' \
+            -f id="$COMMENT_NODE_ID" \
+            || echo "::warning::Could not minimize the command comment (cosmetic only)."
+
       - name: Get PR details
         id: pr-details
         env:
@@ -307,21 +319,19 @@ jobs:
             echo "$message"
           } > /tmp/pr-comment.md
 
-          existing_id=$(gh api --paginate \
+          # Delete older sticky comments and repost so the result is always the
+          # newest comment in the thread (no scrolling up to find it).
+          gh api --paginate \
             "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n1)
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" \
+            | while read -r cid; do
+                gh api --method DELETE "repos/${{ github.repository }}/issues/comments/$cid" --silent
+              done
 
-          if [[ -n "$existing_id" ]]; then
-            jq -Rs '{body: .}' < /tmp/pr-comment.md \
-              | gh api --method PATCH \
-                "repos/${{ github.repository }}/issues/comments/$existing_id" \
-                --input - --silent
-          else
-            jq -Rs '{body: .}' < /tmp/pr-comment.md \
-              | gh api --method POST \
-                "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-                --input - --silent
-          fi
+          jq -Rs '{body: .}' < /tmp/pr-comment.md \
+            | gh api --method POST \
+              "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+              --input - --silent
 
           gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
             -f state='success' \
@@ -424,21 +434,19 @@ jobs:
           COMMENT_BODY
           } > /tmp/pr-comment.md
 
-          existing_id=$(gh api --paginate \
+          # Delete older sticky comments and repost so progress is always the
+          # newest comment in the thread.
+          gh api --paginate \
             "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n1)
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" \
+            | while read -r cid; do
+                gh api --method DELETE "repos/${{ github.repository }}/issues/comments/$cid" --silent
+              done
 
-          if [[ -n "$existing_id" ]]; then
-            jq -Rs '{body: .}' < /tmp/pr-comment.md \
-              | gh api --method PATCH \
-                "repos/${{ github.repository }}/issues/comments/$existing_id" \
-                --input - --silent
-          else
-            jq -Rs '{body: .}' < /tmp/pr-comment.md \
-              | gh api --method POST \
-                "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-                --input - --silent
-          fi
+          jq -Rs '{body: .}' < /tmp/pr-comment.md \
+            | gh api --method POST \
+              "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+              --input - --silent
 
       - name: Poll for results
         if: steps.targets.outputs.has_targets == 'true'
@@ -611,21 +619,19 @@ jobs:
             '{head_sha: $h, tag_sha: $t, results: $r}')
           printf '\n<!-- state:test-downstream %s -->\n' "$state" >> /tmp/pr-results.md
 
-          existing_id=$(gh api --paginate \
+          # Delete older sticky comments and repost so the final result is always
+          # the newest comment in the thread.
+          gh api --paginate \
             "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n1)
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" \
+            | while read -r cid; do
+                gh api --method DELETE "repos/${{ github.repository }}/issues/comments/$cid" --silent
+              done
 
-          if [[ -n "$existing_id" ]]; then
-            jq -Rs '{body: .}' < /tmp/pr-results.md \
-              | gh api --method PATCH \
-                "repos/${{ github.repository }}/issues/comments/$existing_id" \
-                --input - --silent
-          else
-            jq -Rs '{body: .}' < /tmp/pr-results.md \
-              | gh api --method POST \
-                "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-                --input - --silent
-          fi
+          jq -Rs '{body: .}' < /tmp/pr-results.md \
+            | gh api --method POST \
+              "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+              --input - --silent
 
       - name: Finalize commit status
         if: steps.targets.outputs.has_targets == 'true'

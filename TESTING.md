@@ -64,9 +64,10 @@ pushes fan out zero redundant runs.
    are mapped to their consuming workflows automatically).
 2. A user with write access comments `/test` (affected repos only) or
    `/test-all` (every mapped repo).
-3. The orchestrator posts progress to a sticky PR comment and finishes by
-   setting the commit status. ❌ any receiver failed / no run found / timeout;
-   ✅ all receivers green.
+3. The orchestrator posts progress to a sticky PR comment (always reposted as
+   the newest comment; processed command comments are collapsed as resolved)
+   and finishes by setting the commit status. ❌ any receiver failed / no run
+   found / timeout; ✅ all receivers green.
 4. On transient failures (e.g. an Azure hiccup in one repo), comment `/retest`:
    only the repos that failed in the previous battery are re-dispatched, and
    the earlier successes carry over into the final result. `/retest` refuses to
