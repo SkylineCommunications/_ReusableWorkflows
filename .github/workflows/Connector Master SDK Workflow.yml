@@ -29,6 +29,12 @@ on:
         required: false
         type: boolean
 
+      # Name of the solution file (.sln or .slnx) to build when the repository
+      # contains more than one.
+      solution-filter-name:
+        required: false
+        type: string
+
     secrets:
       api-key:
         required: false
@@ -97,8 +103,27 @@ jobs:
  
       - name: Find solution file
         id: findSlnFile
+        env:
+          SOLUTION_FILTER_NAME: ${{ inputs.solution-filter-name }}
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
+          if [[ -z "$SOLUTION_FILTER_NAME" ]]; then
+            results=$(find . -type f \( -name '*.sln' -o -name '*.slnx' \))
+          else
+            results=$(find . -type f -name "$SOLUTION_FILTER_NAME" \( -name '*.sln' -o -name '*.slnx' \))
+          fi
+
+          count=$(echo "$results" | grep -c .)
+          if [ "$count" -eq 0 ]; then
+            echo "Error: No solution file found."
+            exit 1
+          elif [ "$count" -gt 1 ]; then
+            echo "Error: Multiple solution files found:"
+            echo "$results"
+            echo "Please specify a solution-filter-name input to disambiguate."
+            exit 1
+          fi
+
+          echo "solutionFilePath=$results" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Setup NuGet sources
@@ -208,7 +233,7 @@ jobs:
       - name: Run Connector Validator - Validate
         run: |
           dataminer-validator validate protocol-solution `
-            --solution-path "${{ github.workspace }}" `
+            --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
             --output-directory "${{ github.workspace }}" `
             --output-file-name "validateResults" `
             --perform-restore false `
@@ -218,7 +243,7 @@ jobs:
       - name: Run Connector Validator - Compare
         run: |
           dataminer-validator compare protocol-solution `
-            --solution-path "${{ github.workspace }}" `
+            --solution-path "${{ steps.findSlnFile.outputs.solutionFilePath }}" `
             --output-directory "${{ github.workspace }}" `
             --output-file-name "compareResults" `
             --previous-validate-output-file-name "previousValidateResults" `
@@ -738,8 +763,30 @@ jobs:
 
       - name: Find solution file
         id: findSlnFile
+        env:
+          SOLUTION_FILTER_NAME: ${{ inputs.solution-filter-name }}
         run: |
-          echo solutionFilePath=$(find . -type f -name '*.sln' -o -name '*.slnx') >> $GITHUB_OUTPUT
+          if [[ -z "$SOLUTION_FILTER_NAME" ]]; then
+            results=$(find . -type f \( -name '*.sln' -o -name '*.slnx' \))
+          else
+            results=$(find . -type f -name "$SOLUTION_FILTER_NAME" \( -name '*.sln' -o -name '*.slnx' \))
+          fi
+
+          count=$(echo "$results" | grep -c .)
+          if [ "$count" -eq 0 ]; then
+            echo "Error: No solution file found."
+            exit 1
+          elif [ "$count" -gt 1 ]; then
+            echo "Error: Multiple solution files found:"
+            echo "$results"
+            echo "Please specify a solution-filter-name input to disambiguate."
+            exit 1
+          fi
+
+          echo "solutionFilePath=$results" >> $GITHUB_OUTPUT
+          # The packager and protocol.xml lookup are directory-scoped; anchor them
+          # to the solution's directory so a filtered solution in a subfolder works.
+          echo "solutionDirPath=$(dirname "$results")" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Setup NuGet sources
@@ -763,7 +810,7 @@ jobs:
       - name: Create DMProtocol - Release
         if: github.ref_type == 'tag'
         run: |
-          dataminer-package-create dmprotocol ${{ github.workspace }} \
+          dataminer-package-create dmprotocol "${{ steps.findSlnFile.outputs.solutionDirPath }}" \
             --name  "${{ steps.packageName.outputs.name }}" \
             --output ${{ github.workspace }} \
             --version-override "${{ github.ref_name  }}" \
@@ -773,8 +820,8 @@ jobs:
       - name: Find and extract Protocol Version
         if: github.ref_type != 'tag'
         run: |
-          # Find the protocol.xml file
-          xml_file=$(find "${{ github.workspace }}" -maxdepth 1 -name "protocol.xml" -or -name "Protocol.xml" | head -n 1)
+          # Find the protocol.xml file next to the resolved solution
+          xml_file=$(find "${{ steps.findSlnFile.outputs.solutionDirPath }}" -maxdepth 1 -name "protocol.xml" -or -name "Protocol.xml" | head -n 1)
 
           # Extract the Protocol Version using awk and store it in a variable
           protocol_version=$(awk -F '[><]' '/<Version>/ {print $3}' "$xml_file")
@@ -789,7 +836,7 @@ jobs:
       - name: Create DMProtocol - Build
         if: github.ref_type != 'tag'
         run: |
-          dataminer-package-create dmprotocol ${{ github.workspace }} \
+          dataminer-package-create dmprotocol "${{ steps.findSlnFile.outputs.solutionDirPath }}" \
             --name  "${{ steps.packageName.outputs.name }}" \
             --output ${{ github.workspace }} \
             --version-override "${{ env.PROTOCOL_VERSION }}_B${{ github.run_number }}" \

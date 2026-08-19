@@ -47,6 +47,12 @@ on:
         required: false
         type: boolean
 
+      # Name of the solution file (.sln or .slnx) to build when the repository
+      # contains more than one. Only supported for SDK-style connectors.
+      solution-filter-name:
+        required: false
+        type: string
+
     secrets:
       api-key:
         required: false
@@ -137,16 +143,53 @@ jobs:
         - name: Install SDKChecker
           run: dotnet tool install Skyline.DataMiner.CICD.Tools.SDKChecker --global --version 2.*
 
+        - name: Find solution file
+          id: find-solution
+          if: inputs.solution-filter-name != ''
+          env:
+            SOLUTION_FILTER_NAME: ${{ inputs.solution-filter-name }}
+          run: |
+            results=$(find . -type f -name "$SOLUTION_FILTER_NAME" \( -name '*.sln' -o -name '*.slnx' \))
+
+            count=$(echo "$results" | grep -c .)
+            if [ "$count" -eq 0 ]; then
+              echo "Error: No .sln or .slnx file matching '$SOLUTION_FILTER_NAME' found. Note: .slnf filters are not supported for connectors."
+              exit 1
+            elif [ "$count" -gt 1 ]; then
+              echo "Error: Multiple solution files match '$SOLUTION_FILTER_NAME':"
+              echo "$results"
+              exit 1
+            fi
+
+            echo "path=$results" >> "$GITHUB_OUTPUT"
+          shell: bash
+
         - name: Run SDKChecker
           id: checker
+          env:
+            WORKSPACE: ${{ github.workspace }}
+            REPOSITORY_URL: ${{ github.repositoryUrl }}
+            REF_NAME: ${{ github.ref_name }}
+            SOLUTION_FILEPATH: ${{ steps.find-solution.outputs.path }}
           run: |
-            output="$(SDKChecker --workspace "${{ github.workspace }}" --repositoryName "${{ github.repositoryUrl }}" --repositoryBranch "${{ github.ref_name }}")"
+            if [ -n "$SOLUTION_FILEPATH" ]; then
+              output="$(SDKChecker --workspace "$WORKSPACE" --repositoryName "$REPOSITORY_URL" --repositoryBranch "$REF_NAME" --solution-filepath "$SOLUTION_FILEPATH")"
+            else
+              output="$(SDKChecker --workspace "$WORKSPACE" --repositoryName "$REPOSITORY_URL" --repositoryBranch "$REF_NAME")"
+            fi
             if [ -z "$output" ]; then
               echo "isSdk=true" >> "$GITHUB_OUTPUT"
             else
               echo "isSdk=false" >> "$GITHUB_OUTPUT"
             fi
             echo "Output: $output"
+
+        # The legacy pipeline is repo-root-bound and cannot honor a solution filter.
+        - name: Reject solution filter for legacy connectors
+          if: inputs.solution-filter-name != '' && steps.checker.outputs.isSdk == 'false'
+          run: |
+            echo "::error::solution-filter-name is only supported for SDK-style connectors; this repository resolved to the legacy pipeline."
+            exit 1
 
   CI_Legacy:
     uses: ./.github/workflows/Connector Master Legacy Workflow.yml
@@ -174,6 +217,7 @@ jobs:
 
       sonarCloudProjectName: ${{ inputs.sonarCloudProjectName }}
       debug: ${{ inputs.debug }}
+      solution-filter-name: ${{ inputs.solution-filter-name }}
     secrets: inherit
 
   # Keep the enterprise custom property `Workflow-Repo-Type` in sync: a connector repo is always

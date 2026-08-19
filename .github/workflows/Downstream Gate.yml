@@ -1,0 +1,75 @@
+name: Downstream Gate
+
+# Posts the `downstream-tests` commit status that branch protection requires.
+# PRs touching reusable workflows or composite actions start as `pending`
+# (a maintainer with write access must comment /test to run the downstream
+# battery); all other PRs pass immediately as not applicable.
+#
+# Fork PRs: GITHUB_TOKEN is read-only there, so no status can be posted and
+# the required check stays "expected" — merge remains blocked until a
+# maintainer runs the battery (which rejects fork PRs by design). This is
+# intentional fail-closed behavior.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: downstream-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Set downstream-tests status
+    runs-on: ubuntu-latest
+    steps:
+      # No checkout: the diff comes from the API, so no PR code is executed here.
+      - name: Determine whether PR affects workflows or actions
+        id: relevance
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          changed=$(gh pr diff "$PR_NUMBER" --repo "$REPO" --name-only)
+
+          if grep -qE '^\.github/(workflows|actions)/' <<<"$changed"; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post downstream-tests status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RELEVANT: ${{ steps.relevance.outputs.relevant }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$IS_FORK" == "true" ]]; then
+            echo "Fork PR: GITHUB_TOKEN cannot post statuses. The downstream-tests check stays 'expected' (merge blocked)."
+            exit 0
+          fi
+
+          if [[ "$RELEVANT" == "true" ]]; then
+            state='pending'
+            description='Comment /test (write access required) to run the downstream test battery'
+          else
+            state='success'
+            description='Not applicable — no reusable workflow or composite action changes'
+          fi
+
+          gh api "repos/$REPO/statuses/$HEAD_SHA" \
+            -f state="$state" \
+            -f context='downstream-tests' \
+            -f description="$description" \
+            -f target_url="$TARGET_URL" \
+            --silent
