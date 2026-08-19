@@ -34,6 +34,25 @@ Centralized GitHub Actions **reusable workflows** and **composite actions** cons
 
 `update-global-json-sdks/action.yml` hard-codes `$DATAMINER_SDK_VERSION` and the `$dataMinerSdkPatterns` list. **To roll out a new DataMiner SDK version across the fleet, bump that constant and the matching `version=...` line in the `update-global-json-sdks` job of `Test composite actions.yml`.** The action rewrites every `msbuild-sdks` key matching `Skyline.DataMiner.*` to the shared version; exact-name overrides in `$otherManagedSdks` win against the pattern.
 
+## DxM and DcM integration boundary
+
+This repository owns only the reusable, repository-type-neutral part of the DxM flow:
+
+- `Master Workflow.yml` builds, tests, packages, signs, and publishes artifacts.
+- `compute-next-version`, `determine-version`, and `exempt-change-detector` provide shared release classification and version contracts.
+- `references-parser` parses the common `References:` administration format.
+- `package-debian`, `resolve-oidc`, `load-secrets`, NuGet-source actions, and `set-repo-type` remain generic building blocks.
+
+Core-specific PR governance, tag orchestration, collaboration, CR/QA task-state behavior, and the production DxM repository template belong in `SkylineCommunicationsCore/.github-private`. SkylineAPI behavior belongs in `SkylineCommunicationsCore/Skyline.DataMiner.CICD.Tools.ReleaseTracker`. DxM artifact API behavior and the production server synchronizer belong in `SkylineCommunicationsCore/Skyline.DataMiner.CICD.Tools.DxMStorage`.
+
+When changing a DxM-facing contract:
+
+- Search `SkylineCommunicationsCore/.github-private/provisioning/dxm-repo-template` and its reusable workflows for affected callers and consumers.
+- Keep stable and prerelease SemVer behavior aligned across `compute-next-version`, `determine-version`, `.github-private/auto-tag.yml`, DxMStorage publication, and server tag resolution.
+- Keep exempt-change behavior aligned between `exempt-change-detector`, `.github-private/pr-validation.yml`, `.github-private/auto-tag.yml`, `.github-private/collaboration.yml`, and ReleaseTracker's reserved-RN filtering.
+- Add or update `Test composite actions.yml` coverage for a changed action, then use the downstream battery for the affected Master Workflow paths. Event-driven Core governance behavior still needs a separate `PilotDxM` run.
+- Update `SkylineCommunications/internal-docs/DevDocs/GitHub_DxM_Repositories/` when developer, release, packaging, identity, or operational behavior changes.
+
 ## Testing
 
 - **`Test composite actions.yml`** — self-contained smoke tests, triggered on push/PR that touches `.github/actions/**`. Adds runtime assertions on outputs and idempotency for every composite that doesn't need live secrets. When you add a composite action, **add a matching job here**. `sonarcloud-status` is gated to `workflow_dispatch` because it needs a live `SONAR_TOKEN` + `SONAR_NAME` var.
