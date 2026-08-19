@@ -11,6 +11,7 @@ This file applies when editing workflows under `.github/workflows/` or composite
 
 - Master workflow catalog and deprecation rules: [README.md](../../README.md)
 - Composite action conventions: [.github/actions/README.md](../actions/README.md)
+- Downstream integration-test battery (coverage, /test usage, adding scenarios): [TESTING.md](../../TESTING.md)
 
 ## Editing reusable workflows (`.github/workflows/*.yml`)
 

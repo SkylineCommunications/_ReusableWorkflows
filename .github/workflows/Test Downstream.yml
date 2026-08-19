@@ -55,14 +55,16 @@ env:
         "repo": "SkylineCommunications/BOOST-DailyRegression-InternalNuGet",
         "workflows": [
           "Internal NuGet Solution Master Workflow.yml",
-          "Master Workflow.yml"
+          "Master Workflow.yml",
+          "Wrapper Migration Workflow.yml"
         ]
       },
       {
         "repo": "SkylineCommunications/BOOST-DailyRegression-Skyline.DataMiner.Sdk",
         "workflows": [
           "DataMiner App Packages Master Workflow.yml",
-          "Master Workflow.yml"
+          "Master Workflow.yml",
+          "Update Catalog Details Workflow.yml"
         ]
       },
       {
@@ -75,6 +77,14 @@ env:
         "repo": "SkylineCommunications/BOOST-DailyRegression-MasterWorkflow",
         "workflows": [
           "Master Workflow.yml"
+        ]
+      },
+      {
+        "repo": "SkylineCommunications/BOOST-DailyRegression-NegativePaths",
+        "workflows": [
+          "Master Workflow.yml",
+          "Connector Master Workflow.yml",
+          "Connector Master SDK Workflow.yml"
         ]
       }
     ]
