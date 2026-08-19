@@ -1147,7 +1147,8 @@ jobs:
 
       - parallel:
           - name: Install DxM storage tool
-            run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxMStorage --global --version '1.*'
+            # run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxMStorage --global --version '1.*'
+            run: dotnet tool install Skyline.DataMiner.CICD.Tools.DxMStorage --global --prerelease
             shell: bash
 
           - name: Download signed installers
