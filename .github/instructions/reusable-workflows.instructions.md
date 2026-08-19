@@ -57,6 +57,16 @@ After editing a reusable workflow:
 
 For important changes to reusable workflows or their behavior, check whether the corresponding documentation in `C:\GitHub\dataminer-docs\develop\CICD\GitHub\GitHubReusableWorkflows` also needs to be updated. Before finishing, ask the user whether they will make the documentation changes themselves or want guidance through making them. Do not require documentation changes for minor, internal, or non-user-visible workflow updates.
 
+### Downstream battery coupling
+
+The downstream test battery ([TESTING.md](../../TESTING.md)) asserts on **concrete names** inside the reusable workflows. Renaming any of these breaks downstream verify jobs even when the pipeline itself still works — update the affected downstream scenarios in the same change and run `/test`:
+
+- Artifact names: `SignedNugetPackages`, `SignedDataMinerPackages`, `SignedInstallers`, `debian-package`, `Connector Package`, `validatorResults`, `SBOM`, `Catalog Details`.
+- Job display names: `Discover Project Types`, `Push NuGet Packages`, `Upload to Catalog`, `Package & Sign (Windows)`, `SDK Skyline Quality Gate`, `Artifact Registration and Upload`, `Validate Trigger`, `Migrate wrapper to Master Workflow` (and its step `Create migration PR (dry run)`).
+- Failure semantics relied on by NegativePaths: multi-solution discovery error, apply-catalog-identifiers rejection, validator quality-gate initial-version rule and missing-results fail-closed path, guard-trigger rejection of `pull_request_target`.
+
+When adding a new input or feature to a master workflow, add a scenario for it (see "Adding coverage" in [TESTING.md](../../TESTING.md)) — a feature without a downstream scenario is unprotected against regressions.
+
 ## Referencing composite actions from inside this repo
 
 ```yaml
