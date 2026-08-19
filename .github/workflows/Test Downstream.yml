@@ -11,6 +11,12 @@ concurrency:
   group: test-downstream
   cancel-in-progress: false
 
+# Commands (PR comments, write access required):
+#   /test      - run the battery for the repos affected by the PR's changes
+#   /test-all  - run the battery for every mapped repo
+#   /retest    - re-run only the repos that failed in the previous battery for
+#                this PR (successes carry over; requires an unchanged head SHA)
+#
 # To add a new target repo:
 #   1. Add an entry to DOWNSTREAM_MAP below with the repo and its dependent workflow files
 #      (include transitive dependencies — e.g. if Connector Master calls Connector Master Legacy, list both)
@@ -97,6 +103,7 @@ jobs:
       && (
         github.event.comment.body == '/test'
         || github.event.comment.body == '/test-all'
+        || github.event.comment.body == '/retest'
       )
     runs-on: ubuntu-latest
     permissions:
@@ -172,6 +179,36 @@ jobs:
           # with `contents: write` — GitHub explicitly blocks it.
           token: ${{ secrets.DOWNSTREAM_PAT }}
 
+      - name: Load previous battery state
+        id: prior
+        if: github.event.comment.body == '/retest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- sticky:test-downstream -->'
+          body=$(gh api --paginate \
+            "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .body" | head -c 65536)
+
+          state=$(grep -oP '(?<=<!-- state:test-downstream ).*(?= -->)' <<<"$body" | tail -n1 || true)
+          if [[ -z "$state" ]]; then
+            echo "::error::No previous battery result found on this PR — run /test or /test-all first."
+            exit 1
+          fi
+
+          prior_head=$(jq -r '.head_sha' <<<"$state")
+          if [[ "$prior_head" != "$HEAD_SHA" ]]; then
+            echo "::error::The PR head moved since the previous battery ($prior_head → $HEAD_SHA); earlier results no longer apply. Run /test again."
+            exit 1
+          fi
+
+          echo "Previous battery state loaded:"
+          jq . <<<"$state"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+
       - name: Map changed files to affected workflows
         id: changed-files
         env:
@@ -211,10 +248,16 @@ jobs:
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
           CHANGED_WORKFLOWS: ${{ steps.changed-files.outputs.changed_workflows }}
+          PRIOR_STATE: ${{ steps.prior.outputs.state }}
         run: |
           command="$COMMENT_BODY"
+          carried='{}'
 
-          if [[ "$command" == "/test-all" ]]; then
+          if [[ "$command" == "/retest" ]]; then
+            # Only re-dispatch what failed; successful results carry over.
+            target_repos=$(jq -r '.results | to_entries[] | select(.value != "success") | .key' <<<"$PRIOR_STATE")
+            carried=$(jq -c '.results | with_entries(select(.value == "success"))' <<<"$PRIOR_STATE")
+          elif [[ "$command" == "/test-all" ]]; then
             target_repos=$(echo "$DOWNSTREAM_MAP" | jq -r '.[].repo')
           else
             # Filter DOWNSTREAM_MAP to repos whose workflows were changed
@@ -228,7 +271,7 @@ jobs:
           fi
 
           if [[ -z "$target_repos" ]]; then
-            echo "No target repos affected by the changed workflow files."
+            echo "No target repos to dispatch."
             echo "has_targets=false" >> "$GITHUB_OUTPUT"
           else
             echo "Target repos to dispatch:"
@@ -236,6 +279,7 @@ jobs:
             echo "has_targets=true" >> "$GITHUB_OUTPUT"
           fi
 
+          echo "carried=$carried" >> "$GITHUB_OUTPUT"
           echo "repos<<EOF" >> "$GITHUB_OUTPUT"
           echo "$target_repos" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
@@ -245,12 +289,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
           MARKER='<!-- sticky:test-downstream -->'
+
+          if [[ "$COMMENT_BODY" == "/retest" ]]; then
+            message="✅ **Nothing to retry** — every repo in the previous battery already succeeded."
+            description='All downstream tests passed (previous battery)'
+          else
+            message="ℹ️ **No downstream tests triggered** — the changed files in this PR don't affect any mapped reusable workflows or composite actions."
+            description='Not applicable — no mapped downstream consumers affected'
+          fi
+
           {
             echo "$MARKER"
-            echo "ℹ️ **No downstream tests triggered** — the changed files in this PR don't affect any mapped reusable workflows or composite actions."
+            echo "$message"
           } > /tmp/pr-comment.md
 
           existing_id=$(gh api --paginate \
@@ -272,7 +326,7 @@ jobs:
           gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
             -f state='success' \
             -f context='downstream-tests' \
-            -f description='Not applicable — no mapped downstream consumers affected' \
+            -f description="$description" \
             -f target_url='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
             --silent
 
@@ -393,6 +447,7 @@ jobs:
           GH_TOKEN: ${{ secrets.DOWNSTREAM_PAT }}
           TARGET_REPOS: ${{ steps.targets.outputs.repos }}
           CORRELATION_ID: ${{ steps.dispatch.outputs.correlation_id }}
+          CARRIED: ${{ steps.targets.outputs.carried }}
         run: |
           dispatch_time="${{ steps.dispatch.outputs.dispatch_time }}"
           max_wait=5400  # 90 minutes — downstream BRANCH + RELEASE flows can exceed 30
@@ -480,11 +535,22 @@ jobs:
           # Phase 3: Collect results
           result_table="| Repository | Status | Link |\n|---|---|---|"
           overall="success"
+          carried="$CARRIED"
+          if [[ -z "$carried" ]]; then carried='{}'; fi
+          results="$carried"
+
+          # Successes carried over from the previous battery (only set by /retest).
+          while IFS= read -r repo; do
+            [[ -z "$repo" ]] && continue
+            result_table="${result_table}\n| ${repo} | ✅ success (previous battery) | - |"
+          done < <(jq -r 'keys[]' <<<"$carried")
+
           for repo in $TARGET_REPOS; do
             run_id="${run_ids[$repo]:-}"
             if [[ -z "$run_id" ]]; then
               result_table="${result_table}\n| ${repo} | ⚠️ No run found | - |"
               overall="failure"
+              results=$(jq -c --arg r "$repo" '. + {($r): "no-run-found"}' <<<"$results")
               continue
             fi
 
@@ -505,15 +571,20 @@ jobs:
             fi
 
             result_table="${result_table}\n| ${repo} | ${icon} ${conclusion} | [View run](${html_url}) |"
+            results=$(jq -c --arg r "$repo" --arg c "$conclusion" '. + {($r): $c}' <<<"$results")
           done
 
           echo -e "result_table<<EOF\n${result_table}\nEOF" >> "$GITHUB_OUTPUT"
           echo "overall=$overall" >> "$GITHUB_OUTPUT"
+          echo "results=$results" >> "$GITHUB_OUTPUT"
 
       - name: Post results
         if: steps.targets.outputs.has_targets == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          TAG_SHA: ${{ steps.build-tag.outputs.tag_sha }}
+          RESULTS: ${{ steps.poll.outputs.results }}
         run: |
           set -euo pipefail
           MARKER='<!-- sticky:test-downstream -->'
@@ -521,7 +592,7 @@ jobs:
           if [[ "${{ steps.poll.outputs.overall }}" == "success" ]]; then
             header="✅ **All downstream tests passed**"
           else
-            header="❌ **Some downstream tests failed**"
+            header="❌ **Some downstream tests failed** — comment \`/retest\` to re-run only the failed repos."
           fi
 
           cat <<COMMENT_BODY > /tmp/pr-results.md
@@ -532,6 +603,13 @@ jobs:
 
           ${{ steps.poll.outputs.result_table }}
           COMMENT_BODY
+
+          # Machine-readable state consumed by /retest.
+          results_json="$RESULTS"
+          if [[ -z "$results_json" ]]; then results_json='{}'; fi
+          state=$(jq -c -n --arg h "$HEAD_SHA" --arg t "$TAG_SHA" --argjson r "$results_json" \
+            '{head_sha: $h, tag_sha: $t, results: $r}')
+          printf '\n<!-- state:test-downstream %s -->\n' "$state" >> /tmp/pr-results.md
 
           existing_id=$(gh api --paginate \
             "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \

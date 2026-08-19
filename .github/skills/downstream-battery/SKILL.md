@@ -37,6 +37,7 @@ Single scenario: `gh workflow run <caller>.yml --repo <repo> --ref main -f corre
 2. run-and-monitor log has the dispatched run's `run_url` and failed jobs/steps.
 3. Runs of one battery share the correlation id in their `run-name`: `[<id>-BRANCH]` / `[<id>-RELEASE]`.
 4. Extract failure summaries: `gh run view <id> --repo <repo> --log 2>&1 | Select-String -Pattern 'Validator Quality Gate failed:' -Context 0,6`.
+5. Transient infra failure (Azure, runner)? Comment `/retest` on the PR: only the failed repos re-dispatch; previous successes carry over (state lives in a `<!-- state:test-downstream ... -->` line inside the sticky comment and is invalidated when the head SHA moves).
 
 ## Verify-job pattern (side-effect assertions)
 
