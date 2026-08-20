@@ -4,18 +4,19 @@ on:
   issue_comment:
     types: [created]
 
-# Queued, not cancelled: an in-flight battery must keep the test-downstream tag
-# stable until its downstream runs finish. A newer queued run replaces older
-# pending ones (GitHub keeps at most one pending run per group).
+# Batteries are queued so the shared test-downstream tag remains stable. Manual
+# test refs are isolated per PR and can replace an older preparation run.
 concurrency:
-  group: test-downstream
-  cancel-in-progress: false
+  group: ${{ github.event.comment.body == '/prepare-test' && format('manual-test-ref-pr-{0}', github.event.issue.number) || 'test-downstream' }}
+  cancel-in-progress: ${{ github.event.comment.body == '/prepare-test' }}
 
 # Commands (PR comments, write access required):
 #   /test      - run the battery for the repos affected by the PR's changes
 #   /test-all  - run the battery for every mapped repo
 #   /retest    - re-run only the repos that failed in the previous battery for
 #                this PR (successes carry over; requires an unchanged head SHA)
+#   /prepare-test - create/update a self-consistent test-pr-<number> tag for
+#                   manual testing without dispatching the battery
 #
 # To add a new target repo:
 #   1. Add an entry to DOWNSTREAM_MAP below with the repo and its dependent workflow files
@@ -96,6 +97,131 @@ env:
     ]
 
 jobs:
+  prepare-manual-test-ref:
+    name: Prepare Manual Test Ref
+    if: github.event.issue.pull_request && github.event.comment.body == '/prepare-test'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: read
+
+    steps:
+      - name: Check commenter permissions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          set -euo pipefail
+          permission=$(gh api \
+            "repos/${{ github.repository }}/collaborators/$COMMENTER/permission" \
+            --jq '.permission')
+
+          if [[ "$permission" != "admin" && "$permission" != "write" ]]; then
+            echo "User $COMMENTER has '$permission' permission. Write or admin required."
+            exit 1
+          fi
+
+      - name: React with eyes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api \
+            repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content='eyes' \
+            --silent
+
+      - name: Get PR details
+        id: pr-details
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          pr_json=$(gh pr view "$PR_NUMBER" \
+            --repo ${{ github.repository }} \
+            --json headRefOid,headRefName,isCrossRepository)
+
+          if [[ "$(jq -r '.isCrossRepository' <<<"$pr_json")" == "true" ]]; then
+            echo "::error::Fork PRs are not supported. Push the branch to this repository and open an internal PR."
+            exit 1
+          fi
+
+          echo "head_sha=$(jq -r '.headRefOid' <<<"$pr_json")" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$(jq -r '.headRefName' <<<"$pr_json")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.DOWNSTREAM_PAT }}
+
+      - name: Build and publish self-consistent manual test tag
+        id: build-tag
+        env:
+          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          test_ref="test-pr-$PR_NUMBER"
+          export TEST_REF="$test_ref"
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git checkout -B "prepare-test-pr-$PR_NUMBER" "$HEAD_SHA"
+
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          pattern = re.compile(
+              r'(SkylineCommunications/_ReusableWorkflows/\.github/actions/[A-Za-z0-9._-]+)@[A-Za-z0-9._/-]+'
+          )
+          replacement = rf'\1@{os.environ["TEST_REF"]}'
+          targets = list(pathlib.Path('.github/workflows').glob('*.yml')) \
+                  + list(pathlib.Path('.github/actions').glob('*/action.yml'))
+          for path in targets:
+              contents = path.read_text(encoding='utf-8')
+              rewritten = pattern.sub(replacement, contents)
+              if rewritten != contents:
+                  path.write_text(rewritten, encoding='utf-8')
+                  print(f'rewrote {path}')
+          PY
+
+          if ! git diff --quiet; then
+            git add .github/workflows .github/actions
+            git commit -m "prepare-test: pin composite actions to @$test_ref"
+          fi
+
+          git tag -f "$test_ref"
+          git push -f origin "refs/tags/$test_ref"
+
+          echo "test_ref=$test_ref" >> "$GITHUB_OUTPUT"
+          echo "tag_sha=$(git rev-parse "$test_ref^{commit}")" >> "$GITHUB_OUTPUT"
+
+      - name: Comment manual test ref
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          HEAD_REF: ${{ steps.pr-details.outputs.head_ref }}
+          TEST_REF: ${{ steps.build-tag.outputs.test_ref }}
+          TAG_SHA: ${{ steps.build-tag.outputs.tag_sha }}
+        run: |
+          set -euo pipefail
+          cat <<COMMENT_BODY > /tmp/manual-test-ref.md
+          ✅ **Manual test ref ready:** \`$TEST_REF\`
+
+          Built from PR #$PR_NUMBER branch \`$HEAD_REF\` at \`$HEAD_SHA\`. Internal composite-action references point to \`@$TEST_REF\` in the published commit \`$TAG_SHA\`.
+
+          Use \`SkylineCommunications/_ReusableWorkflows/.github/workflows/<workflow>.yml@$TEST_REF\` from a manual test caller. Re-run \`/prepare-test\` after the PR changes to update the tag.
+          COMMENT_BODY
+
+          jq -Rs '{body: .}' < /tmp/manual-test-ref.md \
+            | gh api --method POST \
+              "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+              --input - --silent
+
   test-downstream:
     name: Test Downstream Repos
     if: >-

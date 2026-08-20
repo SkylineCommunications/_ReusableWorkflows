@@ -16,6 +16,7 @@ against real consumer repositories before they reach the fleet.
 flowchart TD
     PR[PR in _ReusableWorkflows] -->|on: pull_request| Gate["Downstream Gate.yml<br/>posts commit status 'downstream-tests'<br/>pending (workflows/actions touched) or success (n/a)"]
     PR -->|maintainer comments /test| TD["Test Downstream.yml (runs from main)"]
+      PR -->|maintainer comments /prepare-test| MANUAL["Create/update per-PR tag<br/>test-pr-&lt;number&gt;<br/>with self-consistent action refs"]
     TD -->|1. map changed workflows AND composite actions| MAP[DOWNSTREAM_MAP]
     TD -->|2. force-push tag from PR head| TAG[(test-downstream tag)]
     TD -->|3. repository_dispatch<br/>pr_number, head_sha, tag_sha, correlation_id| RCV[pr-regression.yml receivers]
@@ -39,6 +40,30 @@ flowchart TD
   payload and fail closed if another battery overwrote it.
 - **Fork PRs** are rejected by the battery (and the gate cannot post statuses
   for them) — merge stays blocked until the branch is pushed internally.
+
+## Preparing a ref for manual testing
+
+Comment `/prepare-test` on an internal PR to create or update a persistent
+`test-pr-<number>` tag without starting the downstream battery. The command
+requires write access to the repository.
+
+The tag points to a synthetic commit based on the current PR head. Every
+cross-repository composite-action reference in the workflows and composite
+actions is rewritten to the same `test-pr-<number>` tag, so manual tests use a
+self-consistent version of the PR instead of loading actions from `main`.
+
+Use the generated ref from a manual caller, for example:
+
+```yaml
+jobs:
+   CI:
+      uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Master Workflow.yml@test-pr-123
+```
+
+The workflow posts the exact ref and commit SHA on the PR. Run `/prepare-test`
+again after pushing changes to the PR; this force-updates that PR's tag. Each PR
+has its own tag, so preparing a manual ref does not move or interfere with the
+shared `test-downstream` tag used by the integration-test battery.
 
 ## Downstream repositories
 

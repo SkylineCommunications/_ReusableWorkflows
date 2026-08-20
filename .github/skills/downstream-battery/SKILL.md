@@ -31,6 +31,14 @@ To test unmerged workflow code first: commit on a branch, then `git tag -f test-
 
 Single scenario: `gh workflow run <caller>.yml --repo <repo> --ref main -f correlation-id=manual-<purpose>`.
 
+## Per-PR ref for manual testing
+
+Comment `/prepare-test` on an internal `_ReusableWorkflows` PR to create or
+update `test-pr-<number>`. The generated tag starts from the current PR head and
+rewrites all cross-repository composite-action references to that same tag. It
+does not dispatch the battery and does not interfere with `test-downstream`.
+Run the command again whenever the PR head changes.
+
 ## Diagnosis path for a red battery
 
 1. Receiver run → failing job names the scenario (`c1-validator-critical / run-workflow`).
