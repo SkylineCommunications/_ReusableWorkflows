@@ -49,7 +49,6 @@ Usage examples in each action README are sourced from the master workflows in
 | `set-repo-type` | Writes the enterprise `Workflow-Repo-Type` custom property (idempotent read-before-write). | [set-repo-type/README.md](set-repo-type/README.md) |
 | `remove-wix-projects` | Strips WiX projects from a solution for cross-platform CI builds. | [remove-wix-projects/README.md](remove-wix-projects/README.md) |
 | `partition-solution-projects` | Splits a solution into remaining, WiX, and DataMiner package build stages. | [partition-solution-projects/README.md](partition-solution-projects/README.md) |
-| `sign-assemblies` | Signs build outputs through Azure Key Vault, signing each unique file content once and copying the result over its duplicates. | [sign-assemblies/README.md](sign-assemblies/README.md) |
 | `package-debian` | Builds a `.deb` per DxM project from per-project Debian skeletons. | [package-debian/README.md](package-debian/README.md) |
 | `apply-source-code-url` | Fills empty `source_code_url:` fields in catalog manifests. | [apply-source-code-url/README.md](apply-source-code-url/README.md) |
 | `sonarcloud-status` | Checks SonarCloud project status and emits analysis flag. | [sonarcloud-status/README.md](sonarcloud-status/README.md) |
