@@ -1,0 +1,29 @@
+name: Test maintenance scripts
+
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/**'
+      - '.github/workflows/Test Downstream.yml'
+      - '.github/workflows/Test maintenance scripts.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/**'
+      - '.github/workflows/Test Downstream.yml'
+      - '.github/workflows/Test maintenance scripts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-prepare-downstream-fixes:
+    name: Test prepare-downstream-fixes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run unit tests
+        shell: bash
+        run: python3 -m unittest discover -s .github/scripts/tests -p 'test_*.py'

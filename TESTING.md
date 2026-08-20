@@ -65,6 +65,45 @@ again after pushing changes to the PR; this force-updates that PR's tag. Each PR
 has its own tag, so preparing a manual ref does not move or interfere with the
 shared `test-downstream` tag used by the integration-test battery.
 
+## Preparing downstream fix pull requests
+
+When a reusable-workflow change requires edits to one or more battery repos,
+a maintainer with write access can comment on the source PR:
+
+```text
+/prepare-downstream-fixes
+- Consume the new workflow output from the caller job.
+- Assert the expected names and URLs in the verify job.
+- Cover both SDK multi-manifest and supported legacy behavior.
+```
+
+The first line must match exactly and the following acceptance criteria are
+required. The command maps the PR's changed workflows and composite actions
+through `DOWNSTREAM_MAP`, creates or reuses one linked `downstream-fix` issue
+per affected repository, and assigns `copilot-swe-agent[bot]`. Each assignment
+starts an independent Copilot session in that repository; the resulting pull
+requests must be reviewed and merged separately.
+
+The command is idempotent for a source PR. Re-running it reuses an existing
+open task identified by its machine-readable source marker. It never reopens a
+closed task, pushes to a downstream branch, merges a pull request, or executes
+content from the source PR. Every run appends an audit summary to the source
+PR. A partial failure leaves successfully created tasks intact and fails the
+orchestration run.
+
+Configure `DOWNSTREAM_ISSUES_TOKEN` in `_ReusableWorkflows` before enabling the
+command. Prefer a GitHub App installation token scoped only to the repositories
+in `DOWNSTREAM_MAP`, with **Issues: read and write** and metadata read. A
+fine-grained user token with the same repository and permission limits is the
+fallback. Do not reuse `DOWNSTREAM_PAT`: task preparation does not need access
+to contents, actions, workflows, administration, or pull requests.
+
+Copilot coding agent must be enabled and assignable in every target repository.
+If assignment is unavailable, the downstream issue remains as an auditable
+manual task and the orchestration run reports a failure. Because
+`issue_comment` loads workflows from the default branch, this command becomes
+available only after its orchestrator changes merge.
+
 ## Downstream repositories
 
 | Repository | Exercises | Key assertions |

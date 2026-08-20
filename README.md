@@ -29,7 +29,7 @@ the legacy wrappers.
 
 | Workflow                                                  | Purpose                                                                       |
 | --------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `Test Downstream.yml`                                     | Repo-local: runs the downstream integration-test battery against changes here. Triggered by a `/test` PR comment; reports via the `downstream-tests` commit status. See [TESTING.md](TESTING.md). |
+| `Test Downstream.yml`                                     | Repo-local: runs the downstream integration-test battery with `/test` and prepares linked Copilot tasks in affected repos with `/prepare-downstream-fixes`. See [TESTING.md](TESTING.md). |
 | `Downstream Gate.yml`                                     | Repo-local: sets the `downstream-tests` commit status on every PR — *pending* when reusable workflows or composite actions are touched, *success (n/a)* otherwise. |
 | `Wrapper Migration Workflow.yml`                          | Opens a PR migrating callers off the deprecated redirecting wrappers. Called automatically by those wrappers; can also be dispatched standalone. |
 

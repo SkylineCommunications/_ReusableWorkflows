@@ -7,7 +7,12 @@ on:
 # Batteries are queued so the shared test-downstream tag remains stable. Manual
 # test refs are isolated per PR and can replace an older preparation run.
 concurrency:
-  group: ${{ github.event.comment.body == '/prepare-test' && format('manual-test-ref-pr-{0}', github.event.issue.number) || 'test-downstream' }}
+  group: >-
+    ${{ startsWith(github.event.comment.body, '/prepare-downstream-fixes')
+        && format('downstream-fixes-pr-{0}', github.event.issue.number)
+        || (github.event.comment.body == '/prepare-test'
+            && format('manual-test-ref-pr-{0}', github.event.issue.number)
+            || 'test-downstream') }}
   cancel-in-progress: ${{ github.event.comment.body == '/prepare-test' }}
 
 # Commands (PR comments, write access required):
@@ -17,6 +22,9 @@ concurrency:
 #                this PR (successes carry over; requires an unchanged head SHA)
 #   /prepare-test - create/update a self-consistent test-pr-<number> tag for
 #                   manual testing without dispatching the battery
+#   /prepare-downstream-fixes - create an issue in each affected downstream
+#                   repo and assign Copilot; acceptance criteria are required
+#                   on the following lines
 #
 # To add a new target repo:
 #   1. Add an entry to DOWNSTREAM_MAP below with the repo and its dependent workflow files
@@ -221,6 +229,143 @@ jobs:
             | gh api --method POST \
               "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
               --input - --silent
+
+  prepare-downstream-fixes:
+    name: Prepare Downstream Fixes
+    if: >-
+      github.event.issue.pull_request
+      && startsWith(github.event.comment.body, '/prepare-downstream-fixes')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+
+    steps:
+      - name: Check commenter permissions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          set -euo pipefail
+          permission=$(gh api \
+            "repos/${{ github.repository }}/collaborators/$COMMENTER/permission" \
+            --jq '.permission')
+
+          if [[ "$permission" != "admin" && "$permission" != "write" ]]; then
+            echo "::error::User $COMMENTER has '$permission' permission. Write or admin required."
+            exit 1
+          fi
+
+      - name: React with eyes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api \
+            repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content='eyes' \
+            --silent
+
+      - name: Get PR details
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          gh pr view "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --json headRefOid,isCrossRepository,title,url \
+            > /tmp/source-pr.json
+
+          if [[ "$(jq -r '.isCrossRepository' /tmp/source-pr.json)" == "true" ]]; then
+            echo "::error::Fork PRs are not supported. Push the branch to this repository and open an internal PR."
+            exit 1
+          fi
+
+      - name: Checkout orchestrator
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Map changed files to affected workflows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA=$(jq -r '.headRefOid' /tmp/source-pr.json)
+          changed_paths=$(gh pr diff "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --name-only)
+
+          changed_workflows=$(grep '^\.github/workflows/' <<<"$changed_paths" | xargs -r -I{} basename "{}" || true)
+          changed_actions=$(grep -oP '^\.github/actions/\K[^/]+' <<<"$changed_paths" | sort -u || true)
+          consumer_workflows=""
+          if [[ -n "$changed_actions" ]]; then
+            while IFS= read -r action; do
+              [[ -z "$action" ]] && continue
+              consumers=$(git grep -lE "actions/${action}([@\"'[:space:]]|\$)" "$HEAD_SHA" -- '.github/workflows/*.yml' \
+                | cut -d: -f2- \
+                | xargs -r -I{} basename "{}" || true)
+              consumer_workflows+="$consumers"$'\n'
+            done <<<"$changed_actions"
+          fi
+
+          printf '%s\n%s\n' "$changed_workflows" "$consumer_workflows" \
+            | sed '/^$/d' \
+            | sort -u \
+            > /tmp/changed-workflows.txt
+
+      - name: Prepare downstream tasks
+        id: prepare
+        continue-on-error: true
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          DOWNSTREAM_ISSUES_TOKEN: ${{ secrets['DOWNSTREAM_ISSUES_TOKEN'] }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$COMMENT_BODY" > /tmp/command.txt
+          printf '%s' "$DOWNSTREAM_MAP" > /tmp/downstream-map.json
+
+          python3 .github/scripts/prepare_downstream_fixes.py \
+            --source-repo "${{ github.repository }}" \
+            --pr-number "${{ github.event.issue.number }}" \
+            --pr-title "$(jq -r '.title' /tmp/source-pr.json)" \
+            --head-sha "$(jq -r '.headRefOid' /tmp/source-pr.json)" \
+            --source-pr-url "$(jq -r '.url' /tmp/source-pr.json)" \
+            --command-url "${{ github.event.comment.html_url }}" \
+            --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --comment-file /tmp/command.txt \
+            --changed-workflows-file /tmp/changed-workflows.txt \
+            --downstream-map-file /tmp/downstream-map.json \
+            --result-file /tmp/downstream-fixes.json \
+            --summary-file /tmp/downstream-fixes.md
+
+      - name: Post audit summary
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          if [[ ! -f /tmp/downstream-fixes.md ]]; then
+            cat <<'EOF' > /tmp/downstream-fixes.md
+          <!-- downstream-fixes-summary -->
+          **Downstream fix preparation failed before downstream tasks could be created.**
+
+          Open the linked workflow run from this comment's timeline for the failing step.
+          EOF
+          fi
+
+          jq -Rs '{body: .}' < /tmp/downstream-fixes.md \
+            | gh api --method POST \
+              "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+              --input - --silent
+
+      - name: Fail on incomplete preparation
+        if: steps.prepare.outcome == 'failure'
+        run: |
+          echo "::error::One or more downstream tasks could not be prepared. See the audit summary on the source PR."
+          exit 1
 
   test-downstream:
     name: Test Downstream Repos
