@@ -43,7 +43,8 @@ function Invoke-DetectorCase {
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][AllowEmptyString()][string]$ChangedFiles,
         [Parameter(Mandatory)][string]$ExpectedExempt,
-        [string]$Patterns = $defaultPatterns
+        [string]$Patterns = $defaultPatterns,
+        [AllowNull()][string]$RepositoryPatterns
     )
 
     $caseDirectoryName = $Name -replace '[^A-Za-z0-9]', '_'
@@ -51,14 +52,37 @@ function Invoke-DetectorCase {
     New-Item -Path $caseDirectory -ItemType Directory -Force | Out-Null
     $outputFile = Join-Path -Path $caseDirectory -ChildPath 'outputs.txt'
 
+    if ($null -ne $RepositoryPatterns) {
+        $githubDirectory = Join-Path -Path $caseDirectory -ChildPath '.github'
+        New-Item -Path $githubDirectory -ItemType Directory -Force | Out-Null
+        Set-Content -Path (Join-Path -Path $githubDirectory -ChildPath 'exempt-change-patterns.txt') -Value $RepositoryPatterns -NoNewline
+    }
+
     $env:CHANGED_FILES = $ChangedFiles
     $env:PATTERNS = $Patterns
     $env:GITHUB_OUTPUT = $outputFile
+    $env:GITHUB_WORKSPACE = $caseDirectory
 
     & (Join-Path -Path $actionDirectory -ChildPath 'exempt-change-detector.ps1') | Out-Null
 
     $exempt = Get-OutputValue -Name 'exempt' -Path $outputFile
     Assert-Equal -Actual $exempt -Expected $ExpectedExempt -Label "${Name} exempt"
+}
+
+function Invoke-DetectorFailureCase {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$RepositoryPatterns
+    )
+
+    try {
+        Invoke-DetectorCase -Name $Name -ChangedFiles 'tools/LocalHarness/Program.cs' -ExpectedExempt 'true' -RepositoryPatterns $RepositoryPatterns
+        throw "${Name}: expected detector to fail."
+    } catch {
+        if ($_.Exception.Message -eq "${Name}: expected detector to fail.") {
+            throw
+        }
+    }
 }
 
 try {
@@ -76,6 +100,14 @@ try {
     Invoke-DetectorCase -Name '12 test file at repo root not matched by folder pattern' -ChangedFiles "FooTests.cs" -ExpectedExempt 'false'
     Invoke-DetectorCase -Name '13 non-test cs under tests-like name' -ChangedFiles "src/Testing/Foo.cs" -ExpectedExempt 'false'
     Invoke-DetectorCase -Name '14 docs not exempt by default' -ChangedFiles "README.md" -ExpectedExempt 'false'
+    Invoke-DetectorCase -Name '15 repository pattern adds local tool' -ChangedFiles "tools/LocalHarness/Program.cs" -ExpectedExempt 'true' -RepositoryPatterns 'tools/LocalHarness/**'
+    Invoke-DetectorCase -Name '16 repository pattern preserves defaults' -ChangedFiles ".github/workflows/ci.yml`ntools/LocalHarness/Program.cs" -ExpectedExempt 'true' -RepositoryPatterns 'tools/LocalHarness/**'
+    Invoke-DetectorCase -Name '17 repository pattern mixed with source' -ChangedFiles "tools/LocalHarness/Program.cs`nsrc/MyProject/Foo.cs" -ExpectedExempt 'false' -RepositoryPatterns 'tools/LocalHarness/**'
+    Invoke-DetectorCase -Name '18 repository comments and CRLF' -ChangedFiles "tools/LocalHarness/Program.cs" -ExpectedExempt 'true' -RepositoryPatterns "# Local-only tooling`r`n`r`n  tools/LocalHarness/**  `r`n"
+    Invoke-DetectorCase -Name '19 empty repository pattern file' -ChangedFiles "src/MyProject/Foo.cs" -ExpectedExempt 'false' -RepositoryPatterns ''
+    Invoke-DetectorFailureCase -Name '20 repository-wide pattern rejected' -RepositoryPatterns '**'
+    Invoke-DetectorFailureCase -Name '21 parent traversal rejected' -RepositoryPatterns '../tools/**'
+    Invoke-DetectorFailureCase -Name '22 negated pattern rejected' -RepositoryPatterns '!src/**'
 
     Write-Output 'All exempt-change-detector cases passed.'
 } finally {

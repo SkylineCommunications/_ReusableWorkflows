@@ -1,8 +1,9 @@
 name: Exempt Change Detector
 description: >
   Classifies a pull request as an "exempt change" when every changed file matches one of the
-  configured glob patterns (by default GitHub configuration and unit-test projects). Exempt PRs
-  are allowed to omit the task id and can have a predefined RN auto-added by the caller workflow.
+  configured glob patterns (by default GitHub configuration and unit-test projects), including
+  repository-specific patterns from .github/exempt-change-patterns.txt. Exempt PRs are allowed to
+  omit the task id and can have a predefined RN auto-added by the caller workflow.
 
 inputs:
   changed-files:

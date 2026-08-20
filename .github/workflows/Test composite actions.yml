@@ -32,6 +32,39 @@ jobs:
       - name: Confirm pass
         run: echo "guard-trigger passed on event '${{ github.event_name }}'"
 
+  exempt-change-detector:
+    name: exempt-change-detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure repository-specific exemption
+        shell: bash
+        run: printf '%s\n' '# Local-only tooling' 'tools/LocalHarness/**' > .github/exempt-change-patterns.txt
+
+      - name: Invoke composite for repository-specific path
+        id: local-tool
+        uses: ./.github/actions/exempt-change-detector
+        with:
+          changed-files: tools/LocalHarness/Program.cs
+
+      - name: Invoke composite for mixed production change
+        id: mixed
+        uses: ./.github/actions/exempt-change-detector
+        with:
+          changed-files: |
+            tools/LocalHarness/Program.cs
+            src/Product/Program.cs
+
+      - name: Assert classifications
+        shell: bash
+        env:
+          LOCAL_TOOL_EXEMPT: ${{ steps.local-tool.outputs.exempt }}
+          MIXED_EXEMPT: ${{ steps.mixed.outputs.exempt }}
+        run: |
+          test "$LOCAL_TOOL_EXEMPT" = "true"
+          test "$MIXED_EXEMPT" = "false"
+
   is-skyline-managed-org:
     name: is-skyline-managed-org
     runs-on: ubuntu-latest

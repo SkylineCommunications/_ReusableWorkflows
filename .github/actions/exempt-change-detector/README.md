@@ -19,6 +19,26 @@ and mixed/source file changes remain actionable; an explicitly requested prerele
 | `changed-files` | yes | Newline-separated list of file paths changed in the pull request. |
 | `patterns` | no | Newline-separated glob patterns. Defaults to `.github/**`, `**/*Tests/**`, `**/*.Tests/**`. |
 
+## Repository patterns
+
+A repository can add exempt paths in `.github/exempt-change-patterns.txt`, with one glob per line:
+
+```text
+# Local-only development tools
+tools/LocalHarness/**
+```
+
+The file is optional. Its patterns augment rather than replace the `patterns` input. Blank lines and
+lines whose first non-whitespace character is `#` are ignored.
+
+The action reads this file from `GITHUB_WORKSPACE`, so the caller must check out the repository before
+invoking it. For pull-request governance, check out the trusted base revision rather than the PR head;
+otherwise a PR could widen its own exemptions. A new repository pattern then takes effect after the
+configuration change is merged.
+
+Repository patterns must be relative, use `/` as the separator, and cannot use negation, `.` or `..`
+segments, or the repository-wide `**` pattern. Invalid configuration fails the action.
+
 ## Outputs
 
 | Output | Description |
@@ -44,6 +64,11 @@ and mixed/source file changes remain actionable; an explicitly requested prerele
 ## Usage
 
 ```yaml
+- name: Check out trusted repository configuration
+  uses: actions/checkout@v7
+  with:
+    ref: ${{ github.event.pull_request.base.sha }}
+
 - name: Collect changed files
   id: changed
   shell: bash
