@@ -92,7 +92,6 @@ jobs:
     permissions:
       contents: write
       id-token: write
-      actions: write
     outputs:
       catalog-links: ${{ steps.publish_catalog_links.outputs.catalog-links }}
     steps:
