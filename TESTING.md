@@ -49,7 +49,7 @@ flowchart TD
 | `BOOST-DailyRegression-Automation-SDK` / `-Legacy` | Automation Master — frozen (deprecating) | run conclusion only |
 | `BOOST-DailyRegression-InternalNuGet` | Internal NuGet wrapper → Master Workflow; Wrapper Migration (dry run) | `SignedNugetPackages` artifact; on tags `Push NuGet Packages` job; migration rewrite/idempotency matches repo state |
 | `BOOST-DailyRegression-Skyline.DataMiner.Sdk` | App Packages wrapper → Master Workflow; Update Catalog Details | `SignedDataMinerPackages`; on tags `Upload to Catalog` job; `Catalog Details` artifact contains manifests |
-| `BOOST-DailyRegression-SharedLibrary` | Master Workflow direct (modern inputs), ProjectReference build order, signing dedup | `SignedDataMinerPackages`; on tags catalog upload |
+| `BOOST-DailyRegression-SharedLibrary` | Master Workflow direct (modern inputs), ProjectReference build order, signing dedup | `SignedDataMinerPackages`; signing dedup summary present with duplicates > 0 (Azure 429 guard); on tags catalog upload |
 | `BOOST-DailyRegression-MasterWorkflow` | Master Workflow feature matrix: NuGet path, multi-package + `override-catalog-identifiers`, `.slnf` filtering, `dxm-projects-ubuntu` (.deb), WiX partition, `pull_request` event (synthetic PR), no-filter negative | deep assertions incl. nupkg names (filter honored), manifest ids inside built packages (overrides applied), `.deb` presence |
 | `BOOST-DailyRegression-NegativePaths` | Expected failures: broken build, invalid catalog mapping, validator criticals, missing validator results, `pull_request_target` rejection; plus the connector `solution-filter-name` positive control | run must fail **at the expected job** (`expected-failed-job` in run-and-monitor) |
 

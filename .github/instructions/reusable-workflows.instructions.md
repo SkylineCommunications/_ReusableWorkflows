@@ -63,6 +63,7 @@ The downstream test battery ([TESTING.md](../../TESTING.md)) asserts on **concre
 
 - Artifact names: `SignedNugetPackages`, `SignedDataMinerPackages`, `SignedInstallers`, `debian-package`, `Connector Package`, `validatorResults`, `SBOM`, `Catalog Details`.
 - Job display names: `Discover Project Types`, `Push NuGet Packages`, `Upload to Catalog`, `Package & Sign (Windows)`, `SDK Skyline Quality Gate`, `Artifact Registration and Upload`, `Validate Trigger`, `Migrate wrapper to Master Workflow` (and its step `Create migration PR (dry run)`).
+- Log lines: the `sign-assemblies` summary `N unique file content(s) to sign, M duplicate(s) to copy afterwards` (SharedLibrary's verify asserts M > 0 to guard the Azure 429 deduplication from PR #153).
 - Failure semantics relied on by NegativePaths: multi-solution discovery error, apply-catalog-identifiers rejection, validator quality-gate initial-version rule and missing-results fail-closed path, guard-trigger rejection of `pull_request_target`.
 
 When adding a new input or feature to a master workflow, add a scenario for it (see "Adding coverage" in [TESTING.md](../../TESTING.md)) — a feature without a downstream scenario is unprotected against regressions.
