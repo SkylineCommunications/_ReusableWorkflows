@@ -6,6 +6,11 @@ if ([string]::IsNullOrWhiteSpace($env:GITHUB_OUTPUT)) {
 
 $changedFilesRaw = if ($null -ne $env:CHANGED_FILES) { $env:CHANGED_FILES } else { '' }
 $patternsRaw = if ($null -ne $env:PATTERNS) { $env:PATTERNS } else { '' }
+$repositoryPatternsPath = if ([string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
+    $null
+} else {
+    Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath '.github/exempt-change-patterns.txt'
+}
 
 function ConvertTo-Lines {
     param([AllowNull()][string]$Value)
@@ -63,7 +68,50 @@ function Convert-GlobToRegex {
     return $builder.ToString()
 }
 
-$patterns = ConvertTo-Lines -Value $patternsRaw
+function Get-RepositoryPatterns {
+    param([AllowNull()][string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path)) {
+        return @()
+    }
+
+    $item = Get-Item -LiteralPath $Path
+    if ($item.PSIsContainer) {
+        throw "Repository exempt-pattern configuration must be a file: ${Path}"
+    }
+
+    if ($item.Length -gt 64KB) {
+        throw "Repository exempt-pattern configuration exceeds 64 KiB: ${Path}"
+    }
+
+    $patterns = @(
+        Get-Content -LiteralPath $Path |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and -not $_.StartsWith('#') }
+    )
+
+    if ($patterns.Count -gt 256) {
+        throw 'Repository exempt-pattern configuration contains more than 256 patterns.'
+    }
+
+    foreach ($pattern in $patterns) {
+        if ($pattern.Length -gt 1024) {
+            throw 'Repository exempt-pattern configuration contains a pattern longer than 1024 characters.'
+        }
+
+        $dotSegments = @($pattern -split '/' | Where-Object { $_ -eq '.' -or $_ -eq '..' })
+        if ($pattern -eq '**' -or $pattern.StartsWith('!') -or $pattern.StartsWith('/') -or
+            $pattern.Contains('\') -or $pattern -match '^[A-Za-z]:' -or
+            $dotSegments.Count -gt 0) {
+            throw "Invalid repository exempt pattern '${pattern}'. Patterns must be relative globs and cannot match the entire repository."
+        }
+    }
+
+    return $patterns
+}
+
+$repositoryPatterns = Get-RepositoryPatterns -Path $repositoryPatternsPath
+$patterns = @((ConvertTo-Lines -Value $patternsRaw) + $repositoryPatterns)
 if ($patterns.Count -eq 0) {
     throw 'At least one exempt pattern must be provided via the patterns input.'
 }

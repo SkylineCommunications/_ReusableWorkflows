@@ -57,6 +57,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `run-unit-tests` | Runs unit tests for all test projects in a solution. | [run-unit-tests/README.md](run-unit-tests/README.md) |
 | `unit-tests` | Wrapper combining detect + run unit test actions. | [unit-tests/README.md](unit-tests/README.md) |
 | `references-parser` | Parses and validates the mandatory PR `References:` line and renders the sticky-comment summary. | [references-parser/README.md](references-parser/README.md) |
+| `exempt-change-detector` | Classifies changes against shared and repository-specific exempt path globs. | [exempt-change-detector/README.md](exempt-change-detector/README.md) |
 | `quality-gate-summary` | Aggregates unit-test / SonarCloud / Validator outcomes, renders a Job Summary + sticky PR comment, and fails the job on any failed sub-gate. | [quality-gate-summary/README.md](quality-gate-summary/README.md) |
 
 ## Referencing from a reusable workflow in this repo
