@@ -17,6 +17,7 @@ from typing import Any
 
 COMMAND = "/prepare-downstream-fixes"
 ASSIGNEE = "copilot-swe-agent[bot]"
+COPILOT_ASSIGNEE_LOGINS = {"copilot", "copilot-swe-agent", ASSIGNEE.casefold()}
 LABEL = "downstream-fix"
 MAX_CRITERIA_LENGTH = 16_384
 
@@ -206,7 +207,16 @@ def assign_copilot(
         expected=(201,),
     )
     issue = client.request("GET", f"/repos/{repository}/issues/{issue_number}")
-    return ASSIGNEE in {assignee["login"] for assignee in issue.get("assignees", [])}
+    return is_copilot_assigned(issue)
+
+
+def is_copilot_assigned(issue: dict[str, Any]) -> bool:
+    assignees = {
+        assignee["login"].casefold()
+        for assignee in issue.get("assignees", [])
+        if isinstance(assignee.get("login"), str)
+    }
+    return not assignees.isdisjoint(COPILOT_ASSIGNEE_LOGINS)
 
 
 def prepare_target(
@@ -242,8 +252,7 @@ def prepare_target(
             result["status"] = "reused"
 
         result["issue_url"] = issue["html_url"]
-        assignees = {assignee["login"] for assignee in issue.get("assignees", [])}
-        if ASSIGNEE in assignees:
+        if is_copilot_assigned(issue):
             result["copilot"] = "already-assigned"
         elif assign_copilot(client, repository, issue["number"]):
             result["copilot"] = "assigned"

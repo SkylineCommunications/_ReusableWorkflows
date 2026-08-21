@@ -10,6 +10,7 @@ from prepare_downstream_fixes import (  # noqa: E402
     OrchestrationError,
     SourcePullRequest,
     assign_copilot,
+    is_copilot_assigned,
     issue_marker,
     parse_command,
     render_issue_body,
@@ -25,7 +26,7 @@ class RecordingClient:
     def request(self, method, path, payload=None, expected=(200,)):
         self.requests.append((method, path, payload, expected))
         if method == "GET":
-            return {"assignees": [{"login": "copilot-swe-agent[bot]"}]}
+            return {"assignees": [{"login": "Copilot"}]}
         return {}
 
 
@@ -131,6 +132,18 @@ class PrepareDownstreamFixesTests(unittest.TestCase):
                 "custom_agent": "",
                 "model": "",
             },
+        )
+
+    def test_copilot_assignment_accepts_github_normalized_login(self):
+        self.assertTrue(
+            is_copilot_assigned(
+                {
+                    "assignees": [
+                        {"login": "SkylineCICD"},
+                        {"login": "Copilot"},
+                    ]
+                }
+            )
         )
 
     def test_summary_reports_successes_and_failures(self):
