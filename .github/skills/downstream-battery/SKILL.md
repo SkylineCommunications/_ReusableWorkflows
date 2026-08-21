@@ -63,10 +63,12 @@ production refs, validate the receiver scenario, and link the source PR.
 
 Treat the command comment as human approval for task creation and Copilot
 assignment. Never infer acceptance criteria silently, accept repository names
-from comment input, execute PR content, broaden the map, or use a token with
-contents/workflow permissions. The dedicated `DOWNSTREAM_ISSUES_TOKEN` is
-limited to Issues read/write on mapped repositories. Repeated commands reuse
-the source marker; closed tasks require manual review rather than reopening.
+from comment input, execute PR content, or broaden the map. The dedicated
+`DOWNSTREAM_ISSUES_TOKEN` must be a user-to-server token scoped only to mapped
+repositories. Copilot assignment requires metadata read plus Actions, Contents,
+Issues, and Pull requests read/write; GitHub App installation tokens are not
+supported. Repeated commands reuse the source marker; closed tasks require
+manual review rather than reopening.
 
 ## Diagnosis path for a red battery
 

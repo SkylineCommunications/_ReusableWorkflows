@@ -92,11 +92,12 @@ PR. A partial failure leaves successfully created tasks intact and fails the
 orchestration run.
 
 Configure `DOWNSTREAM_ISSUES_TOKEN` in `_ReusableWorkflows` before enabling the
-command. Prefer a GitHub App installation token scoped only to the repositories
-in `DOWNSTREAM_MAP`, with **Issues: read and write** and metadata read. A
-fine-grained user token with the same repository and permission limits is the
-fallback. Do not reuse `DOWNSTREAM_PAT`: task preparation does not need access
-to contents, actions, workflows, administration, or pull requests.
+command. Copilot issue assignment requires a user-to-server token. Use a
+fine-grained user PAT scoped only to the repositories in `DOWNSTREAM_MAP`, with
+metadata read and **Actions, Contents, Issues, and Pull requests: read and
+write**. A GitHub App installation token is not supported for this operation.
+Keep this credential separate from `DOWNSTREAM_PAT` and do not grant
+administration access.
 
 Copilot coding agent must be enabled and assignable in every target repository.
 If assignment is unavailable, the downstream issue remains as an auditable

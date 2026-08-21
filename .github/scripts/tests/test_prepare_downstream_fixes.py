@@ -9,12 +9,24 @@ from prepare_downstream_fixes import (  # noqa: E402
     COMMAND,
     OrchestrationError,
     SourcePullRequest,
+    assign_copilot,
     issue_marker,
     parse_command,
     render_issue_body,
     render_summary,
     select_targets,
 )
+
+
+class RecordingClient:
+    def __init__(self):
+        self.requests = []
+
+    def request(self, method, path, payload=None, expected=(200,)):
+        self.requests.append((method, path, payload, expected))
+        if method == "GET":
+            return {"assignees": [{"login": "copilot-swe-agent[bot]"}]}
+        return {}
 
 
 class PrepareDownstreamFixesTests(unittest.TestCase):
@@ -90,6 +102,36 @@ class PrepareDownstreamFixesTests(unittest.TestCase):
         self.assertIn("- Consume `catalog-links`", body)
         self.assertIn("never push directly to the default branch", body)
         self.assertIn("Do not merge the pull request automatically", body)
+
+    def test_assign_copilot_uses_agent_assignment_contract(self):
+        client = RecordingClient()
+
+        assigned = assign_copilot(
+            client,
+            "SkylineCommunications/BOOST-DailyRegression-One",
+            42,
+        )
+
+        self.assertTrue(assigned)
+        self.assertEqual(len(client.requests), 2)
+        method, path, payload, expected = client.requests[0]
+        self.assertEqual(method, "POST")
+        self.assertEqual(
+            path,
+            "/repos/SkylineCommunications/BOOST-DailyRegression-One/issues/42/assignees",
+        )
+        self.assertEqual(expected, (201,))
+        self.assertEqual(payload["assignees"], ["copilot-swe-agent[bot]"])
+        self.assertEqual(
+            payload["agent_assignment"],
+            {
+                "target_repo": "SkylineCommunications/BOOST-DailyRegression-One",
+                "base_branch": "main",
+                "custom_instructions": "",
+                "custom_agent": "",
+                "model": "",
+            },
+        )
 
     def test_summary_reports_successes_and_failures(self):
         summary = render_summary(
