@@ -190,16 +190,19 @@ def find_existing_issue(
 def assign_copilot(
     client: GitHubClient, repository: str, issue_number: int
 ) -> bool:
-    encoded_assignee = urllib.parse.quote(ASSIGNEE, safe="")
-    client.request(
-        "GET",
-        f"/repos/{repository}/assignees/{encoded_assignee}",
-        expected=(204,),
-    )
     client.request(
         "POST",
         f"/repos/{repository}/issues/{issue_number}/assignees",
-        {"assignees": [ASSIGNEE]},
+        {
+            "assignees": [ASSIGNEE],
+            "agent_assignment": {
+                "target_repo": repository,
+                "base_branch": "main",
+                "custom_instructions": "",
+                "custom_agent": "",
+                "model": "",
+            },
+        },
         expected=(201,),
     )
     issue = client.request("GET", f"/repos/{repository}/issues/{issue_number}")
