@@ -25,6 +25,10 @@ on:
     secrets:
       api-key:
         required: false
+    outputs:
+      catalog-links:
+        description: Markdown links to updated DataMiner Catalog item(s).
+        value: ${{ jobs.update_catalog_details.outputs.catalog-links }}
 
 jobs:
 
@@ -88,7 +92,8 @@ jobs:
     permissions:
       contents: write
       id-token: write
-      actions: write
+    outputs:
+      catalog-links: ${{ steps.publish_catalog_links.outputs.catalog-links }}
     steps:
         - name: Azure Login
           uses: azure/login@v3
@@ -244,4 +249,52 @@ jobs:
                 --path-to-catalog-yml "${{ github.workspace }}/$catalogFile" `
                 --dm-catalog-token "${{ env.DATAMINER_TOKEN }}" `
                 --debug "${{ inputs.debug }}"
+            }
+
+        - name: Publish Catalog Links
+          id: publish_catalog_links
+          if: steps.detect_catalog_files.outputs.catalog-files != ''
+          shell: pwsh
+          run: |
+            $catalogFiles = @'
+            ${{ steps.detect_catalog_files.outputs.catalog-files }}
+            '@ -split "`r?`n" |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { $_ -ne "" }
+
+            $links = New-Object System.Collections.Generic.List[string]
+
+            foreach ($catalogFile in $catalogFiles) {
+              $fullPath = "${{ github.workspace }}/$catalogFile"
+
+              $catalogId = (yq eval '.id // ""' $fullPath) | Out-String | ForEach-Object { $_.Trim() }
+              $title = (yq eval '.title // ""' $fullPath) | Out-String | ForEach-Object { $_.Trim() }
+
+              if ([string]::IsNullOrWhiteSpace($catalogId)) {
+                Write-Host "::warning::Could not find a catalog ID in $catalogFile, skipping link generation."
+                continue
+              }
+
+              $catalogDir = Split-Path $catalogFile -Parent
+              if (-not [string]::IsNullOrWhiteSpace($catalogDir) -and (Split-Path $catalogDir -Leaf) -eq "CatalogInformation") {
+                $catalogDir = Split-Path $catalogDir -Parent
+              }
+              $projectName = if ([string]::IsNullOrWhiteSpace($catalogDir)) { "${{ github.event.repository.name }}" } else { Split-Path $catalogDir -Leaf }
+
+              $displayName = if ([string]::IsNullOrWhiteSpace($title)) { $projectName } else { $title }
+              $url = "https://catalog.dataminer.services/details/$catalogId"
+
+              $links.Add("- [$displayName | Catalog | dataminer.services]($url) ``Project[$projectName]``")
+            }
+
+            if ($links.Count -gt 0) {
+              "## :white_check_mark: Updated Catalog Item(s)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+              $links | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+              echo "catalog-links<<EOF" >> $env:GITHUB_OUTPUT
+              $links | ForEach-Object { echo $_ >> $env:GITHUB_OUTPUT }
+              echo "EOF" >> $env:GITHUB_OUTPUT
+            }
+            else {
+              Write-Host "::warning::No catalog IDs could be resolved; no links published."
             }
