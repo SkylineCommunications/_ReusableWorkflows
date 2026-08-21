@@ -112,7 +112,7 @@ jobs:
     permissions:
       contents: write
       issues: write
-      pull-requests: read
+      pull-requests: write
 
     steps:
       - name: Check commenter permissions
@@ -239,7 +239,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      pull-requests: write
 
     steps:
       - name: Check commenter permissions
