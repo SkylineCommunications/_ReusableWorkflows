@@ -82,7 +82,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@test-downstream
 
   check_oidc:
     name: Check OIDC
@@ -111,7 +111,7 @@ jobs:
         shell: bash
 
       - id: resolve
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@test-downstream
         with:
           client-id: ${{ inputs.oidc-client-id }}
           tenant-id: ${{ inputs.oidc-tenant-id }}
@@ -227,7 +227,7 @@ jobs:
     steps:
       - name: Determine version
         id: determine-version
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/determine-version@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/determine-version@test-downstream
         with:
           ref-type: ${{ github.ref_type }}
           ref-name: ${{ github.ref_name }}
@@ -259,7 +259,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -282,7 +282,7 @@ jobs:
 
       - name: Set repo type
         if: steps.map.outputs.repo-types != ''
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/set-repo-type@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/set-repo-type@test-downstream
         with:
           repo-types: ${{ steps.map.outputs.repo-types }}
           token: ${{ env.REUSABLE_WORKFLOWS_TOKEN }}
@@ -329,7 +329,7 @@ jobs:
 
       - parallel:
           - name: Load secrets
-            uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+            uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
             with:
               use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
               secret-names: |
@@ -350,7 +350,7 @@ jobs:
               packages: mono-complete
 
       - name: Validate inputs
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@test-downstream
         with:
           sonarcloud-project-name: ${{ inputs.sonarcloud-project-name }}
           sonarcloud-token: ${{ env.SONAR_TOKEN }}
@@ -366,7 +366,7 @@ jobs:
       # (no Key Vault) fall back to just their own organization's feed.
       - name: Setup Skyline NuGet sources
         if: needs.check_oidc.outputs.is-skyline-managed == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@test-downstream
         with:
           skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
           skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
@@ -374,7 +374,7 @@ jobs:
 
       - name: Setup local GitHub NuGet source
         if: needs.check_oidc.outputs.is-skyline-managed != 'true' || needs.check_oidc.outputs.is-fork == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@test-downstream
         with:
           organization: ${{ github.repository_owner }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -410,13 +410,13 @@ jobs:
 
       - name: Remove WiX projects (not buildable in cross-platform CI)
         if: needs.discover_projects.outputs.has-wix-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/remove-wix-projects@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/remove-wix-projects@test-downstream
         with:
           solution-path: ${{ needs.discover_projects.outputs.solution-path }}
 
       - name: Update msbuild-sdks in global.json
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@test-downstream
 
       - name: Update Skyline.DataMiner.Core.AppPackageInstaller
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
@@ -435,13 +435,13 @@ jobs:
         shell: pwsh
 
       - name: Apply catalog identifiers
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@test-downstream
         with:
           mappings: ${{ inputs.override-catalog-identifiers }}
 
       - name: Apply source_code_url to manifest
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@test-downstream
         with:
           repository: ${{ github.repository }}
 
@@ -468,7 +468,7 @@ jobs:
       - name: Get SonarCloud Status
         if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true'
         id: get-sonarcloud-status
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@test-downstream
         with:
           project-key: ${{ inputs.sonarcloud-project-name }}
           branch: ${{ github.ref_name }}
@@ -554,7 +554,7 @@ jobs:
       # ──────────────────────────────────────────────────────────────
       - name: Unit Tests
         id: unit-tests
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/unit-tests@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/unit-tests@test-downstream
         with:
           solution-path: ${{ needs.discover_projects.outputs.solution-path }}
           configuration: ${{ inputs.configuration }}
@@ -580,7 +580,7 @@ jobs:
       - name: Quality Gate
         id: quality-step
         if: always()
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@test-downstream
         with:
           unit-tests-outcome: ${{ steps.unit-tests.outcome }}
           sonar-outcome: ${{ inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true' && steps.sonarcloud-quality-gate-check.outcome || '' }}
@@ -612,7 +612,7 @@ jobs:
             uses: actions/checkout@v7
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -624,7 +624,7 @@ jobs:
 
       - name: Setup Skyline NuGet sources
         if: needs.check_oidc.outputs.is-skyline-managed == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@test-downstream
         with:
           skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
           skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
@@ -632,7 +632,7 @@ jobs:
 
       - name: Setup local GitHub NuGet source
         if: needs.check_oidc.outputs.is-skyline-managed != 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@test-downstream
         with:
           organization: ${{ github.repository_owner }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -644,7 +644,7 @@ jobs:
 
       - name: Build Debian packages
         id: package-debian
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/package-debian@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/package-debian@test-downstream
         with:
           projects: ${{ inputs.dxm-projects-ubuntu }}
           version: ${{ needs.determine_version.outputs.version }}
@@ -704,7 +704,7 @@ jobs:
               fetch-depth: 0
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -723,7 +723,7 @@ jobs:
 
       - name: Setup Skyline NuGet sources
         if: needs.check_oidc.outputs.is-skyline-managed == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@test-downstream
         with:
           skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
           skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
@@ -731,7 +731,7 @@ jobs:
 
       - name: Setup local GitHub NuGet source
         if: needs.check_oidc.outputs.is-skyline-managed != 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@test-downstream
         with:
           organization: ${{ github.repository_owner }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -759,7 +759,7 @@ jobs:
 
       - name: Update msbuild-sdks in global.json
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@test-downstream
 
       - name: Update Skyline.DataMiner.Core.AppPackageInstaller
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
@@ -769,19 +769,19 @@ jobs:
         shell: bash
 
       - name: Apply catalog identifiers
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@test-downstream
         with:
           mappings: ${{ inputs.override-catalog-identifiers }}
 
       - name: Apply source_code_url to manifest
         if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@test-downstream
         with:
           repository: ${{ github.repository }}
 
       - name: Partition solution projects
         id: partition
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/partition-solution-projects@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/partition-solution-projects@test-downstream
         with:
           solution-path: ${{ needs.discover_projects.outputs.solution-path }}
 
@@ -838,7 +838,7 @@ jobs:
           needs.check_oidc.outputs.use-oidc == 'true' &&
           steps.partition.outputs.remaining-count != '0' &&
           (steps.partition.outputs.wix-count != '0' || steps.partition.outputs.dataminer-package-count != '0')
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sign-assemblies@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sign-assemblies@test-downstream
         env:
           AZURE_TENANT_ID: ${{ env.SIGNING_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ env.SIGNING_CLIENT_ID }}
@@ -1130,7 +1130,7 @@ jobs:
             uses: actions/checkout@v7
 
       - name: Load package feed secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -1139,7 +1139,7 @@ jobs:
             skylinecommunicationscore-github-token
 
       - name: Setup Skyline NuGet sources
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@test-downstream
         with:
           skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
           skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
@@ -1198,7 +1198,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load NuGet push secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -1274,7 +1274,7 @@ jobs:
               fetch-depth: 0
 
       - name: Load catalog upload secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
@@ -1326,7 +1326,7 @@ jobs:
               path: downloaded_artifacts
 
           - name: Update msbuild-sdks in global.json
-            uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@main
+            uses: SkylineCommunications/_ReusableWorkflows/.github/actions/update-global-json-sdks@test-downstream
 
       - name: Wait for version comment
         wait: findVersionComment

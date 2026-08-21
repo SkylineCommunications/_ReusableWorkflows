@@ -67,7 +67,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@test-downstream
 
   check_deprecated_item:
     name: Check deprecated items
@@ -121,7 +121,7 @@ jobs:
       is-skyline-managed: ${{ steps.resolve.outputs.is-skyline-managed }}
     steps:
       - id: resolve
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@test-downstream
         with:
           client-id: ${{ inputs.oidc-client-id }}
           tenant-id: ${{ inputs.oidc-tenant-id }}
@@ -245,14 +245,14 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
             reusable-workflows-token
 
       - name: Set repo type
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/set-repo-type@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/set-repo-type@test-downstream
         with:
           repo-types: Connector
           token: ${{ env.REUSABLE_WORKFLOWS_TOKEN }}

@@ -51,7 +51,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@test-downstream
 
   validate_skyline_quality_gate:
     name: SDK Skyline Quality Gate
@@ -83,7 +83,7 @@ jobs:
 
       - parallel:
           - name: Load secrets
-            uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+            uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
             with:
               use-oidc: ${{ inputs.use-oidc }}
               secret-names: |
@@ -127,7 +127,7 @@ jobs:
         shell: bash
 
       - name: Setup NuGet sources
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@test-downstream
         with:
           repository-owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -152,7 +152,7 @@ jobs:
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
         if: inputs.sonarCloudProjectName != ''
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/sonarcloud-status@test-downstream
         with:
           project-key: ${{ inputs.sonarCloudProjectName }}
           branch: ${{ github.ref_name }}
@@ -555,7 +555,7 @@ jobs:
       - name: Quality Gate
         id: quality-step
         if: always()
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/quality-gate-summary@test-downstream
         with:
           unit-tests-outcome: ${{ steps.unit-tests.outcome }}
           sonar-outcome: ${{ inputs.sonarCloudProjectName != '' && steps.sonarcloud-quality-gate-check.outcome || '' }}
@@ -620,7 +620,7 @@ jobs:
               persist-credentials: false
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ inputs.use-oidc }}
           secret-names: |
@@ -629,7 +629,7 @@ jobs:
             AZURE_TOKEN=${{ secrets.azureToken }}
 
       - name: Setup NuGet sources
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@test-downstream
         with:
           repository-owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -749,7 +749,7 @@ jobs:
             uses: actions/checkout@v7
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ inputs.use-oidc }}
           secret-names: |
@@ -790,7 +790,7 @@ jobs:
         shell: bash
 
       - name: Setup NuGet sources
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-nuget-sources@test-downstream
         with:
           repository-owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -876,7 +876,7 @@ jobs:
               fetch-depth: 0
 
       - name: Load secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ inputs.use-oidc }}
           secret-names: |
