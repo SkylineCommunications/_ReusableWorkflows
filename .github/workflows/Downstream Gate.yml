@@ -7,8 +7,8 @@ name: Downstream Gate
 #
 # Fork PRs: GITHUB_TOKEN is read-only there, so no status can be posted and
 # the required check stays "expected" — merge remains blocked until a
-# maintainer runs the battery (which rejects fork PRs by design). This is
-# intentional fail-closed behavior.
+# maintainer reviews the exact head and runs `/test <40-character-head-sha>`.
+# The trusted issue_comment workflow then posts the pending and final statuses.
 
 on:
   pull_request:
@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
 
           if [[ "$IS_FORK" == "true" ]]; then
-            echo "Fork PR: GITHUB_TOKEN cannot post statuses. The downstream-tests check stays 'expected' (merge blocked)."
+            echo "Fork PR: the read-only GITHUB_TOKEN cannot post statuses. After reviewing the exact head, run /test <40-character-head-sha>."
             exit 0
           fi
 

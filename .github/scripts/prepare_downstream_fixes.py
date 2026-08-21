@@ -30,7 +30,6 @@ class OrchestrationError(RuntimeError):
 class SourcePullRequest:
     repository: str
     number: int
-    title: str
     head_sha: str
     url: str
     command_url: str
@@ -130,7 +129,7 @@ def render_issue_body(
     return f"""{issue_marker(source)}
 # Downstream coverage for {source.repository}#{source.number}
 
-Update this repository's downstream battery coverage for [{source.title}]({source.url}).
+Update this repository's downstream battery coverage for [{source.repository}#{source.number}]({source.url}).
 
 ## Authorized request
 
@@ -296,7 +295,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-repo", required=True)
     parser.add_argument("--pr-number", type=int, required=True)
-    parser.add_argument("--pr-title", required=True)
     parser.add_argument("--head-sha", required=True)
     parser.add_argument("--source-pr-url", required=True)
     parser.add_argument("--command-url", required=True)
@@ -314,7 +312,6 @@ def main() -> int:
     source = SourcePullRequest(
         repository=args.source_repo,
         number=args.pr_number,
-        title=args.pr_title,
         head_sha=args.head_sha,
         url=args.source_pr_url,
         command_url=args.command_url,

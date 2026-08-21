@@ -35,7 +35,6 @@ class PrepareDownstreamFixesTests(unittest.TestCase):
         self.source = SourcePullRequest(
             repository="SkylineCommunications/_ReusableWorkflows",
             number=146,
-            title="Publish catalog item links",
             head_sha="abc123",
             url="https://github.com/SkylineCommunications/_ReusableWorkflows/pull/146",
             command_url="https://github.com/example/comment/1",
@@ -99,6 +98,7 @@ class PrepareDownstreamFixesTests(unittest.TestCase):
         )
 
         self.assertIn(issue_marker(self.source), body)
+        self.assertIn("[SkylineCommunications/_ReusableWorkflows#146]", body)
         self.assertIn("`abc123`", body)
         self.assertIn("- Consume `catalog-links`", body)
         self.assertIn("never push directly to the default branch", body)

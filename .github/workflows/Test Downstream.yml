@@ -10,18 +10,21 @@ concurrency:
   group: >-
     ${{ startsWith(github.event.comment.body, '/prepare-downstream-fixes')
         && format('downstream-fixes-pr-{0}', github.event.issue.number)
-        || (github.event.comment.body == '/prepare-test'
+        || ((github.event.comment.body == '/prepare-test'
+            || startsWith(github.event.comment.body, '/prepare-test '))
             && format('manual-test-ref-pr-{0}', github.event.issue.number)
             || 'test-downstream') }}
-  cancel-in-progress: ${{ github.event.comment.body == '/prepare-test' }}
+  cancel-in-progress: >-
+    ${{ github.event.comment.body == '/prepare-test'
+        || startsWith(github.event.comment.body, '/prepare-test ') }}
 
 # Commands (PR comments, write access required):
-#   /test      - run the battery for the repos affected by the PR's changes
-#   /test-all  - run the battery for every mapped repo
+#   /test [head-sha] - run affected repos; fork PRs require the reviewed SHA
+#   /test-all [head-sha] - run every mapped repo; fork PRs require the SHA
 #   /retest    - re-run only the repos that failed in the previous battery for
 #                this PR (successes carry over; requires an unchanged head SHA)
-#   /prepare-test - create/update a self-consistent test-pr-<number> tag for
-#                   manual testing without dispatching the battery
+#   /prepare-test [head-sha] - create/update a self-consistent test-pr-<number>
+#                   tag; fork PRs must supply the full reviewed head SHA
 #   /prepare-downstream-fixes - create an issue in each affected downstream
 #                   repo and assign Copilot; acceptance criteria are required
 #                   on the following lines
@@ -107,7 +110,10 @@ env:
 jobs:
   prepare-manual-test-ref:
     name: Prepare Manual Test Ref
-    if: github.event.issue.pull_request && github.event.comment.body == '/prepare-test'
+    if: >-
+      github.event.issue.pull_request
+      && (github.event.comment.body == '/prepare-test'
+          || startsWith(github.event.comment.body, '/prepare-test '))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -150,23 +156,39 @@ jobs:
             --repo ${{ github.repository }} \
             --json headRefOid,headRefName,isCrossRepository)
 
-          if [[ "$(jq -r '.isCrossRepository' <<<"$pr_json")" == "true" ]]; then
-            echo "::error::Fork PRs are not supported. Push the branch to this repository and open an internal PR."
-            exit 1
-          fi
-
           echo "head_sha=$(jq -r '.headRefOid' <<<"$pr_json")" >> "$GITHUB_OUTPUT"
           echo "head_ref=$(jq -r '.headRefName' <<<"$pr_json")" >> "$GITHUB_OUTPUT"
+          echo "is_cross_repository=$(jq -r '.isCrossRepository' <<<"$pr_json")" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.DOWNSTREAM_PAT }}
 
+      - name: Verify command and immutable PR head
+        id: verified
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          IS_CROSS_REPOSITORY: ${{ steps.pr-details.outputs.is_cross_repository }}
+          API_HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "+refs/pull/$PR_NUMBER/head:refs/remotes/pull/$PR_NUMBER/head"
+          fetched_sha=$(git rev-parse "refs/remotes/pull/$PR_NUMBER/head^{commit}")
+          python3 .github/scripts/validate_pr_command.py \
+            --comment-body "$COMMENT_BODY" \
+            --allowed-command /prepare-test \
+            --is-cross-repository "$IS_CROSS_REPOSITORY" \
+            --api-head-sha "$API_HEAD_SHA" \
+            --fetched-head-sha "$fetched_sha" \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Build and publish self-consistent manual test tag
         id: build-tag
         env:
-          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
@@ -177,7 +199,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git checkout -B "prepare-test-pr-$PR_NUMBER" "$HEAD_SHA"
 
-          python - <<'PY'
+          python3 -I - <<'PY'
           import os
           import pathlib
           import re
@@ -211,7 +233,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
-          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
           HEAD_REF: ${{ steps.pr-details.outputs.head_ref }}
           TEST_REF: ${{ steps.build-tag.outputs.test_ref }}
           TAG_SHA: ${{ steps.build-tag.outputs.tag_sha }}
@@ -267,6 +289,7 @@ jobs:
             --silent
 
       - name: Get PR details
+        id: pr-details
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
@@ -274,32 +297,52 @@ jobs:
           set -euo pipefail
           gh pr view "$PR_NUMBER" \
             --repo "${{ github.repository }}" \
-            --json headRefOid,isCrossRepository,title,url \
+            --json baseRefOid,headRefOid,url \
             > /tmp/source-pr.json
 
-          if [[ "$(jq -r '.isCrossRepository' /tmp/source-pr.json)" == "true" ]]; then
-            echo "::error::Fork PRs are not supported. Push the branch to this repository and open an internal PR."
-            exit 1
-          fi
+          echo "base_sha=$(jq -r '.baseRefOid' /tmp/source-pr.json)" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(jq -r '.headRefOid' /tmp/source-pr.json)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout orchestrator
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Map changed files to affected workflows
+      - name: Verify immutable PR head
+        id: verified
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
-          HEAD_SHA=$(jq -r '.headRefOid' /tmp/source-pr.json)
-          changed_paths=$(gh pr diff "$PR_NUMBER" \
-            --repo "${{ github.repository }}" \
-            --name-only)
+          git fetch --no-tags origin \
+            "+refs/pull/$PR_NUMBER/head:refs/remotes/pull/$PR_NUMBER/head"
+          fetched_sha=$(git rev-parse "refs/remotes/pull/$PR_NUMBER/head^{commit}")
+          if [[ ! "$API_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::API head SHA is not a full 40-character SHA"
+            exit 1
+          fi
+          if [[ "${API_HEAD_SHA,,}" != "${fetched_sha,,}" ]]; then
+            echo "::error::PR head moved while authorizing downstream fix preparation"
+            exit 1
+          fi
+          echo "head_sha=${API_HEAD_SHA,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Map changed files to affected workflows
+        env:
+          BASE_SHA: ${{ steps.pr-details.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::API base SHA is not a full 40-character SHA"
+            exit 1
+          fi
+          git cat-file -e "$BASE_SHA^{commit}"
+          changed_paths=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
 
           changed_workflows=$(grep '^\.github/workflows/' <<<"$changed_paths" | xargs -r -I{} basename "{}" || true)
-          changed_actions=$(grep -oP '^\.github/actions/\K[^/]+' <<<"$changed_paths" | sort -u || true)
+          changed_actions=$(grep -oP '^\.github/actions/\K[A-Za-z0-9._-]+(?=/)' <<<"$changed_paths" | sort -u || true)
           consumer_workflows=""
           if [[ -n "$changed_actions" ]]; then
             while IFS= read -r action; do
@@ -330,8 +373,7 @@ jobs:
           python3 .github/scripts/prepare_downstream_fixes.py \
             --source-repo "${{ github.repository }}" \
             --pr-number "${{ github.event.issue.number }}" \
-            --pr-title "$(jq -r '.title' /tmp/source-pr.json)" \
-            --head-sha "$(jq -r '.headRefOid' /tmp/source-pr.json)" \
+            --head-sha "${{ steps.verified.outputs.head_sha }}" \
             --source-pr-url "$(jq -r '.url' /tmp/source-pr.json)" \
             --command-url "${{ github.event.comment.html_url }}" \
             --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
@@ -373,7 +415,9 @@ jobs:
       github.event.issue.pull_request
       && (
         github.event.comment.body == '/test'
+        || startsWith(github.event.comment.body, '/test ')
         || github.event.comment.body == '/test-all'
+        || startsWith(github.event.comment.body, '/test-all ')
         || github.event.comment.body == '/retest'
       )
     runs-on: ubuntu-latest
@@ -428,31 +472,17 @@ jobs:
         run: |
           pr_json=$(gh pr view ${{ github.event.issue.number }} \
             --repo ${{ github.repository }} \
-            --json headRefOid,headRefName,isCrossRepository)
+            --json baseRefOid,headRefOid,headRefName,isCrossRepository)
 
-          if [[ "$(echo "$pr_json" | jq -r '.isCrossRepository')" == "true" ]]; then
-            echo "::error::Fork PRs are not supported by the downstream battery. Push the branch to this repository and open an internal PR."
-            exit 1
-          fi
-
+          base_sha=$(echo "$pr_json" | jq -r '.baseRefOid')
           head_sha=$(echo "$pr_json" | jq -r '.headRefOid')
           head_ref=$(echo "$pr_json" | jq -r '.headRefName')
 
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
           echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
           echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+          echo "is_cross_repository=$(echo "$pr_json" | jq -r '.isCrossRepository')" >> "$GITHUB_OUTPUT"
           echo "PR #${{ github.event.issue.number }}: branch=$head_ref sha=$head_sha"
-
-      - name: Set commit status to pending
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
-        run: |
-          gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
-            -f state='pending' \
-            -f context='downstream-tests' \
-            -f description='Downstream test battery is running...' \
-            -f target_url='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
-            --silent
 
       - uses: actions/checkout@v7
         with:
@@ -462,12 +492,51 @@ jobs:
           # with `contents: write` — GitHub explicitly blocks it.
           token: ${{ secrets.DOWNSTREAM_PAT }}
 
-      - name: Load previous battery state
-        id: prior
-        if: github.event.comment.body == '/retest'
+      - name: Verify command and immutable PR head
+        id: verified
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          IS_CROSS_REPOSITORY: ${{ steps.pr-details.outputs.is_cross_repository }}
+          API_HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          case "$COMMENT_BODY" in
+            /test|/test\ *) allowed_command=/test ;;
+            /test-all|/test-all\ *) allowed_command=/test-all ;;
+            /retest) allowed_command=/retest ;;
+            *) echo "::error::Unsupported test command"; exit 1 ;;
+          esac
+
+          git fetch --no-tags origin \
+            "+refs/pull/$PR_NUMBER/head:refs/remotes/pull/$PR_NUMBER/head"
+          fetched_sha=$(git rev-parse "refs/remotes/pull/$PR_NUMBER/head^{commit}")
+          python3 .github/scripts/validate_pr_command.py \
+            --comment-body "$COMMENT_BODY" \
+            --allowed-command "$allowed_command" \
+            --is-cross-repository "$IS_CROSS_REPOSITORY" \
+            --api-head-sha "$API_HEAD_SHA" \
+            --fetched-head-sha "$fetched_sha" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Set commit status to pending
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
+            -f state='pending' \
+            -f context='downstream-tests' \
+            -f description='Downstream test battery is running...' \
+            -f target_url='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            --silent
+
+      - name: Load previous battery state
+        id: prior
+        if: steps.verified.outputs.command == '/retest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
@@ -495,20 +564,22 @@ jobs:
       - name: Map changed files to affected workflows
         id: changed-files
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
-          PR_NUMBER: ${{ github.event.issue.number }}
+          BASE_SHA: ${{ steps.pr-details.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
         run: |
           set -euo pipefail
-          changed_paths=$(gh pr diff "$PR_NUMBER" \
-            --repo ${{ github.repository }} \
-            --name-only)
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::API base SHA is not a full 40-character SHA"
+            exit 1
+          fi
+          git cat-file -e "$BASE_SHA^{commit}"
+          changed_paths=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
 
           changed_workflows=$(grep '^\.github/workflows/' <<<"$changed_paths" | xargs -r -I{} basename "{}" || true)
 
           # A changed composite action affects every workflow referencing it, in
           # either the cross-repo (actions/<name>@ref) or relative (./.github/actions/<name>) form.
-          changed_actions=$(grep -oP '^\.github/actions/\K[^/]+' <<<"$changed_paths" | sort -u || true)
+          changed_actions=$(grep -oP '^\.github/actions/\K[A-Za-z0-9._-]+(?=/)' <<<"$changed_paths" | sort -u || true)
           consumer_workflows=""
           if [[ -n "$changed_actions" ]]; then
             while IFS= read -r action; do
@@ -529,11 +600,11 @@ jobs:
       - name: Determine target repos
         id: targets
         env:
-          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMAND: ${{ steps.verified.outputs.command }}
           CHANGED_WORKFLOWS: ${{ steps.changed-files.outputs.changed_workflows }}
           PRIOR_STATE: ${{ steps.prior.outputs.state }}
         run: |
-          command="$COMMENT_BODY"
+          command="$COMMAND"
           carried='{}'
 
           if [[ "$command" == "/retest" ]]; then
@@ -571,13 +642,13 @@ jobs:
         if: steps.targets.outputs.has_targets == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
-          COMMENT_BODY: ${{ github.event.comment.body }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
+          COMMAND: ${{ steps.verified.outputs.command }}
         run: |
           set -euo pipefail
           MARKER='<!-- sticky:test-downstream -->'
 
-          if [[ "$COMMENT_BODY" == "/retest" ]]; then
+          if [[ "$COMMAND" == "/retest" ]]; then
             message="✅ **Nothing to retry** — every repo in the previous battery already succeeded."
             description='All downstream tests passed (previous battery)'
           else
@@ -615,7 +686,7 @@ jobs:
         if: steps.targets.outputs.has_targets == 'true'
         id: build-tag
         env:
-          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
         run: |
           set -euo pipefail
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -630,7 +701,7 @@ jobs:
           # Without this, the master workflow files from the PR would
           # still load composite actions from @main / @{branch}, hiding any
           # regression introduced by the PR.
-          python - <<'PY'
+          python3 -I - <<'PY'
           import re, pathlib
           pat = re.compile(
               r'(SkylineCommunications/_ReusableWorkflows/\.github/actions/[A-Za-z0-9._-]+)@[A-Za-z0-9._/-]+'
@@ -663,7 +734,7 @@ jobs:
           TARGET_REPOS: ${{ steps.targets.outputs.repos }}
           TAG_SHA: ${{ steps.build-tag.outputs.tag_sha }}
           CORRELATION_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
         run: |
           timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "dispatch_time=$timestamp" >> "$GITHUB_OUTPUT"
@@ -697,7 +768,7 @@ jobs:
           {
             echo "$MARKER"
             cat <<'COMMENT_BODY'
-          ⏳ **Downstream tests triggered** from PR #${{ github.event.issue.number }} (`${{ steps.pr-details.outputs.head_sha }}`)
+          ⏳ **Downstream tests triggered** from PR #${{ github.event.issue.number }} (`${{ steps.verified.outputs.head_sha }}`)
 
           Triggered repos:
           ${{ steps.dispatch.outputs.dispatched_repos }}
@@ -862,7 +933,7 @@ jobs:
         if: steps.targets.outputs.has_targets == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
           TAG_SHA: ${{ steps.build-tag.outputs.tag_sha }}
           RESULTS: ${{ steps.poll.outputs.results }}
         run: |
@@ -879,7 +950,7 @@ jobs:
           ${MARKER}
           ${header}
 
-          PR #${{ github.event.issue.number }} (${{ steps.pr-details.outputs.head_sha }})
+          PR #${{ github.event.issue.number }} (${{ steps.verified.outputs.head_sha }})
 
           ${{ steps.poll.outputs.result_table }}
           COMMENT_BODY
@@ -909,7 +980,7 @@ jobs:
         if: steps.targets.outputs.has_targets == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ steps.pr-details.outputs.head_sha }}
+          HEAD_SHA: ${{ steps.verified.outputs.head_sha }}
           OVERALL: ${{ steps.poll.outputs.overall }}
         run: |
           if [[ "$OVERALL" == "success" ]]; then

@@ -35,10 +35,11 @@ Single scenario: `gh workflow run <caller>.yml --repo <repo> --ref main -f corre
 ## Per-PR ref for manual testing
 
 Comment `/prepare-test` on an internal `_ReusableWorkflows` PR to create or
-update `test-pr-<number>`. The generated tag starts from the current PR head and
-rewrites all cross-repository composite-action references to that same tag. It
-does not dispatch the battery and does not interfere with `test-downstream`.
-Run the command again whenever the PR head changes.
+update `test-pr-<number>`. For a fork PR, a write-access maintainer must review
+the exact head and comment `/prepare-test <40-character-head-sha>`. The command
+fails unless the supplied, API, and fetched PR-ref SHAs match. The generated
+tag rewrites all cross-repository composite-action references to that same tag.
+It does not dispatch the battery or interfere with `test-downstream`.
 
 ## Cross-repository fix preparation
 
@@ -54,12 +55,13 @@ those edits:
 - <required SDK, legacy, branch, or release scenarios>
 ```
 
-The maintainer posts this on an internal `_ReusableWorkflows` PR. The default-
-branch `Test Downstream.yml` maps changed workflows and actions through its
-hard allowlist, creates or reuses a linked issue in every affected repository,
-and assigns `copilot-swe-agent[bot]`. Each issue must instruct Copilot to open
-a PR, avoid direct default-branch pushes and automatic merges, retain normal
-production refs, validate the receiver scenario, and link the source PR.
+The maintainer posts this on an `_ReusableWorkflows` PR. The default-branch
+`Test Downstream.yml` maps changed workflows and actions through its hard
+allowlist, creates or reuses a linked issue in every affected repository, and
+assigns `copilot-swe-agent[bot]`. Fork-controlled PR titles are not forwarded
+to Copilot. Each issue must instruct Copilot to open a PR, avoid direct default-
+branch pushes and automatic merges, retain normal production refs, validate
+the receiver scenario, and link the source PR.
 
 Treat the command comment as human approval for task creation and Copilot
 assignment. Never infer acceptance criteria silently, accept repository names
@@ -77,6 +79,12 @@ manual review rather than reopening.
 3. Runs of one battery share the correlation id in their `run-name`: `[<id>-BRANCH]` / `[<id>-RELEASE]`.
 4. Extract failure summaries: `gh run view <id> --repo <repo> --log 2>&1 | Select-String -Pattern 'Validator Quality Gate failed:' -Context 0,6`.
 5. Transient infra failure (Azure, runner)? Comment `/retest` on the PR: only the failed repos re-dispatch; previous successes carry over (state lives in a `<!-- state:test-downstream ... -->` line inside the sticky comment and is invalidated when the head SHA moves).
+
+For fork PRs, `/test` and `/test-all` require the full reviewed head SHA. Treat
+the command as approval to execute that exact workflow code in trusted battery
+repositories with their configured OIDC, signing, Catalog, package, and test
+credentials. `/retest` accepts no SHA and only reuses state for an unchanged,
+previously approved head.
 
 ## Verify-job pattern (side-effect assertions)
 

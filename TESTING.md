@@ -38,14 +38,17 @@ flowchart TD
   holds it for the full battery, keeping the mutable `test-downstream` tag
   stable. Receivers additionally verify the tag SHA against the dispatch
   payload and fail closed if another battery overwrote it.
-- **Fork PRs** are rejected by the battery (and the gate cannot post statuses
-  for them) — merge stays blocked until the branch is pushed internally.
+- **Fork PRs** remain blocked until a write-access maintainer reviews the exact
+   head and comments `/test <40-character-head-sha>` or
+   `/test-all <40-character-head-sha>`. The command fetches the server-side PR
+   ref and fails unless the supplied, API, and fetched SHAs all match.
 
 ## Preparing a ref for manual testing
 
 Comment `/prepare-test` on an internal PR to create or update a persistent
-`test-pr-<number>` tag without starting the downstream battery. The command
-requires write access to the repository.
+`test-pr-<number>` tag without starting the downstream battery. For a fork PR,
+review the exact head and comment `/prepare-test <40-character-head-sha>`.
+The command requires write access to the repository.
 
 The tag points to a synthetic commit based on the current PR head. Every
 cross-repository composite-action reference in the workflows and composite
@@ -61,8 +64,9 @@ jobs:
 ```
 
 The workflow posts the exact ref and commit SHA on the PR. Run `/prepare-test`
-again after pushing changes to the PR; this force-updates that PR's tag. Each PR
-has its own tag, so preparing a manual ref does not move or interfere with the
+again after an internal PR changes, or review the new fork head and run
+`/prepare-test <new-head-sha>`; this force-updates that PR's tag. Each PR has
+its own tag, so preparing a manual ref does not move or interfere with the
 shared `test-downstream` tag used by the integration-test battery.
 
 ## Preparing downstream fix pull requests
@@ -87,9 +91,10 @@ requests must be reviewed and merged separately.
 The command is idempotent for a source PR. Re-running it reuses an existing
 open task identified by its machine-readable source marker. It never reopens a
 closed task, pushes to a downstream branch, merges a pull request, or executes
-content from the source PR. Every run appends an audit summary to the source
-PR. A partial failure leaves successfully created tasks intact and fails the
-orchestration run.
+content from the source PR. The source PR title is not copied into Copilot's
+task; only maintainer-authored acceptance criteria and allowlisted workflow
+names are forwarded. Every run appends an audit summary to the source PR. A
+partial failure leaves successfully created tasks intact and fails the run.
 
 Configure `DOWNSTREAM_ISSUES_TOKEN` in `_ReusableWorkflows` before enabling the
 command. Copilot issue assignment requires a user-to-server token. Use a
@@ -128,7 +133,10 @@ pushes fan out zero redundant runs.
    workflows or composite actions are touched (composite-action-only changes
    are mapped to their consuming workflows automatically).
 2. A user with write access comments `/test` (affected repos only) or
-   `/test-all` (every mapped repo).
+   `/test-all` (every mapped repo). For a fork, the maintainer must first review
+   the exact head and append its full SHA to the command. This is privileged
+   approval: the promoted workflow code runs in trusted battery repositories
+   with their configured OIDC, signing, Catalog, package, and test credentials.
 3. The orchestrator posts progress to a sticky PR comment (always reposted as
    the newest comment; processed command comments are collapsed as resolved)
    and finishes by setting the commit status. ❌ any receiver failed / no run
@@ -190,7 +198,9 @@ changed actions to the workflows that consume them and dispatches those repos.
 
 ## Known limitations
 
-- **Fork PRs**: not supported by the battery; internal branches only.
+- **Fork status initialization**: the `pull_request` token cannot post a commit
+   status on a fork head. The required check remains expected until the trusted
+   `/test <head-sha>` or `/test-all <head-sha>` run posts its pending status.
 - **`/test` runs `main`'s orchestrator** (`issue_comment` semantics): fixes to
   `Test Downstream.yml` itself only take effect after merge.
 - **WiX and debian release flows**: BRANCH-only. Date-based release tags exceed
