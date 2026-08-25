@@ -1289,12 +1289,6 @@ jobs:
           overrides: |
             DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
 
-      - name: Partition solution projects
-        id: partition
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/partition-solution-projects@main
-        with:
-          solution-path: ${{ needs.discover_projects.outputs.solution-path }}
-
       - name: Find Version Comment
         id: findVersionComment
         env:
@@ -1369,6 +1363,17 @@ jobs:
           Remove-Item -Path $downloadRoot -Recurse -Force
           Write-Output "Cleanup complete."
         shell: pwsh
+
+      # Publishing the whole solution would also publish unrelated projects (e.g. ASP.NET
+      # Core web projects), which fail under --no-build because their publish output was
+      # never built or downloaded here. Only the DataMiner package partition owns catalog
+      # artifacts, so restrict the publish to it. Runs after the global.json update so the
+      # Skyline SDK versions are already pinned for the publish that follows.
+      - name: Partition solution projects
+        id: partition
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/partition-solution-projects@main
+        with:
+          solution-path: ${{ needs.discover_projects.outputs.solution-path }}
 
       - name: Publish To Catalog
         shell: pwsh
