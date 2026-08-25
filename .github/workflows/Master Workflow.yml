@@ -934,7 +934,6 @@ jobs:
         env:
           OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.OVERRIDE_CATALOG_DOWNLOAD_TOKEN }}
           SOLUTION_PATH: ${{ steps.partition.outputs.dataminer-package-solution-path }}
-          VERSION: ${{ needs.determine_version.outputs.version }}
           PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
           INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
@@ -942,13 +941,13 @@ jobs:
           CONFIGURATION: ${{ inputs.configuration }}
           DEBUG_FLAG: ${{ inputs.debug }}
         run: |
-          dotnet restore "$SOLUTION_PATH" \
-            -p:Version="$VERSION" \
-            -p:PackageVersion="$VERSION" \
-            --configuration "$CONFIGURATION"
-
+          # The DataMiner package SDK validates `Version` (its error message names
+          # `PackageVersion`, but setting that alone has no effect), so the package-compatible
+          # version must be passed as Version here. AssemblyVersion/FileVersion/
+          # InformationalVersion are set explicitly below, so the assemblies still carry the
+          # exact build version and only the produced package is renamed.
           dotnet build "$SOLUTION_PATH" \
-            -p:Version="$VERSION" \
+            -p:Version="$PACKAGE_VERSION" \
             -p:PackageVersion="$PACKAGE_VERSION" \
             -p:AssemblyVersion="$NUMERIC_VERSION" \
             -p:FileVersion="$NUMERIC_VERSION" \
@@ -960,8 +959,7 @@ jobs:
             -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" \
             -p:SkylineDataMinerSdkDebug="$DEBUG_FLAG" \
             -p:PackageOutputPath="${GITHUB_WORKSPACE}/_NuGetOutput" \
-            -p:BuildProjectReferences=false \
-            --no-restore
+            -p:BuildProjectReferences=false
         shell: bash
 
       - name: Create package name

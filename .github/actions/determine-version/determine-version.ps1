@@ -26,15 +26,25 @@ if ($refType -eq 'tag') {
 }
 $informationalVersion = $version
 
-# The DataMiner package SDK accepts prerelease versions only in the form
-# A.B.C-suffix. Normalize punctuation in the suffix and fold a fourth numeric
-# field into the suffix so package creation accepts all valid build versions.
-$packageVersion = $version
-if ($version -match '^v?(\d+)\.(\d+)\.(\d+)\.(\d+)-(.+)$') {
-    $normalizedSuffix = $Matches[5] -replace '[^0-9A-Za-z_]', '_'
-    $packageVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])-$($Matches[4])_$normalizedSuffix"
-} elseif ($version -match '^(.+?)-(.+)$') {
-    $packageVersion = "$($Matches[1])-$($Matches[2] -replace '[^0-9A-Za-z_]', '_')"
+# package-version: the DataMiner package SDK validates PackageVersion far more
+# strictly than SemVer. It rejects the '.' and '-' separators SemVer allows inside a
+# pre-release label, rejects '+build' metadata, and rejects a four-field core combined
+# with a suffix (despite what its own error message claims). NuGet, which restores the
+# same projects, rejects '_'. The only shape both accept is therefore
+# 'A.B.C[.D]' or 'A.B.C-<alphanumeric>', so:
+#   - build metadata is dropped (it never identifies a package),
+#   - every separator inside the pre-release label is removed,
+#   - a four-field core with a suffix folds field four into the suffix.
+# Stable versions are passed through untouched, so released package versions keep
+# matching their tag exactly; only pre-releases are rewritten.
+# e.g. 2.7.1-49.5.96759cda -> 2.7.1-49596759cda, 1.2.3.4-rc.1+meta -> 1.2.3-4rc1.
+$packageVersion = ($version -split '\+', 2)[0]
+if ($packageVersion -match '^(v?\d+\.\d+\.\d+)\.(\d+)-(.*)$') {
+    $packageVersion = '{0}-{1}{2}' -f $Matches[1], $Matches[2], ($Matches[3] -replace '[^0-9A-Za-z]', '')
+} elseif ($packageVersion -match '^(.+?)-(.*)$') {
+    $normalizedSuffix = $Matches[2] -replace '[^0-9A-Za-z]', ''
+    # A suffix of pure punctuation would leave a trailing '-', which is not a valid version.
+    $packageVersion = if ($normalizedSuffix) { "$($Matches[1])-$normalizedSuffix" } else { $Matches[1] }
 }
 
 # numeric-version: strip any pre-release/build suffix (-… / +…) down to the numeric core,
