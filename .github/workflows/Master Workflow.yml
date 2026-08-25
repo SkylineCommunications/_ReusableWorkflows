@@ -1289,6 +1289,12 @@ jobs:
           overrides: |
             DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
 
+      - name: Partition solution projects
+        id: partition
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/partition-solution-projects@main
+        with:
+          solution-path: ${{ needs.discover_projects.outputs.solution-path }}
+
       - name: Find Version Comment
         id: findVersionComment
         env:
@@ -1367,7 +1373,7 @@ jobs:
       - name: Publish To Catalog
         shell: pwsh
         env:
-          SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
+          SOLUTION_PATH: ${{ steps.partition.outputs.dataminer-package-solution-path }}
           PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
           VERSION_COMMENT: ${{ steps.findVersionComment.outputs.versionComment }}
           CONFIGURATION: ${{ inputs.configuration }}
@@ -1377,6 +1383,7 @@ jobs:
             "$env:SOLUTION_PATH" `
             --no-build `
             -p:Version="$env:PACKAGE_VERSION" `
+            -p:PackageVersion="$env:PACKAGE_VERSION" `
             -p:VersionComment="$env:VERSION_COMMENT" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
             --configuration "$env:CONFIGURATION" `
