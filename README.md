@@ -20,6 +20,7 @@ across the fleet and can be evolved in a single place.
 | `Internal NuGet Solution Master Workflow.yml`             | *(deprecated)* Thin redirect to `Master Workflow.yml` for internal NuGet.     |
 | `DataMiner App Packages Master Workflow.yml`              | *(deprecated)* Thin redirect to `Master Workflow.yml` for app packages.       |
 | `Update Catalog Details Workflow.yml`                     | Update Catalog metadata on release.                                           |
+| `Auto-tag.yml`                                            | Create an on-demand prerelease tag from the `Create-Prerelease` PR label.     |
 
 ## Internal / maintenance workflows
 

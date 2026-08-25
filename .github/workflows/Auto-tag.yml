@@ -1,0 +1,146 @@
+name: Auto-tag
+
+# Reusable workflow for an on-demand prerelease requested with the
+# Create-Prerelease pull request label.
+
+on:
+  workflow_call:
+
+jobs:
+  prerelease:
+    name: prerelease
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    concurrency:
+      group: auto-tag-prerelease-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - name: Validate trigger
+        uses: ./.github/actions/guard-trigger
+
+      - name: Resolve OIDC parameters
+        id: oidc
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        with:
+          repository-owner: ${{ github.repository_owner }}
+          is-fork: "false"
+
+      - name: Azure Login
+        if: steps.oidc.outputs.use-oidc == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ steps.oidc.outputs.client-id }}
+          tenant-id: ${{ steps.oidc.outputs.tenant-id }}
+          subscription-id: ${{ steps.oidc.outputs.subscription-id }}
+
+      - name: Load tag-bot App private key
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ steps.oidc.outputs.use-oidc }}
+          secret-names: |
+            tag-bot-app-private-key
+
+      - name: Mint tag-bot installation token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.TAG_BOT_APP_ID }}
+          private-key: ${{ env.TAG_BOT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Resolve Change-Type
+        id: change-type
+        shell: bash
+        env:
+          LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          change_type=$(printf '%s' "$LABELS_JSON" | jq -r '
+            map(select(type == "string" and startswith("Change-Type:")))
+            | if length == 1 then (.[0] | sub("^Change-Type:"; "")) else "Patch" end')
+          case "$change_type" in
+            Minor|Major) ;;
+            *) change_type=Patch ;;
+          esac
+          echo "value=$change_type" >> "$GITHUB_OUTPUT"
+
+      - name: Build pre-release suffix
+        id: suffix
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          short_sha=${HEAD_SHA:0:8}
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid PR number: '$PR_NUMBER'." >&2
+            exit 1
+          fi
+          if [[ ! "$RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid workflow run number: '$RUN_NUMBER'." >&2
+            exit 1
+          fi
+          if [[ ! "$short_sha" =~ ^[0-9a-f]{8}$ ]]; then
+            echo "Invalid PR head SHA: '$HEAD_SHA'." >&2
+            exit 1
+          fi
+          echo "value=${PR_NUMBER}.${RUN_NUMBER}.${short_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR head commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compute next version
+        id: version
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/compute-next-version@main
+        with:
+          change-type: ${{ steps.change-type.outputs.value }}
+          mode: prerelease
+          suffix: ${{ steps.suffix.outputs.value }}
+
+      - name: Create and push pre-release tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          MESSAGE: ${{ github.event.pull_request.title }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          APP_ID: ${{ vars.TAG_BOT_APP_ID }}
+        run: |
+          set -euo pipefail
+          git config user.name "skyline-tag-bot[bot]"
+          git config user.email "${APP_ID}+skyline-tag-bot[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "$MESSAGE" "$COMMIT_SHA"
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push "$remote" "refs/tags/${VERSION}"
+          echo "Pushed pre-release tag ${VERSION} at ${COMMIT_SHA}." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the Create-Prerelease label
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh api --method DELETE "/repos/${REPO}/issues/${PR_NUMBER}/labels/Create-Prerelease"
+
+      - name: Comment the pre-release version on the PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          body=$(printf '🏷️ Pre-release `%s` is being made.' "$VERSION")
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$body"
