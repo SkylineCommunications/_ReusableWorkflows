@@ -3,10 +3,10 @@ name: Playwright Docker ACR Workflow
 on:
   workflow_call:
     inputs:
-      project-path:
+      csproj-path:
         required: true
         type: string
-        description: 'Path to the LiveServiceTesting project folder (e.g. MyApp.LiveServiceTesting)'
+        description: 'Path to the .csproj file relative to repository root (e.g. MyApp.LiveServiceTesting/MyApp.LiveServiceTesting.csproj)'
       image-name:
         required: true
         type: string
@@ -133,9 +133,9 @@ jobs:
 
       - name: Publish test project
         env:
-          PROJECT_PATH: ${{ inputs.project-path }}
+          CSPROJ_PATH: ${{ inputs.csproj-path }}
         run: |
-          dotnet publish "$PROJECT_PATH/$PROJECT_PATH.csproj" -c Release -o ./publish/tests
+          dotnet publish "$CSPROJ_PATH" -c Release -o ./publish/tests
 
       - name: Upload published tests
         uses: actions/upload-artifact@v7
@@ -176,6 +176,13 @@ jobs:
         with:
           name: playwright-tests-publish
           path: publish/tests
+
+      - name: Determine project directory
+        id: project-dir
+        env:
+          CSPROJ_PATH: ${{ inputs.csproj-path }}
+        run: |
+          echo "dir=$(dirname "$CSPROJ_PATH")" >> "$GITHUB_OUTPUT"
 
       - name: Azure Login (LiveService)
         if: needs.check_oidc.outputs.liveservice-use-oidc == 'true'
@@ -223,7 +230,7 @@ jobs:
           file: ${{ inputs.dockerfile-path }}
           push: true
           build-args: |
-            PROJECT_PATH=${{ inputs.project-path }}
+            PROJECT_PATH=${{ steps.project-dir.outputs.dir }}
           tags: |
             ${{ steps.set-acr.outputs.login-server }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
             ${{ inputs.include-sha-tag && format('{0}/{1}:{2}', steps.set-acr.outputs.login-server, inputs.image-name, github.sha) || '' }}
