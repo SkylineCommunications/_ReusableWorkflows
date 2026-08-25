@@ -945,6 +945,7 @@ jobs:
           dotnet restore "$SOLUTION_PATH" \
             -p:Version="$VERSION" \
             -p:PackageVersion="$VERSION" \
+            -p:GenerateDataMinerPackage=false \
             --configuration "$CONFIGURATION"
 
           dotnet build "$SOLUTION_PATH" \
