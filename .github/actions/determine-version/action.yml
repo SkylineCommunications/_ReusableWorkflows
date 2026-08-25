@@ -36,6 +36,9 @@ outputs:
   product-version-valid:
     description: Whether ProductVersion satisfies MSI limits (major/minor <= 255 and build <= 65535).
     value: ${{ steps.determine.outputs.product-version-valid }}
+  package-version:
+    description: DataMiner package-compatible version. Prerelease suffixes are normalized and four-part prerelease versions are reduced to three numeric fields.
+    value: ${{ steps.determine.outputs.package-version }}
 
 runs:
   using: composite

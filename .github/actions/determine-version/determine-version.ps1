@@ -26,6 +26,17 @@ if ($refType -eq 'tag') {
 }
 $informationalVersion = $version
 
+# The DataMiner package SDK accepts prerelease versions only in the form
+# A.B.C-suffix. Normalize punctuation in the suffix and fold a fourth numeric
+# field into the suffix so package creation accepts all valid build versions.
+$packageVersion = $version
+if ($version -match '^v?(\d+)\.(\d+)\.(\d+)\.(\d+)-(.+)$') {
+    $normalizedSuffix = $Matches[5] -replace '[^0-9A-Za-z_]', '_'
+    $packageVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])-$($Matches[4])_$normalizedSuffix"
+} elseif ($version -match '^(.+?)-(.+)$') {
+    $packageVersion = "$($Matches[1])-$($Matches[2] -replace '[^0-9A-Za-z_]', '_')"
+}
+
 # numeric-version: strip any pre-release/build suffix (-… / +…) down to the numeric core,
 # then ensure 4 fields. A 3-field core (major.minor.patch — SemVer tags) gets the run
 # number appended as the 4th field; a 4-field core (e.g. date-based tags like
@@ -77,6 +88,7 @@ Write-Host "Determined version '$version', informational-version '$informational
 @(
     "version=$version"
     "informational-version=$informationalVersion"
+    "package-version=$packageVersion"
     "numeric-version=$numericVersion"
     "product-version=$productVersion"
     "product-version-valid=$($productVersionValid.ToString().ToLowerInvariant())"

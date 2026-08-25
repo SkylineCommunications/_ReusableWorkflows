@@ -6,6 +6,7 @@ ProductVersion.
 
 - **Tag builds** use the tag name verbatim (e.g. `2.3.1`, `1.4.0-123.42.a1b2c3d4`).
 - **Branch builds** keep the legacy `0.0.<run-number>` in all modes.
+- **DataMiner package builds** use a normalized package-compatible version when a prerelease suffix contains punctuation or the version has four numeric fields.
 
 ## Inputs
 
@@ -21,6 +22,7 @@ ProductVersion.
 | --- | :--: | --- |
 | `version` | ✔ | Full SemVer — for MSBuild `Version` / `PackageVersion`, NuGet, `.dmapp` / Catalog, `.deb` (after its own `~` normalisation), DxM release. |
 | `informational-version` | ✔ | Exact `AssemblyInformationalVersion`, equal to `version`; builds disable automatic source-revision appending. |
+| `package-version` | ✔ | DataMiner package-compatible version; prerelease suffix punctuation is replaced with `_`, and four-part prereleases are represented as a three-part version with the fourth field folded into the suffix. |
 | `numeric-version` | ✘ | Strict 4-field `major.minor.patch.<build>` (every field wrapped `% 65535`) — for `AssemblyVersion` / `FileVersion`. `<build>` = the run number, or the version's own 4th field when it already has one. |
 | `product-version` | ✘ | Stable three-part tags use `major.minor.build`; prereleases, branches, and explicit four-part tags retain `numeric-version`'s fourth field for Skyline release classification. |
 | `product-version-valid` | — | `true` when MSI limits are met: major/minor ≤ 255 and build ≤ 65,535. |
@@ -54,6 +56,9 @@ ProductVersion.
 - Windows Installer itself ignores the fourth field for upgrade comparison, so a real MSI upgrade
   must still change at least one of the first three fields. Retaining field four is a Skyline package
   convention; it does not change native MSI upgrade ordering.
+- `package-version` preserves stable versions. For prereleases, it normalizes suffix punctuation to
+  `_`; for a four-part prerelease such as `1.2.3.4-rc.1`, it emits `1.2.3-4_rc_1`, which is
+  accepted by the DataMiner package SDK.
 
 ## Usage
 

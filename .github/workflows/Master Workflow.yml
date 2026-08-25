@@ -221,6 +221,7 @@ jobs:
     outputs:
       version: ${{ steps.determine-version.outputs.version }}
       informational-version: ${{ steps.determine-version.outputs.informational-version }}
+      package-version: ${{ steps.determine-version.outputs.package-version }}
       numeric-version: ${{ steps.determine-version.outputs.numeric-version }}
       product-version: ${{ steps.determine-version.outputs.product-version }}
       product-version-valid: ${{ steps.determine-version.outputs.product-version-valid }}
@@ -847,7 +848,7 @@ jobs:
       - name: Generate SBOM files for WiX installers
         if: steps.partition.outputs.wix-count != '0' && github.ref_type == 'tag' && !contains(github.ref_name, '-')
         env:
-          PACKAGE_VERSION: ${{ needs.determine_version.outputs.version }}
+          PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
         run: |
           dataminer-sbom generate \
             --solution-path "$GITHUB_WORKSPACE" \
@@ -875,6 +876,7 @@ jobs:
         env:
           SOLUTION_PATH: ${{ steps.partition.outputs.wix-solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
+          PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
           INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
           PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
@@ -933,6 +935,7 @@ jobs:
           OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.OVERRIDE_CATALOG_DOWNLOAD_TOKEN }}
           SOLUTION_PATH: ${{ steps.partition.outputs.dataminer-package-solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
+          PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
           INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
           PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
@@ -941,7 +944,7 @@ jobs:
         run: |
           dotnet build "$SOLUTION_PATH" \
             -p:Version="$VERSION" \
-            -p:PackageVersion="$VERSION" \
+            -p:PackageVersion="$PACKAGE_VERSION" \
             -p:AssemblyVersion="$NUMERIC_VERSION" \
             -p:FileVersion="$NUMERIC_VERSION" \
             -p:InformationalVersion="$INFORMATIONAL_VERSION" \
@@ -971,7 +974,7 @@ jobs:
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           PACKAGE_NAME: ${{ steps.packageName.outputs.name }}
-          PACKAGE_VERSION: ${{ needs.determine_version.outputs.version }}
+          PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
           DEBUG_FLAG: ${{ inputs.debug }}
         run: |
           find . -type f \( -name "*.dmapp" -o -name "*.dmtest" \) -print0 | while IFS= read -r -d '' file; do
