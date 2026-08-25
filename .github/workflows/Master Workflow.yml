@@ -942,6 +942,11 @@ jobs:
           CONFIGURATION: ${{ inputs.configuration }}
           DEBUG_FLAG: ${{ inputs.debug }}
         run: |
+          dotnet restore "$SOLUTION_PATH" \
+            -p:Version="$VERSION" \
+            -p:PackageVersion="$VERSION" \
+            --configuration "$CONFIGURATION"
+
           dotnet build "$SOLUTION_PATH" \
             -p:Version="$VERSION" \
             -p:PackageVersion="$PACKAGE_VERSION" \
@@ -955,7 +960,8 @@ jobs:
             -p:CatalogDefaultDownloadKeyName="OVERRIDE_CATALOG_DOWNLOAD_TOKEN" \
             -p:SkylineDataMinerSdkDebug="$DEBUG_FLAG" \
             -p:PackageOutputPath="${GITHUB_WORKSPACE}/_NuGetOutput" \
-            -p:BuildProjectReferences=false
+            -p:BuildProjectReferences=false \
+            --no-restore
         shell: bash
 
       - name: Create package name
