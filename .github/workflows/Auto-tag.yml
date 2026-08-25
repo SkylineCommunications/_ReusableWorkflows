@@ -19,7 +19,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Validate trigger
-        uses: ./.github/actions/guard-trigger
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 
       - name: Resolve OIDC parameters
         id: oidc
