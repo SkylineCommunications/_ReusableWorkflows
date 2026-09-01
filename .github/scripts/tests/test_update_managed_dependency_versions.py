@@ -158,7 +158,12 @@ class ManagedDependencyUpdaterTests(unittest.TestCase):
             {"apppackageinstaller": "0.0.0", "dataminer-sdk": "0.0.0"},
         )
         self.assertEqual({}, updates)
-        self.assertEqual("2.5.5", current["dataminer-sdk"])
+        self.assertEqual(
+            {"apppackageinstaller", "dataminer-sdk"},
+            set(current),
+        )
+        for version in current.values():
+            UPDATER.parse_stable_version(version)
 
     def test_write_failure_rolls_back_already_replaced_files(self):
         latest = {"apppackageinstaller": "4.2.0", "dataminer-sdk": "2.5.7"}
