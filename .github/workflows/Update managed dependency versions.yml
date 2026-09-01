@@ -25,7 +25,7 @@ jobs:
       contents: read
     steps:
       - name: Validate trigger
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@3cb60284258b993d11b581f7c3fabe082cf51f7e
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 
   dry_run:
     name: Check managed dependency versions (dry run)
@@ -37,7 +37,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -72,7 +72,7 @@ jobs:
         shell: bash
 
       - name: Checkout default branch
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -88,7 +88,7 @@ jobs:
       - name: Resolve OIDC parameters
         if: steps.versions.outputs.changed == 'true'
         id: oidc
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@3cb60284258b993d11b581f7c3fabe082cf51f7e
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
         with:
           repository-owner: ${{ github.repository_owner }}
 
@@ -101,7 +101,7 @@ jobs:
 
       - name: Azure Login
         if: steps.versions.outputs.changed == 'true' && steps.oidc.outputs.use-oidc == 'true'
-        uses: azure/login@4c03e4685fe81df2c50d5714c7d93cf39d8deb7f # v3
+        uses: azure/login@v3
         with:
           client-id: ${{ steps.oidc.outputs.client-id }}
           tenant-id: ${{ steps.oidc.outputs.tenant-id }}
@@ -109,7 +109,7 @@ jobs:
 
       - name: Load pull request token
         if: steps.versions.outputs.changed == 'true' && steps.oidc.outputs.use-oidc == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@3cb60284258b993d11b581f7c3fabe082cf51f7e
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
         with:
           use-oidc: 'true'
           secret-names: reusable-workflows-token
