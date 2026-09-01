@@ -32,7 +32,7 @@ Centralized GitHub Actions **reusable workflows** and **composite actions** cons
 
 ## Centrally-managed SDK versions
 
-`update-global-json-sdks/action.yml` hard-codes `$DATAMINER_SDK_VERSION` and the `$dataMinerSdkPatterns` list. **To roll out a new DataMiner SDK version across the fleet, bump that constant and the matching `version=...` line in the `update-global-json-sdks` job of `Test composite actions.yml`.** The action rewrites every `msbuild-sdks` key matching `Skyline.DataMiner.*` to the shared version; exact-name overrides in `$otherManagedSdks` win against the pattern.
+`Update managed dependency versions.yml` checks NuGet.org every Monday for listed stable AppPackageInstaller and DataMiner SDK releases and creates or updates one review PR. Manual dispatch defaults to a read-only dry run; setting `dry-run` to `false` creates or updates the PR when dispatched from the default branch. `update-global-json-sdks/action.yml` hard-codes `$DATAMINER_SDK_VERSION` and the `$dataMinerSdkPatterns` list; manual bumps must also update the matching `version=...` line in the `update-global-json-sdks` job of `Test composite actions.yml`. The action rewrites every `msbuild-sdks` key matching `Skyline.DataMiner.*` to the shared version; exact-name overrides in `$otherManagedSdks` win against the pattern.
 
 ## DxM and DcM integration boundary
 

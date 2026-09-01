@@ -4,14 +4,22 @@ on:
   pull_request:
     paths:
       - '.github/scripts/**'
+      - '.github/actions/update-global-json-sdks/action.yml'
+      - '.github/workflows/Master Workflow.yml'
+      - '.github/workflows/Test composite actions.yml'
       - '.github/workflows/Test Downstream.yml'
       - '.github/workflows/Test maintenance scripts.yml'
+      - '.github/workflows/Update managed dependency versions.yml'
   push:
     branches: [main]
     paths:
       - '.github/scripts/**'
+      - '.github/actions/update-global-json-sdks/action.yml'
+      - '.github/workflows/Master Workflow.yml'
+      - '.github/workflows/Test composite actions.yml'
       - '.github/workflows/Test Downstream.yml'
       - '.github/workflows/Test maintenance scripts.yml'
+      - '.github/workflows/Update managed dependency versions.yml'
 
 permissions:
   contents: read

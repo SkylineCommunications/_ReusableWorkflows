@@ -33,6 +33,7 @@ the legacy wrappers.
 | `Test Downstream.yml`                                     | Repo-local: runs the downstream integration-test battery with `/test` and prepares linked Copilot tasks in affected repos with `/prepare-downstream-fixes`. See [TESTING.md](TESTING.md). |
 | `Downstream Gate.yml`                                     | Repo-local: sets the `downstream-tests` commit status on every PR — *pending* when reusable workflows or composite actions are touched, *success (n/a)* otherwise. |
 | `Wrapper Migration Workflow.yml`                          | Opens a PR migrating callers off the deprecated redirecting wrappers. Called automatically by those wrappers; can also be dispatched standalone. |
+| `Update managed dependency versions.yml`                  | Checks listed stable AppPackageInstaller and DataMiner SDK releases every Monday and creates or updates one review PR. Manual dispatch defaults to dry-run mode but can opt into PR creation from the default branch. |
 
 ## Using master workflows
 
