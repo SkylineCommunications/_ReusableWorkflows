@@ -221,7 +221,6 @@ jobs:
     outputs:
       version: ${{ steps.determine-version.outputs.version }}
       informational-version: ${{ steps.determine-version.outputs.informational-version }}
-      package-version: ${{ steps.determine-version.outputs.package-version }}
       numeric-version: ${{ steps.determine-version.outputs.numeric-version }}
       product-version: ${{ steps.determine-version.outputs.product-version }}
       product-version-valid: ${{ steps.determine-version.outputs.product-version-valid }}
@@ -848,7 +847,7 @@ jobs:
       - name: Generate SBOM files for WiX installers
         if: steps.partition.outputs.wix-count != '0' && github.ref_type == 'tag' && !contains(github.ref_name, '-')
         env:
-          PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
+          PACKAGE_VERSION: ${{ needs.determine_version.outputs.version }}
         run: |
           dataminer-sbom generate \
             --solution-path "$GITHUB_WORKSPACE" \
@@ -876,7 +875,6 @@ jobs:
         env:
           SOLUTION_PATH: ${{ steps.partition.outputs.wix-solution-path }}
           VERSION: ${{ needs.determine_version.outputs.version }}
-          PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
           INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
           PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
@@ -934,21 +932,16 @@ jobs:
         env:
           OVERRIDE_CATALOG_DOWNLOAD_TOKEN: ${{ secrets.OVERRIDE_CATALOG_DOWNLOAD_TOKEN }}
           SOLUTION_PATH: ${{ steps.partition.outputs.dataminer-package-solution-path }}
-          PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
+          VERSION: ${{ needs.determine_version.outputs.version }}
           INFORMATIONAL_VERSION: ${{ needs.determine_version.outputs.informational-version }}
           NUMERIC_VERSION: ${{ needs.determine_version.outputs.numeric-version }}
           PRODUCT_VERSION: ${{ needs.determine_version.outputs.product-version }}
           CONFIGURATION: ${{ inputs.configuration }}
           DEBUG_FLAG: ${{ inputs.debug }}
         run: |
-          # The DataMiner package SDK validates `Version` (its error message names
-          # `PackageVersion`, but setting that alone has no effect), so the package-compatible
-          # version must be passed as Version here. AssemblyVersion/FileVersion/
-          # InformationalVersion are set explicitly below, so the assemblies still carry the
-          # exact build version and only the produced package is renamed.
           dotnet build "$SOLUTION_PATH" \
-            -p:Version="$PACKAGE_VERSION" \
-            -p:PackageVersion="$PACKAGE_VERSION" \
+            -p:Version="$VERSION" \
+            -p:PackageVersion="$VERSION" \
             -p:AssemblyVersion="$NUMERIC_VERSION" \
             -p:FileVersion="$NUMERIC_VERSION" \
             -p:InformationalVersion="$INFORMATIONAL_VERSION" \
@@ -978,7 +971,7 @@ jobs:
         env:
           SOLUTION_PATH: ${{ needs.discover_projects.outputs.solution-path }}
           PACKAGE_NAME: ${{ steps.packageName.outputs.name }}
-          PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
+          PACKAGE_VERSION: ${{ needs.determine_version.outputs.version }}
           DEBUG_FLAG: ${{ inputs.debug }}
         run: |
           find . -type f \( -name "*.dmapp" -o -name "*.dmtest" \) -print0 | while IFS= read -r -d '' file; do
@@ -1261,7 +1254,7 @@ jobs:
     name: Upload to Catalog
     runs-on: windows-latest
     if: github.ref_type == 'tag' && needs.discover_projects.outputs.has-dataminer-projects == 'true' && needs.package_windows.outputs.has-dataminer-packages == 'true'
-    needs: [ci, package_windows, check_oidc, discover_projects, determine_version]
+    needs: [ci, package_windows, check_oidc, discover_projects]
     steps:
       - name: Enable long paths
         run: git config --global core.longpaths true
@@ -1378,8 +1371,8 @@ jobs:
       - name: Publish To Catalog
         shell: pwsh
         env:
+          VERSION: ${{ github.ref_name }}
           SOLUTION_PATH: ${{ steps.partition.outputs.dataminer-package-solution-path }}
-          PACKAGE_VERSION: ${{ needs.determine_version.outputs.package-version }}
           VERSION_COMMENT: ${{ steps.findVersionComment.outputs.versionComment }}
           CONFIGURATION: ${{ inputs.configuration }}
           DEBUG_FLAG: ${{ inputs.debug }}
@@ -1387,8 +1380,7 @@ jobs:
           dotnet publish `
             "$env:SOLUTION_PATH" `
             --no-build `
-            -p:Version="$env:PACKAGE_VERSION" `
-            -p:PackageVersion="$env:PACKAGE_VERSION" `
+            -p:Version="$env:VERSION" `
             -p:VersionComment="$env:VERSION_COMMENT" `
             -p:CatalogPublishKeyName="DATAMINER_TOKEN" `
             --configuration "$env:CONFIGURATION" `
