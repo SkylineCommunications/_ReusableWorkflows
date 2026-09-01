@@ -1,0 +1,162 @@
+name: Update managed dependency versions
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Preview updates without creating or updating a pull request.
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: update-managed-dependency-versions
+  cancel-in-progress: false
+
+jobs:
+  validate_trigger:
+    name: Validate Trigger
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate trigger
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@3cb60284258b993d11b581f7c3fabe082cf51f7e
+
+  dry_run:
+    name: Check managed dependency versions (dry run)
+    if: github.event_name == 'workflow_dispatch' && inputs.dry-run == true
+    needs: [validate_trigger]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Check latest stable versions
+        run: >-
+          python3 .github/scripts/update_managed_dependency_versions.py
+          --github-output "$GITHUB_OUTPUT"
+          --step-summary "$GITHUB_STEP_SUMMARY"
+        shell: bash
+
+      - name: Show proposed changes
+        run: git --no-pager diff --check && git --no-pager diff
+        shell: bash
+
+  update:
+    name: Update managed dependency versions
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry-run == false)
+    needs: [validate_trigger]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REUSABLE_WORKFLOWS_TOKEN: ''
+    steps:
+      - name: Require default branch for write mode
+        if: github.event_name == 'workflow_dispatch' && github.ref_name != github.event.repository.default_branch
+        run: |
+          echo "::error title=Untrusted dispatch ref::Non-dry-run dispatches must run from the repository default branch."
+          exit 1
+        shell: bash
+
+      - name: Checkout default branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Check latest stable versions
+        id: versions
+        run: >-
+          python3 .github/scripts/update_managed_dependency_versions.py
+          --github-output "$GITHUB_OUTPUT"
+          --step-summary "$GITHUB_STEP_SUMMARY"
+        shell: bash
+
+      - name: Resolve OIDC parameters
+        if: steps.versions.outputs.changed == 'true'
+        id: oidc
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@3cb60284258b993d11b581f7c3fabe082cf51f7e
+        with:
+          repository-owner: ${{ github.repository_owner }}
+
+      - name: Require OIDC
+        if: steps.versions.outputs.changed == 'true' && steps.oidc.outputs.use-oidc != 'true'
+        run: |
+          echo "::error title=OIDC unavailable::A newer managed dependency exists, but Skyline OIDC could not be resolved."
+          exit 1
+        shell: bash
+
+      - name: Azure Login
+        if: steps.versions.outputs.changed == 'true' && steps.oidc.outputs.use-oidc == 'true'
+        uses: azure/login@4c03e4685fe81df2c50d5714c7d93cf39d8deb7f # v3
+        with:
+          client-id: ${{ steps.oidc.outputs.client-id }}
+          tenant-id: ${{ steps.oidc.outputs.tenant-id }}
+          subscription-id: ${{ steps.oidc.outputs.subscription-id }}
+
+      - name: Load pull request token
+        if: steps.versions.outputs.changed == 'true' && steps.oidc.outputs.use-oidc == 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@3cb60284258b993d11b581f7c3fabe082cf51f7e
+        with:
+          use-oidc: 'true'
+          secret-names: reusable-workflows-token
+
+      - name: Require pull request token
+        if: steps.versions.outputs.changed == 'true'
+        env:
+          PR_TOKEN: ${{ env.REUSABLE_WORKFLOWS_TOKEN }}
+        run: |
+          if [[ -z "$PR_TOKEN" ]]; then
+            echo "::error title=PR token unavailable::A newer managed dependency exists, but reusable-workflows-token could not be loaded."
+            exit 1
+          fi
+        shell: bash
+
+      - name: Create pull request body
+        if: steps.versions.outputs.changed == 'true'
+        env:
+          APP_CURRENT: ${{ steps.versions.outputs.apppackageinstaller_current }}
+          APP_LATEST: ${{ steps.versions.outputs.apppackageinstaller_latest }}
+          SDK_CURRENT: ${{ steps.versions.outputs.dataminer_sdk_current }}
+          SDK_LATEST: ${{ steps.versions.outputs.dataminer_sdk_latest }}
+        run: |
+          cat > "$RUNNER_TEMP/managed-dependency-pr.md" <<EOF
+          This PR was created automatically by the **Update managed dependency versions** workflow.
+
+          | Package | Current | Latest stable |
+          | --- | --- | --- |
+          | Skyline.DataMiner.Core.AppPackageInstaller | $APP_CURRENT | $APP_LATEST |
+          | Skyline.DataMiner.Sdk | $SDK_CURRENT | $SDK_LATEST |
+
+          Prerelease and unlisted NuGet versions are excluded. Merging this PR rolls the selected versions out through the reusable workflow.
+          EOF
+        shell: bash
+
+      - name: Create or update pull request
+        if: steps.versions.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ env.REUSABLE_WORKFLOWS_TOKEN }}
+          base: ${{ github.event.repository.default_branch }}
+          branch: automation/update-managed-dependency-versions
+          delete-branch: true
+          add-paths: |
+            .github/actions/update-global-json-sdks/action.yml
+            .github/workflows/Master Workflow.yml
+            .github/workflows/Test composite actions.yml
+          commit-message: 'chore: update managed dependency versions'
+          title: 'chore: update managed dependency versions'
+          body-path: ${{ runner.temp }}/managed-dependency-pr.md

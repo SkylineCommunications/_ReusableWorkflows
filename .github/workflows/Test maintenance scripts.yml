@@ -4,14 +4,22 @@ on:
   pull_request:
     paths:
       - '.github/scripts/**'
+      - '.github/actions/update-global-json-sdks/action.yml'
+      - '.github/workflows/Master Workflow.yml'
+      - '.github/workflows/Test composite actions.yml'
       - '.github/workflows/Test Downstream.yml'
       - '.github/workflows/Test maintenance scripts.yml'
+      - '.github/workflows/Update managed dependency versions.yml'
   push:
     branches: [main]
     paths:
       - '.github/scripts/**'
+      - '.github/actions/update-global-json-sdks/action.yml'
+      - '.github/workflows/Master Workflow.yml'
+      - '.github/workflows/Test composite actions.yml'
       - '.github/workflows/Test Downstream.yml'
       - '.github/workflows/Test maintenance scripts.yml'
+      - '.github/workflows/Update managed dependency versions.yml'
 
 permissions:
   contents: read
@@ -22,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Run unit tests
         shell: bash

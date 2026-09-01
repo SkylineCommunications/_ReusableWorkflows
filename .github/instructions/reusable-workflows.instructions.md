@@ -47,6 +47,12 @@ After editing a reusable workflow:
 - Some command-line tools return a failure code when a glob matches no files. Before invoking a tool for an optional artifact type, explicitly check whether matching files exist. Do not suppress failures from an invocation that had actual inputs.
 - A composite action's smoke test must exercise the same invocation path used by its workflow caller, including the composite interface, outputs, and command-output parsing. An offline script test alone does not validate the workflow wrapper.
 
+### Managed dependency versions
+
+- `Update managed dependency versions.yml` is the normal path for updating the listed stable versions of `Skyline.DataMiner.Core.AppPackageInstaller` and `Skyline.DataMiner.Sdk`. It maintains one PR from `automation/update-managed-dependency-versions`; manual dispatch defaults to previewing the validated diff and can set `dry-run` to `false` only from the default branch.
+- Manual DataMiner SDK bumps must update both `$DATAMINER_SDK_VERSION` in `update-global-json-sdks/action.yml` and the matching expected `version=...` in the `update-global-json-sdks` job of `Test composite actions.yml`.
+- Keep the updater script's target patterns synchronized if either assignment format or location changes. A missing, duplicate, or mismatched assignment must fail closed instead of partially updating files.
+
 ### Partitioned build ordering
 
 - When a later build stage consumes signed outputs from an earlier stage, pass `BuildProjectReferences=false` to the later build. Otherwise MSBuild can rebuild a dependency and replace its signed output.
