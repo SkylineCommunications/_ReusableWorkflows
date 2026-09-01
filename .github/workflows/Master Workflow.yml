@@ -366,7 +366,7 @@ jobs:
       # reads its own org) + the Skyline Azure feeds. Non-Skyline owners and fork PRs
       # (no Key Vault) fall back to just their own organization's feed.
       - name: Setup Skyline NuGet sources
-        if: needs.check_oidc.outputs.is-skyline-managed == 'true'
+        if: needs.check_oidc.outputs.is-skyline-managed == 'true' && needs.check_oidc.outputs.is-fork != 'true'
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
         with:
           skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
