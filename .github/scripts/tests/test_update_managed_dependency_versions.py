@@ -30,10 +30,13 @@ class ManagedDependencyUpdaterTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.repo_root = Path(self.temporary_directory.name)
         self.master_path = self.repo_root / ".github/workflows/Master Workflow.yml"
-        self.action_path = self.repo_root / ".github/actions/update-global-json-sdks/action.yml"
+        self.action_script_path = (
+            self.repo_root
+            / ".github/actions/update-global-json-sdks/update-global-json-sdks.ps1"
+        )
         self.test_workflow_path = self.repo_root / ".github/workflows/Test composite actions.yml"
         self.master_path.parent.mkdir(parents=True)
-        self.action_path.parent.mkdir(parents=True)
+        self.action_script_path.parent.mkdir(parents=True)
         self._write_fixture_versions("4.1.0", "2.5.5", "2.5.5")
 
     def tearDown(self):
@@ -44,9 +47,8 @@ class ManagedDependencyUpdaterTests(unittest.TestCase):
             f"name: Main workflow\n\nenv:\n  VERSION_APPPACKAGEINSTALLER: '{app_version}'\n",
             encoding="utf-8",
         )
-        self.action_path.write_text(
-            "runs:\n  using: composite\n  steps:\n    - shell: pwsh\n      run: |\n"
-            f"        $DATAMINER_SDK_VERSION = '{sdk_version}'\n",
+        self.action_script_path.write_text(
+            f"$DATAMINER_SDK_VERSION = '{sdk_version}'\n",
             encoding="utf-8",
         )
         self.test_workflow_path.write_text(
@@ -128,19 +130,26 @@ class ManagedDependencyUpdaterTests(unittest.TestCase):
         self.assertEqual({Path(".github/workflows/Master Workflow.yml")}, set(updates))
         UPDATER.write_updates(self.repo_root, updates)
         self.assertIn("VERSION_APPPACKAGEINSTALLER: '4.2.0'", self.master_path.read_text())
-        self.assertIn("$DATAMINER_SDK_VERSION = '2.5.5'", self.action_path.read_text())
+        self.assertIn(
+            "$DATAMINER_SDK_VERSION = '2.5.5'", self.action_script_path.read_text()
+        )
 
     def test_updates_sdk_pin_and_test_expectation_together(self):
         updates, _ = self._prepare(sdk_version="2.5.7")
         self.assertEqual(
             {
-                Path(".github/actions/update-global-json-sdks/action.yml"),
+                Path(
+                    ".github/actions/update-global-json-sdks/"
+                    "update-global-json-sdks.ps1"
+                ),
                 Path(".github/workflows/Test composite actions.yml"),
             },
             set(updates),
         )
         UPDATER.write_updates(self.repo_root, updates)
-        self.assertIn("$DATAMINER_SDK_VERSION = '2.5.7'", self.action_path.read_text())
+        self.assertIn(
+            "$DATAMINER_SDK_VERSION = '2.5.7'", self.action_script_path.read_text()
+        )
         self.assertIn('echo "version=2.5.7"', self.test_workflow_path.read_text())
 
     def test_updates_both_dependencies_and_second_run_is_idempotent(self):
@@ -209,21 +218,23 @@ class ManagedDependencyUpdaterTests(unittest.TestCase):
         with self.assertRaisesRegex(UPDATER.UpdateError, "not synchronized"):
             self._prepare(app_version="4.2.0", sdk_version="2.5.7")
         self.assertEqual(original_master, self.master_path.read_text())
-        self.assertIn("$DATAMINER_SDK_VERSION = '2.5.5'", self.action_path.read_text())
+        self.assertIn(
+            "$DATAMINER_SDK_VERSION = '2.5.5'", self.action_script_path.read_text()
+        )
         self.assertIn('echo "version=2.5.4"', self.test_workflow_path.read_text())
 
     def test_missing_or_duplicate_assignment_fails_before_any_write(self):
-        original_action = self.action_path.read_text()
+        original_action_script = self.action_script_path.read_text()
         for content in (
             "name: missing\n",
-            original_action + "        $DATAMINER_SDK_VERSION = '2.5.5'\n",
+            original_action_script + "$DATAMINER_SDK_VERSION = '2.5.5'\n",
         ):
             with self.subTest(content=content):
-                self.action_path.write_text(content, encoding="utf-8")
+                self.action_script_path.write_text(content, encoding="utf-8")
                 with self.assertRaisesRegex(UPDATER.UpdateError, "Expected one version assignment"):
                     self._prepare(sdk_version="2.5.7")
                 self.assertIn("VERSION_APPPACKAGEINSTALLER: '4.1.0'", self.master_path.read_text())
-        self.action_path.write_text(original_action, encoding="utf-8")
+        self.action_script_path.write_text(original_action_script, encoding="utf-8")
 
 
 if __name__ == "__main__":

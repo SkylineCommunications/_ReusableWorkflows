@@ -1,13 +1,15 @@
 # update-global-json-sdks
 
-Updates centrally managed `msbuild-sdks` versions in `global.json`.
+Updates centrally managed `msbuild-sdks` versions in every `global.json` from
+the repository root through three subdirectory levels.
 
 Behavior:
 
-- Skips silently when `global.json` is missing.
-- Skips silently when `msbuild-sdks` is missing.
+- Skips silently when no `global.json` files are found.
+- Skips individual files when `msbuild-sdks` is missing.
 - Updates managed DataMiner SDK family entries to the shared version.
 - Leaves unmanaged entries unchanged.
+- Treats the repository root as depth 0 and includes files through depth 3.
 
 ## Inputs
 
