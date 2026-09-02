@@ -11,7 +11,7 @@ $otherManagedSdks = @{
 }
 
 $globalJsonPaths = @(
-    Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter 'global.json' -File -Recurse -Depth 3
+    Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter 'global.json' -File -Recurse -Depth 3 -Force
 )
 
 if ($globalJsonPaths.Count -eq 0) {
