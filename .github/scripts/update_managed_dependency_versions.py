@@ -50,8 +50,8 @@ TARGETS = (
     ),
     Target(
         "dataminer-sdk",
-        Path(".github/actions/update-global-json-sdks/action.yml"),
-        re.compile(r"(?m)^(        \$DATAMINER_SDK_VERSION = ')([^']+)(')(?=\r?$)"),
+        Path(".github/actions/update-global-json-sdks/update-global-json-sdks.ps1"),
+        re.compile(r"(?m)^(\$DATAMINER_SDK_VERSION = ')([^']+)(')(?=\r?$)"),
     ),
     Target(
         "dataminer-sdk",

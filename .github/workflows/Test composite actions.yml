@@ -528,16 +528,16 @@ jobs:
 
       # The composite hard-codes the centrally-managed DataMiner SDK
       # version. Keep this in sync with $DATAMINER_SDK_VERSION in
-      # .github/actions/update-global-json-sdks/action.yml.
+      # .github/actions/update-global-json-sdks/update-global-json-sdks.ps1.
       - name: Expected DataMiner SDK version
         id: expected
         shell: bash
         run: echo "version=2.5.7" >> "$GITHUB_OUTPUT"
 
-      - name: No global.json (skip silently)
+      - name: No global.json files (skip silently)
         uses: ./.github/actions/update-global-json-sdks
 
-      - name: Stage global.json without msbuild-sdks
+      - name: Stage one global.json without msbuild-sdks
         shell: bash
         run: |
           cat > global.json <<'EOF'
@@ -558,7 +558,7 @@ jobs:
             exit 1
           fi
 
-      - name: Stage global.json with managed and unmanaged SDKs
+      - name: Stage one global.json with managed and unmanaged SDKs
         shell: bash
         run: |
           cat > global.json <<'EOF'
@@ -584,16 +584,43 @@ jobs:
           jq -e --arg v "$EXPECTED" '."msbuild-sdks"."Skyline.DataMiner.SomethingElse" == $v' global.json > /dev/null
           jq -e '."msbuild-sdks"."Microsoft.Build.NoTargets" == "3.7.0"' global.json > /dev/null
 
-      - name: Re-invoke (idempotency check)
+      - name: Stage two included global.json files and one beyond maximum depth
+        shell: bash
+        run: |
+          mkdir -p level-1/level-2/level-3 level-1/level-2/level-3/level-4
+          for path in global.json level-1/level-2/level-3/global.json level-1/level-2/level-3/level-4/global.json; do
+            cat > "$path" <<'EOF'
+          {
+            "msbuild-sdks": {
+              "Skyline.DataMiner.Sdk": "0.0.1"
+            }
+          }
+          EOF
+          done
+
+      - name: Invoke composite (should update both included files)
         uses: ./.github/actions/update-global-json-sdks
 
-      - name: Assert still in expected state
+      - name: Assert two files updated and depth four excluded
         shell: bash
         env:
           EXPECTED: ${{ steps.expected.outputs.version }}
         run: |
           jq -e --arg v "$EXPECTED" '."msbuild-sdks"."Skyline.DataMiner.Sdk" == $v' global.json > /dev/null
-          jq -e '."msbuild-sdks"."Microsoft.Build.NoTargets" == "3.7.0"' global.json > /dev/null
+          jq -e --arg v "$EXPECTED" '."msbuild-sdks"."Skyline.DataMiner.Sdk" == $v' level-1/level-2/level-3/global.json > /dev/null
+          jq -e '."msbuild-sdks"."Skyline.DataMiner.Sdk" == "0.0.1"' level-1/level-2/level-3/level-4/global.json > /dev/null
+
+      - name: Re-invoke (idempotency check)
+        uses: ./.github/actions/update-global-json-sdks
+
+      - name: Assert both included files remain in expected state
+        shell: bash
+        env:
+          EXPECTED: ${{ steps.expected.outputs.version }}
+        run: |
+          jq -e --arg v "$EXPECTED" '."msbuild-sdks"."Skyline.DataMiner.Sdk" == $v' global.json > /dev/null
+          jq -e --arg v "$EXPECTED" '."msbuild-sdks"."Skyline.DataMiner.Sdk" == $v' level-1/level-2/level-3/global.json > /dev/null
+          jq -e '."msbuild-sdks"."Skyline.DataMiner.Sdk" == "0.0.1"' level-1/level-2/level-3/level-4/global.json > /dev/null
 
   sonarcloud-status:
     # Excluded from automatic runs: requires a live SonarCloud token. Run

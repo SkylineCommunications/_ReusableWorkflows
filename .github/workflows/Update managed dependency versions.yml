@@ -154,7 +154,7 @@ jobs:
           branch: automation/update-managed-dependency-versions
           delete-branch: true
           add-paths: |
-            .github/actions/update-global-json-sdks/action.yml
+            .github/actions/update-global-json-sdks/update-global-json-sdks.ps1
             .github/workflows/Master Workflow.yml
             .github/workflows/Test composite actions.yml
           commit-message: 'chore: update managed dependency versions'

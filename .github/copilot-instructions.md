@@ -32,7 +32,7 @@ Centralized GitHub Actions **reusable workflows** and **composite actions** cons
 
 ## Centrally-managed SDK versions
 
-`Update managed dependency versions.yml` checks NuGet.org every Monday for listed stable AppPackageInstaller and DataMiner SDK releases and creates or updates one review PR. Manual dispatch defaults to a read-only dry run; setting `dry-run` to `false` creates or updates the PR when dispatched from the default branch. `update-global-json-sdks/action.yml` hard-codes `$DATAMINER_SDK_VERSION` and the `$dataMinerSdkPatterns` list; manual bumps must also update the matching `version=...` line in the `update-global-json-sdks` job of `Test composite actions.yml`. The action rewrites every `msbuild-sdks` key matching `Skyline.DataMiner.*` to the shared version; exact-name overrides in `$otherManagedSdks` win against the pattern.
+`Update managed dependency versions.yml` checks NuGet.org every Monday for listed stable AppPackageInstaller and DataMiner SDK releases and creates or updates one review PR. Manual dispatch defaults to a read-only dry run; setting `dry-run` to `false` creates or updates the PR when dispatched from the default branch. `update-global-json-sdks/update-global-json-sdks.ps1` hard-codes `$DATAMINER_SDK_VERSION` and the `$dataMinerSdkPatterns` list; manual bumps must also update the matching `version=...` line in the `update-global-json-sdks` job of `Test composite actions.yml`. The action rewrites every `msbuild-sdks` key matching `Skyline.DataMiner.*` to the shared version; exact-name overrides in `$otherManagedSdks` win against the pattern.
 
 ## DxM and DcM integration boundary
 
@@ -65,7 +65,7 @@ When changing a DxM-facing contract:
 
 - **New input scenarios → extend `Master Workflow.yml`**, not a new wrapper. The three deprecated wrappers stay frozen.
 - **Adding a composite action:** create `.github/actions/<name>/` with `action.yml` + named script(s); add a row to `.github/actions/README.md`; add a smoke-test job to `Test composite actions.yml`; reference it from the relevant master workflow with `@main`.
-- **Editing the SDK version constant** in `update-global-json-sdks/action.yml`: also update the expected `version=` in `Test composite actions.yml` or its assertion will fail.
+- **Editing the SDK version constant** in `update-global-json-sdks/update-global-json-sdks.ps1`: also update the expected `version=` in `Test composite actions.yml` or its assertion will fail.
 - **Editing `Test Downstream.yml`'s `DOWNSTREAM_MAP`**: each entry lists *all* workflow files whose change should fan out to that downstream — include both the entry-point workflow and any sub-pipeline it dispatches to.
 - **Spaces in workflow filenames**: both `Master Workflow.yml` and `Master%20Workflow.yml` work in `uses:`; the repo uses literal spaces.
 
