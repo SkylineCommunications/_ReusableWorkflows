@@ -45,6 +45,6 @@ No outputs.
 
 ## Notes
 
-- The shared DataMiner SDK version constant is defined inside [action.yml](action.yml).
+- The shared DataMiner SDK version constant is defined inside [update-global-json-sdks.ps1](update-global-json-sdks.ps1).
 - [Update managed dependency versions.yml](../../workflows/Update%20managed%20dependency%20versions.yml) checks for listed stable releases weekly and maintains the normal version-update PR. Manual dispatch defaults to preview mode; set `dry-run` to `false` from the default branch to create or update the PR.
 - For manual changes, keep [Test composite actions.yml](../../workflows/Test%20composite%20actions.yml) expected version checks in sync with the constant.

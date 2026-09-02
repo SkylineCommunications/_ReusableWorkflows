@@ -528,7 +528,7 @@ jobs:
 
       # The composite hard-codes the centrally-managed DataMiner SDK
       # version. Keep this in sync with $DATAMINER_SDK_VERSION in
-      # .github/actions/update-global-json-sdks/action.yml.
+      # .github/actions/update-global-json-sdks/update-global-json-sdks.ps1.
       - name: Expected DataMiner SDK version
         id: expected
         shell: bash
