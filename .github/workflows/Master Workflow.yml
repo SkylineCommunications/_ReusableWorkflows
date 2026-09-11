@@ -1286,35 +1286,67 @@ jobs:
         id: findVersionComment
         env:
           REF_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Checking for release notes associated with the reference: '$REF_NAME'"
 
-          RELEASE_INFO=$(gh release view "$REF_NAME" --json body,name 2>/dev/null || echo "{}")
+          RELEASE_INFO=$(gh release view "$REF_NAME" --json body,name,url 2>/dev/null || echo "{}")
           RELEASE_NOTE=$(echo "$RELEASE_INFO" | jq -r '.body // ""' 2>/dev/null || echo "")
           RELEASE_TITLE=$(echo "$RELEASE_INFO" | jq -r '.name // ""' 2>/dev/null || echo "")
+          RELEASE_URL=$(echo "$RELEASE_INFO" | jq -r '.url // ""' 2>/dev/null || echo "")
 
-          escape_special_chars() {
-            echo "$1" | sed -e 's/,/%2c/g' -e 's/"/%22/g' -e 's/;/%3b/g'
+          escape_msbuild_special_chars() {
+            printf '%s' "$1" | sed -e 's/,/%2c/g' -e 's/"/%22/g' -e 's/;/%3b/g'
           }
 
           if [[ -n "$RELEASE_NOTE" ]]; then
-            ESCAPED_RELEASE_NOTE=$(escape_special_chars "$RELEASE_NOTE")
-            echo "Release description found for '$REF_NAME': $ESCAPED_RELEASE_NOTE"
-            echo "versionComment<<EOF" >> $GITHUB_OUTPUT
-            echo "$ESCAPED_RELEASE_NOTE" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            VERSION_COMMENT="$RELEASE_NOTE"
+            VERSION_COMMENT_SOURCE="release description"
+            MORE_INFO_URL="$RELEASE_URL"
           elif [[ -n "$RELEASE_TITLE" ]]; then
-            ESCAPED_RELEASE_TITLE=$(escape_special_chars "$RELEASE_TITLE")
-            echo "Release title found for '$REF_NAME': $ESCAPED_RELEASE_TITLE"
-            echo "versionComment=$ESCAPED_RELEASE_TITLE" >> $GITHUB_OUTPUT
+            VERSION_COMMENT="$RELEASE_TITLE"
+            VERSION_COMMENT_SOURCE="release title"
+            MORE_INFO_URL="$RELEASE_URL"
           else
             echo "No release description or title found for '$REF_NAME'. Falling back to tag or commit message."
-            VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null || git log -1 --pretty=format:%s)
-            ESCAPED_VERSION_COMMENT=$(escape_special_chars "$VERSION_COMMENT")
-            echo "Fallback version comment: $ESCAPED_VERSION_COMMENT"
-            echo "versionComment=$ESCAPED_VERSION_COMMENT" >> $GITHUB_OUTPUT
+            if VERSION_COMMENT=$(git describe --tags --exact-match 2>/dev/null); then
+              VERSION_COMMENT_SOURCE="tag"
+              MORE_INFO_URL="$GITHUB_SERVER_URL/$REPOSITORY/tree/$REF_NAME"
+            else
+              VERSION_COMMENT=$(git log -1 --pretty=format:%s)
+              VERSION_COMMENT_SOURCE="commit message"
+              MORE_INFO_URL="$GITHUB_SERVER_URL/$REPOSITORY/commit/$GITHUB_SHA"
+            fi
           fi
+
+          MAX_COMMENT_LENGTH=1500
+          SEE_MORE_SUFFIX=$'...\n'"See more at [GitHub]($MORE_INFO_URL)."
+          if (( ${#VERSION_COMMENT} > MAX_COMMENT_LENGTH )); then
+            MAX_PREFIX_LENGTH=$((MAX_COMMENT_LENGTH - ${#SEE_MORE_SUFFIX}))
+            if (( MAX_PREFIX_LENGTH <= 0 )); then
+              echo "::error::The GitHub release link is too long to fit within the Catalog version comment limit."
+              exit 1
+            fi
+
+            VERSION_COMMENT="${VERSION_COMMENT:0:MAX_PREFIX_LENGTH}"
+            while [[ "$VERSION_COMMENT" == *[[:space:].] ]]; do
+              VERSION_COMMENT="${VERSION_COMMENT%?}"
+            done
+            VERSION_COMMENT+="$SEE_MORE_SUFFIX"
+          fi
+
+          echo "Using $VERSION_COMMENT_SOURCE for '$REF_NAME' (${#VERSION_COMMENT} characters)."
+          ESCAPED_VERSION_COMMENT=$(escape_msbuild_special_chars "$VERSION_COMMENT")
+          OUTPUT_DELIMITER="ghadelimiter_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_${RANDOM}_${RANDOM}"
+          while grep -Fqx -- "$OUTPUT_DELIMITER" <<< "$ESCAPED_VERSION_COMMENT"; do
+            OUTPUT_DELIMITER="ghadelimiter_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_${RANDOM}_${RANDOM}"
+          done
+          {
+            printf 'versionComment<<%s\n' "$OUTPUT_DELIMITER"
+            printf '%s\n' "$ESCAPED_VERSION_COMMENT"
+            printf '%s\n' "$OUTPUT_DELIMITER"
+          } >> "$GITHUB_OUTPUT"
         shell: bash
         background: true
 
