@@ -23,10 +23,10 @@ runs:
   steps:
     - name: Detect test runner mode
       id: detect
-      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@main
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@test-downstream
 
     - name: Run unit tests
-      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/run-unit-tests@main
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/run-unit-tests@test-downstream
       with:
         solution-path: ${{ inputs.solution-path }}
         configuration: ${{ inputs.configuration }}
