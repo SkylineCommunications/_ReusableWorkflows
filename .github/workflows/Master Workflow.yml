@@ -1321,7 +1321,7 @@ jobs:
           fi
 
           MAX_COMMENT_LENGTH=1500
-          SEE_MORE_SUFFIX="... See more at [GitHub]($MORE_INFO_URL)."
+          SEE_MORE_SUFFIX=$'...\n'"See more at [GitHub]($MORE_INFO_URL)."
           if (( ${#VERSION_COMMENT} > MAX_COMMENT_LENGTH )); then
             MAX_PREFIX_LENGTH=$((MAX_COMMENT_LENGTH - ${#SEE_MORE_SUFFIX}))
             if (( MAX_PREFIX_LENGTH <= 0 )); then
