@@ -1296,6 +1296,10 @@ jobs:
           RELEASE_TITLE=$(echo "$RELEASE_INFO" | jq -r '.name // ""' 2>/dev/null || echo "")
           RELEASE_URL=$(echo "$RELEASE_INFO" | jq -r '.url // ""' 2>/dev/null || echo "")
 
+          escape_msbuild_special_chars() {
+            printf '%s' "$1" | sed -e 's/,/%2c/g' -e 's/"/%22/g' -e 's/;/%3b/g'
+          }
+
           if [[ -n "$RELEASE_NOTE" ]]; then
             VERSION_COMMENT="$RELEASE_NOTE"
             VERSION_COMMENT_SOURCE="release description"
@@ -1333,13 +1337,14 @@ jobs:
           fi
 
           echo "Using $VERSION_COMMENT_SOURCE for '$REF_NAME' (${#VERSION_COMMENT} characters)."
+          ESCAPED_VERSION_COMMENT=$(escape_msbuild_special_chars "$VERSION_COMMENT")
           OUTPUT_DELIMITER="ghadelimiter_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_${RANDOM}_${RANDOM}"
-          while grep -Fqx -- "$OUTPUT_DELIMITER" <<< "$VERSION_COMMENT"; do
+          while grep -Fqx -- "$OUTPUT_DELIMITER" <<< "$ESCAPED_VERSION_COMMENT"; do
             OUTPUT_DELIMITER="ghadelimiter_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_${RANDOM}_${RANDOM}"
           done
           {
             printf 'versionComment<<%s\n' "$OUTPUT_DELIMITER"
-            printf '%s\n' "$VERSION_COMMENT"
+            printf '%s\n' "$ESCAPED_VERSION_COMMENT"
             printf '%s\n' "$OUTPUT_DELIMITER"
           } >> "$GITHUB_OUTPUT"
         shell: bash
