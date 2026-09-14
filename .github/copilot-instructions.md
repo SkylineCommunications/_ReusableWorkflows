@@ -39,7 +39,7 @@ Centralized GitHub Actions **reusable workflows** and **composite actions** cons
 This repository owns only the reusable, repository-type-neutral part of the DxM flow:
 
 - `Master Workflow.yml` builds, tests, packages, signs, and publishes artifacts.
-- `compute-next-version`, `determine-version`, and `exempt-change-detector` provide shared release classification and version contracts.
+- `compute-next-version` and `determine-version` provide shared release classification and version contracts.
 - `references-parser` parses the common `References:` administration format.
 - `package-debian`, `resolve-oidc`, `load-secrets`, NuGet-source actions, and `set-repo-type` remain generic building blocks.
 
@@ -49,7 +49,6 @@ When changing a DxM-facing contract:
 
 - Search `SkylineCommunicationsCore/.github-private/provisioning/dxm-repo-template` and its reusable workflows for affected callers and consumers.
 - Keep stable and prerelease SemVer behavior aligned across `compute-next-version`, `determine-version`, `.github-private/auto-tag.yml`, DxMStorage publication, and server tag resolution.
-- Keep exempt-change behavior aligned between `exempt-change-detector`, `.github-private/pr-validation.yml`, `.github-private/auto-tag.yml`, `.github-private/collaboration.yml`, and ReleaseTracker's reserved-RN filtering.
 - Add or update `Test composite actions.yml` coverage for a changed action, then use the downstream battery for the affected Master Workflow paths. Event-driven Core governance behavior still needs a separate `PilotDxM` run.
 - Update `SkylineCommunications/internal-docs/DevDocs/GitHub_DxM_Repositories/` when developer, release, packaging, identity, or operational behavior changes.
 
