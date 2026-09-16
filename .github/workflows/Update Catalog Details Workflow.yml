@@ -134,6 +134,12 @@ jobs:
               --catalog-identifier "${{ vars.catalogIdentifier }}" \
               --debug "${{ inputs.debug }}"
 
+        - name: Apply source_code_url to manifest
+          if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
+          uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@main
+          with:
+            repository: ${{ github.repository }}
+
         - name: Detect catalog detail files
           id: detect_catalog_files
           shell: pwsh
