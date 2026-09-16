@@ -434,17 +434,6 @@ jobs:
           NuGetValidateSkylineSpecifications --solution-filepath "$env:SOLUTION_PATH" --minimal $minimal
         shell: pwsh
 
-      - name: Apply catalog identifiers
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-catalog-identifiers@main
-        with:
-          mappings: ${{ inputs.override-catalog-identifiers }}
-
-      - name: Apply source_code_url to manifest
-        if: needs.discover_projects.outputs.has-dataminer-projects == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/apply-source-code-url@main
-        with:
-          repository: ${{ github.repository }}
-
       - name: Validate MSI ProductVersion
         if: needs.discover_projects.outputs.has-wix-projects == 'true' && needs.determine_version.outputs.product-version-valid != 'true'
         env:
