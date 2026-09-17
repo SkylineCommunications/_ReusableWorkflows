@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Protocol xmlns="http://www.skyline.be/protocol">
+  <Name>Connector &amp; One</Name>
+  <VersionHistory><Branches><Branch id="1"><Comment>Main &amp; Branch</Comment><SystemVersions><SystemVersion id="0"><MajorVersions><MajorVersion id="0"><MinorVersions><MinorVersion id="1"><Changes><NewFeature>Supports &lt;tag&gt; values</NewFeature></Changes><Date>2026-09-17</Date><Provider><Company>Test</Company><Author>Test</Author></Provider><References><TaskId>400</TaskId></References></MinorVersion></MinorVersions></MajorVersion></MajorVersions></SystemVersion></SystemVersions></Branch></Branches></VersionHistory>
+</Protocol>

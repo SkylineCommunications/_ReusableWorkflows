@@ -60,6 +60,10 @@ on:
         required: false
       azureToken:
         required: false
+      SKYLINE_USERNAME:
+        required: false
+      SKYLINE_PASSWORD:
+        required: false
 
 jobs:
 
@@ -219,6 +223,84 @@ jobs:
       debug: ${{ inputs.debug }}
       solution-filter-name: ${{ inputs.solution-filter-name }}
     secrets: inherit
+
+  update_collaboration_tasks:
+    name: Update Collaboration Tasks
+    # Both route jobs are listed deliberately. The always()-safe condition below
+    # checks only the route selected by check_solution_type, so the skipped route
+    # cannot suppress a successful stable release.
+    needs: [validate_trigger, check_oidc, check_solution_type, CI_SDK, CI_Legacy]
+    if: >-
+      always() &&
+      needs.validate_trigger.result == 'success' &&
+      needs.check_oidc.result == 'success' &&
+      needs.check_solution_type.result == 'success' &&
+      github.ref_type == 'tag' &&
+      !contains(github.ref_name, '-') &&
+      (
+        (needs.check_solution_type.outputs.isSdk == 'true' && needs.CI_SDK.result == 'success') ||
+        (needs.check_solution_type.outputs.isSdk == 'false' && needs.CI_Legacy.result == 'success')
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Enable long paths
+        continue-on-error: true
+        run: git config --global core.longpaths true
+        shell: bash
+
+      - name: Azure Login for optional Key Vault credentials
+        if: needs.check_oidc.outputs.use-oidc == 'true'
+        continue-on-error: true
+        uses: azure/login@v3
+        with:
+          client-id: ${{ needs.check_oidc.outputs.client-id }}
+          tenant-id: ${{ needs.check_oidc.outputs.tenant-id }}
+          subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
+
+      - name: Load optional Skyline API credentials
+        if: needs.check_oidc.outputs.use-oidc == 'true'
+        continue-on-error: true
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+          secret-names: |
+            skyline-username
+            skyline-password
+
+      - name: Checkout released connector tag
+        continue-on-error: true
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - name: Update Collaboration task comments
+        id: update_comments
+        if: always()
+        continue-on-error: true
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/connector-release-task-comment@main
+        with:
+          release-tag: ${{ github.ref_name }}
+          quality-gates-passed: ${{ (needs.check_solution_type.outputs.isSdk == 'true' && needs.CI_SDK.result == 'success') || (needs.check_solution_type.outputs.isSdk == 'false' && needs.CI_Legacy.result == 'success') }}
+        env:
+          SKYLINE_USERNAME_OVERRIDE: ${{ secrets.SKYLINE_USERNAME }}
+          SKYLINE_PASSWORD_OVERRIDE: ${{ secrets.SKYLINE_PASSWORD }}
+
+      - name: Report non-blocking Collaboration result
+        if: always()
+        env:
+          ACTION_OUTCOME: ${{ steps.update_comments.outcome }}
+          ACTION_STATUS: ${{ steps.update_comments.outputs.status }}
+        run: |
+          if [[ "$ACTION_OUTCOME" != "success" || "$ACTION_STATUS" != "success" ]]; then
+            echo "::warning::Connector release succeeded, but Collaboration task comments were not fully updated. See the action error and Job Summary for details."
+          else
+            echo "Collaboration task comments were updated successfully."
+          fi
+        shell: bash
 
   # Keep the enterprise custom property `Workflow-Repo-Type` in sync: a connector repo is always
   # `Connector`. Runs only on the repository's default branch (feature branches / PRs / tags never

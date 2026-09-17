@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Protocol xmlns="http://www.skyline.be/protocol">
+  <Name>Arkona Technologies AT300</Name>
+  <VersionHistory>
+    <Branches>
+      <Branch id="1">
+        <Comment>Main Branch</Comment>
+        <SystemVersions>
+          <SystemVersion id="0">
+            <MajorVersions>
+              <MajorVersion id="0">
+                <MinorVersions>
+                  <MinorVersion id="1">
+                    <Changes>
+                      <NewFeature>Initial version</NewFeature>
+                    </Changes>
+                    <Date>2026-09-17</Date>
+                    <Provider>
+                      <Company>Skyline Communications</Company>
+                      <Author>Connector Team</Author>
+                    </Provider>
+                    <References>
+                      <TaskId>123456</TaskId>
+                    </References>
+                  </MinorVersion>
+                </MinorVersions>
+              </MajorVersion>
+            </MajorVersions>
+          </SystemVersion>
+        </SystemVersions>
+      </Branch>
+    </Branches>
+  </VersionHistory>
+</Protocol>

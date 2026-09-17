@@ -91,6 +91,19 @@ jobs:
     secrets: inherit
 ```
 
+### Connector stable-release task comments
+
+`Connector Master Workflow.yml` runs a post-release fan-in only for a stable
+numeric connector tag after the selected SDK or Legacy pipeline succeeds,
+including quality gates and artifact registration. It reads task IDs from the
+matching version-history entry in `protocol.xml` and updates the Collaboration
+API through `PATCH api/tasks/batch`. The optional reusable-workflow secrets
+`SKYLINE_USERNAME` and `SKYLINE_PASSWORD` follow Skyline's `POST https://api.skyline.be/Token` convention; Skyline-managed callers may instead
+load `skyline-username` and `skyline-password` through the existing OIDC/Key
+Vault flow. Credential or task API failures are reported but do not block the
+already successful release. The existing `api-key` / `DATAMINER_TOKEN` is not
+used for this operation.
+
 ### Example: automation dispatcher (`Automation Master Workflow.yml`)
 
 ```yaml

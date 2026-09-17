@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<d:Protocol xmlns:d="http://www.skyline.be/protocol">
+  <d:Name>Example Connector</d:Name>
+  <d:VersionHistory>
+    <d:Branches>
+      <d:Branch id="1">
+        <d:Comment>Feature Branch</d:Comment>
+        <d:SystemVersions>
+          <d:SystemVersion id="0">
+            <d:MajorVersions>
+              <d:MajorVersion id="0">
+                <d:MinorVersions>
+                  <d:MinorVersion id="2">
+                    <d:Changes>
+                      <d:Fix>Corrected a polling issue</d:Fix>
+                      <d:Change>Updated the connection handling</d:Change>
+                      <d:NewFeature>Added a status table</d:NewFeature>
+                    </d:Changes>
+                    <d:Date>2026-09-17</d:Date>
+                    <d:Provider><d:Company>Skyline Communications</d:Company><d:Author>Test</d:Author></d:Provider>
+                    <d:References>
+                      <d:TaskId>200</d:TaskId>
+                      <d:TaskId>100</d:TaskId>
+                      <d:TaskId>200</d:TaskId>
+                    </d:References>
+                  </d:MinorVersion>
+                </d:MinorVersions>
+              </d:MajorVersion>
+            </d:MajorVersions>
+          </d:SystemVersion>
+        </d:SystemVersions>
+      </d:Branch>
+    </d:Branches>
+  </d:VersionHistory>
+</d:Protocol>

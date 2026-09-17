@@ -58,6 +58,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `unit-tests` | Wrapper combining detect + run unit test actions. | [unit-tests/README.md](unit-tests/README.md) |
 | `references-parser` | Parses and validates the mandatory PR `References:` line and renders the sticky-comment summary. | [references-parser/README.md](references-parser/README.md) |
 | `quality-gate-summary` | Aggregates unit-test / SonarCloud / Validator outcomes, renders a Job Summary + sticky PR comment, and fails the job on any failed sub-gate. | [quality-gate-summary/README.md](quality-gate-summary/README.md) |
+| `connector-release-task-comment` | Formats stable connector version-history metadata and updates Collaboration task comments through the batch API. | [connector-release-task-comment/README.md](connector-release-task-comment/README.md) |
 
 ## Referencing from a reusable workflow in this repo
 

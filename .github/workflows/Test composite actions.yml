@@ -1222,3 +1222,35 @@ jobs:
         run: |
           test "$OUTCOME" = "failure"
           test "$STATUS" = "failed"
+  connector-release-task-comment:
+    name: connector-release-task-comment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Invoke composite in dry-run mode
+        id: release_comment
+        uses: ./.github/actions/connector-release-task-comment
+        with:
+          protocol-file: .github/actions/connector-release-task-comment/tests/fixtures/arkona-namespaced.xml
+          release-tag: 1.0.0.1
+          quality-gates-passed: 'true'
+          dry-run: 'true'
+
+      - name: Assert outputs and exact historical comment
+        env:
+          STATUS: ${{ steps.release_comment.outputs.status }}
+          CONNECTOR: ${{ steps.release_comment.outputs.connector-name }}
+          VERSION: ${{ steps.release_comment.outputs.released-version }}
+          TASK_IDS: ${{ steps.release_comment.outputs.task-ids }}
+          COMMENT_FILE: ${{ steps.release_comment.outputs.comment-file }}
+        run: |
+          test "$STATUS" = "success"
+          test "$CONNECTOR" = "Arkona Technologies AT300"
+          test "$VERSION" = "1.0.0.1"
+          test "$TASK_IDS" = '["123456"]'
+          grep -Fx "Connector 'Arkona Technologies AT300' with version '1.0.0.1' has been released." "$COMMENT_FILE"
+          grep -Fx "Branch Comment: Main Branch" "$COMMENT_FILE"
+          grep -Fx "NF: Initial version" "$COMMENT_FILE"
+          grep -Fx "** Verified as compliant with all SLC quality gates. **" "$COMMENT_FILE"
+        shell: bash

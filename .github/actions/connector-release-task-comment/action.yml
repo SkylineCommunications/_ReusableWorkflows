@@ -1,0 +1,61 @@
+name: Connector Release Task Comment
+description: >
+  Reads the released connector version-history entry, renders the historical release comment,
+  and updates the referenced Collaboration tasks through PATCH api/tasks/batch. API failures are
+  reported by the action and are intended to be made non-blocking by the release workflow caller.
+
+inputs:
+  protocol-file:
+    description: Path to the checked-out connector protocol.xml, relative to the workspace or absolute.
+    required: false
+    default: protocol.xml
+  release-tag:
+    description: Stable connector tag being released. Prerelease and non-version tags are rejected.
+    required: true
+  quality-gates-passed:
+    description: Whether the selected SDK or Legacy pipeline completed all quality gates and artifact registration.
+    required: true
+  api-base-url:
+    description: Collaboration API base URL. The production default is https://api.skyline.be.
+    required: false
+    default: https://api.skyline.be
+  dry-run:
+    description: Parse and render metadata without authenticating or calling the Collaboration API.
+    required: false
+    default: 'false'
+  api-timeout-seconds:
+    description: HTTP timeout for token, task-read, and task-batch requests.
+    required: false
+    default: '30'
+
+outputs:
+  status:
+    description: 'success when metadata was published (or dry-run), otherwise failed.'
+    value: ${{ steps.update.outputs.status }}
+  connector-name:
+    description: Connector name read from protocol.xml.
+    value: ${{ steps.update.outputs.connector-name }}
+  released-version:
+    description: Released version read from the matching version-history entry.
+    value: ${{ steps.update.outputs.released-version }}
+  task-ids:
+    description: JSON array of unique task IDs read from the matching version-history entry.
+    value: ${{ steps.update.outputs.task-ids }}
+  comment-file:
+    description: Absolute path to the rendered historical release comment.
+    value: ${{ steps.update.outputs.comment-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Parse and update collaboration tasks
+      id: update
+      shell: bash
+      env:
+        PROTOCOL_FILE: ${{ inputs.protocol-file }}
+        RELEASE_TAG: ${{ inputs.release-tag }}
+        QUALITY_GATES_PASSED: ${{ inputs.quality-gates-passed }}
+        API_BASE_URL: ${{ inputs.api-base-url }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        API_TIMEOUT_SECONDS: ${{ inputs.api-timeout-seconds }}
+      run: bash "$GITHUB_ACTION_PATH/connector-release-task-comment.sh"

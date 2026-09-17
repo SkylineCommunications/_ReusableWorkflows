@@ -196,6 +196,16 @@ conventions). Checklist:
 tests and idempotency assertions. The battery complements it: `/test` maps
 changed actions to the workflows that consume them and dispatches those repos.
 
+The `connector-release-task-comment` action is covered offline by its
+namespaced Arkona/version-history fixtures and fake Collaboration API tests,
+and by an in-repository composite smoke job that exercises the same dry-run
+interface and output parsing. The existing Connector SDK and Connector Legacy
+entries in `DOWNSTREAM_MAP` already fan out changes to the dispatcher and its
+selected sub-pipeline. A production task update is intentionally not run by
+the downstream battery: it requires Skyline API credentials and real task
+IDs, so a maintainer-controlled canary is required before enabling it for a
+caller.
+
 ## Known limitations
 
 - **Fork status initialization**: the `pull_request` token cannot post a commit

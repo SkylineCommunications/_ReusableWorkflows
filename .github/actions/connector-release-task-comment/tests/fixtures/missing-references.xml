@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Protocol xmlns="http://www.skyline.be/protocol">
+  <Name>Missing References Connector</Name>
+  <VersionHistory><Branches><Branch id="1"><Comment>Main Branch</Comment><SystemVersions><SystemVersion id="0"><MajorVersions><MajorVersion id="0"><MinorVersions><MinorVersion id="1"><Changes><NewFeature>Initial version</NewFeature></Changes><Date>2026-09-17</Date><Provider><Company>Test</Company><Author>Test</Author></Provider></MinorVersion></MinorVersions></MajorVersion></MajorVersions></SystemVersion></SystemVersions></Branch></Branches></VersionHistory>
+</Protocol>

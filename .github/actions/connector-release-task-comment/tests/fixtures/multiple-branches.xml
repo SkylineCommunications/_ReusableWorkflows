@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Protocol xmlns="http://www.skyline.be/protocol">
+  <Name>Multi Branch Connector</Name>
+  <VersionHistory>
+    <Branches>
+      <Branch id="1">
+        <Comment>Old Branch</Comment>
+        <SystemVersions><SystemVersion id="0"><MajorVersions><MajorVersion id="0"><MinorVersions><MinorVersion id="1"><Changes><Fix>Old fix</Fix></Changes><Date>2026-01-01</Date><Provider><Company>Test</Company><Author>Test</Author></Provider><References><TaskId>1</TaskId></References></MinorVersion></MinorVersions></MajorVersion></MajorVersions></SystemVersion></SystemVersions>
+      </Branch>
+      <Branch id="2">
+        <Comment>Release Branch</Comment>
+        <SystemVersions><SystemVersion id="0"><MajorVersions><MajorVersion id="0"><MinorVersions><MinorVersion id="1"><Changes><NewFeature>Selected feature</NewFeature></Changes><Date>2026-09-17</Date><Provider><Company>Test</Company><Author>Test</Author></Provider><References><TaskId>300</TaskId></References></MinorVersion></MinorVersions></MajorVersion></MajorVersions></SystemVersion></SystemVersions>
+      </Branch>
+    </Branches>
+  </VersionHistory>
+</Protocol>

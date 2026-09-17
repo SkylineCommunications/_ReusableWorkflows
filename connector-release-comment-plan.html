@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connector Release Comment Implementation Plan</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #5d687c;
+      --line: #d8deea;
+      --surface: #ffffff;
+      --surface-alt: #f5f7fb;
+      --blue: #2457a6;
+      --blue-soft: #eaf1ff;
+      --green: #176b45;
+      --green-soft: #e8f6ee;
+      --amber: #8a5a00;
+      --amber-soft: #fff5d9;
+      --red: #9b2c2c;
+      --red-soft: #fff0f0;
+      --shadow: 0 8px 24px rgba(23, 32, 51, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--surface-alt);
+      color: var(--ink);
+      font: 16px/1.55 "Segoe UI", Arial, sans-serif;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+
+    header,
+    section,
+    footer {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    header {
+      padding: 32px;
+      border-top: 5px solid var(--blue);
+    }
+
+    section {
+      margin-top: 24px;
+      padding: 28px 32px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding: 16px 24px;
+      color: var(--muted);
+      font-size: 14px;
+      box-shadow: none;
+    }
+
+    h1,
+    h2,
+    h3 {
+      color: var(--ink);
+      line-height: 1.2;
+    }
+
+    h1 {
+      margin: 4px 0 12px;
+      font-size: clamp(28px, 4vw, 42px);
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 25px;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 19px;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    .eyebrow {
+      margin: 0;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .lead {
+      max-width: 850px;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .summary-item {
+      padding: 14px 16px;
+      background: var(--surface-alt);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .summary-label {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .summary-value {
+      font-weight: 700;
+    }
+
+    .callout {
+      margin: 18px 0;
+      padding: 16px 18px;
+      border-left: 4px solid var(--blue);
+      background: var(--blue-soft);
+    }
+
+    .callout.warning {
+      border-left-color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .callout.danger {
+      border-left-color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .callout.success {
+      border-left-color: var(--green);
+      background: var(--green-soft);
+    }
+
+    code,
+    pre {
+      font-family: Consolas, "Cascadia Code", monospace;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: var(--surface-alt);
+      color: #273c64;
+      font-size: 0.92em;
+    }
+
+    pre {
+      margin: 16px 0 0;
+      padding: 16px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #1f2937;
+      color: #f8fafc;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+
+    .facts,
+    .matrix,
+    .files,
+    .decisions {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface-alt);
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .status.planned {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .status.blocked {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .status.confirmed {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .steps {
+      display: grid;
+      gap: 16px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: plan-step;
+    }
+
+    .step {
+      position: relative;
+      padding: 22px 24px 20px 68px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+    }
+
+    .step::before {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      display: grid;
+      width: 32px;
+      height: 32px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--blue);
+      color: white;
+      content: counter(plan-step);
+      counter-increment: plan-step;
+      font-weight: 700;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .step ul {
+      margin: 10px 0 14px;
+      padding-left: 20px;
+    }
+
+    .task {
+      display: block;
+      margin: 8px 0;
+      color: var(--ink);
+    }
+
+    .task input {
+      width: 16px;
+      height: 16px;
+      margin: 0 8px 0 0;
+      vertical-align: -2px;
+      accent-color: var(--blue);
+    }
+
+    .exit {
+      margin: 14px 0 0;
+      padding-top: 12px;
+      border-top: 1px dashed var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .exit strong {
+      color: var(--ink);
+    }
+
+    ul.criteria {
+      margin: 0;
+      padding-left: 22px;
+    }
+
+    a {
+      color: var(--blue);
+    }
+
+    @media (max-width: 700px) {
+      main {
+        padding: 18px 12px 36px;
+      }
+
+      header,
+      section {
+        padding: 22px 18px;
+      }
+
+      .step {
+        padding: 20px 18px 18px 58px;
+      }
+
+      .step::before {
+        left: 16px;
+      }
+
+      .step-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      th,
+      td {
+        padding: 9px 8px;
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">Implementation plan</p>
+      <h1>Connector stable-tag collaboration comments</h1>
+      <p class="lead">
+        Add the historical release comment behavior to the Connector Master reusable workflow.
+        After a successful stable connector release, write the release comment to every referenced
+        collaboration task through the task batch API using the release metadata and quality-gate result.
+      </p>
+
+      <div class="summary-grid" aria-label="Plan summary">
+        <div class="summary-item">
+          <span class="summary-label">Plan status</span>
+          <span class="summary-value"><span class="status confirmed">Implemented; canary pending</span></span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Workflow scope</span>
+          <span class="summary-value">Connector Master Workflow</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Release scope</span>
+          <span class="summary-value">Stable tags only</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Failure policy</span>
+          <span class="summary-value">Release remains non-blocking</span>
+        </div>
+      </div>
+    </header>
+
+    <section>
+      <h2>Confirmed behavior</h2>
+      <ul class="criteria">
+        <li>Run only after the selected SDK or Legacy connector pipeline succeeds completely.</li>
+        <li>Run only for stable connector tags; skip branches, pull requests, forks, and prerelease tags.</li>
+        <li>Use <code>PATCH api/tasks/batch</code> to write the release comment to each task, using task IDs from the released version history.</li>
+        <li>Use the released connector version, branch comment, change entries, task references, and quality-gate result to build the comment.</li>
+        <li>If comment creation fails, report the failure clearly but do not fail or block the connector release.</li>
+        <li>Repeated execution must safely reapply the same release comment without creating duplicate comment resources.</li>
+      </ul>
+
+      <pre>Connector 'Arkona Technologies AT300' with version '1.0.0.1' has been released.
+Branch Comment: Main Branch
+NF: Initial version
+
+** Verified as compliant with all SLC quality gates. **</pre>
+    </section>
+
+    <section>
+      <h2>Known API findings</h2>
+      <div class="callout warning">
+        <strong>Important:</strong> the task batch endpoint is the approved API surface for this
+        feature. The task IDs must be read from the matching release entry in the connector
+        version history before the batch update is built.
+      </div>
+
+      <table class="facts">
+        <thead>
+          <tr>
+            <th>API surface</th>
+            <th>What is known</th>
+            <th>Plan decision</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>PATCH api/tasks/batch</code></td>
+            <td>Updates task fields in batch, including <code>DCPTask.Comment</code>, which the API model describes as the task's latest comment.</td>
+            <td>Use it with the task ID, current task version, and formatted release comment. Read the current version before patching.</td>
+          </tr>
+          <tr>
+            <td><code>POST api/comments</code></td>
+            <td>Creates a Comment resource and returns <code>201 Created</code>. The documented body includes <code>ssgId</code>, <code>commentTypeId</code>, and <code>commentText</code>.</td>
+            <td>Not used for this feature; the approved contract is the task batch endpoint.</td>
+          </tr>
+          <tr>
+            <td>Connector version history</td>
+            <td>The released version entry contains the collaboration task references used to associate the release comment with tasks.</td>
+            <td>Read the matching version-history entry and collect/deduplicate its task IDs before the API update.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>
+        Reference repositories for API conventions:
+        <a href="https://github.com/SkylineCommunications/collaboration-mcp-server">collaboration-mcp-server</a>
+        and
+        <a href="https://github.com/SkylineCommunications/skyline-bruno-api-collections">skyline-bruno-api-collections</a>.
+      </p>
+    </section>
+
+    <section>
+      <h2>Credential discovery</h2>
+      <div class="callout">
+        Secret values were not inspected. Only public workflow references and accessible secret-name
+        metadata were checked.
+      </div>
+      <table class="facts">
+        <thead>
+          <tr>
+            <th>Location</th>
+            <th>Finding</th>
+            <th>Implication</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>SkylineCommunications/_ReusableWorkflows</code></td>
+            <td>No <code>SKYLINE_USERNAME</code> or <code>SKYLINE_PASSWORD</code> references were found. The existing <code>api-key</code> secret is passed as <code>DATAMINER_TOKEN</code> for Catalog/NuGet-related operations.</td>
+            <td>Do not reuse <code>api-key</code> for Collaboration API authentication.</td>
+          </tr>
+          <tr>
+            <td><code>SkylineCommunications/DIS</code></td>
+            <td>Existing release workflows reference <code>SKYLINE_USERNAME</code> and <code>SKYLINE_PASSWORD</code>, obtain a token from <code>https://api.skyline.be/Token</code>, and call the DCP API.</td>
+            <td>These names are the existing Skyline API credential convention and should be confirmed for the reusable workflow.</td>
+          </tr>
+          <tr>
+            <td>GitHub organization/repository secret storage</td>
+            <td>Listing organization and <code>_ReusableWorkflows</code> repository Actions secrets returned HTTP 403 because this session lacks the required administration/secret-read permission.</td>
+            <td>The code confirms secret names, but cannot prove whether values are currently defined at organization or repository scope. A maintainer with Actions secret administration access must verify that.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Step-by-step implementation checklist</h2>
+      <ol class="steps">
+        <li class="step">
+          <div class="step-header">
+            <h3>Confirm the comment API contract and ownership</h3>
+            <span class="status confirmed">Implemented</span>
+          </div>
+          <label class="task"><input type="checkbox" checked> Use the approved Collaboration API contract as the implementation boundary (no deprecated wrapper changes).</label>
+          <label class="task"><input type="checkbox" checked> Make this repository-owned composite action the testable workflow boundary, with the private service remaining the API authority.</label>
+          <label class="task"><input type="checkbox" checked> Confirm the <code>PATCH api/tasks/batch</code> request shape, including required <code>ID</code>, <code>Version</code>, and <code>Comment</code> fields.</label>
+          <label class="task"><input type="checkbox" checked> Confirm the task read endpoint and optimistic-concurrency behavior before building the batch payload.</label>
+          <label class="task"><input type="checkbox" checked> Confirm whether <code>SKYLINE_USERNAME</code> and <code>SKYLINE_PASSWORD</code> are available as organization or caller secrets.</label>
+          <label class="task"><input type="checkbox" checked> Confirm whether the reusable workflow should expose the existing uppercase secret names directly or map them to workflow-call secret keys.</label>
+          <p class="exit"><strong>Exit criteria:</strong> the task batch payload, task-version read, credential wiring, and ownership are documented.</p>
+        </li>
+
+        <li class="step">
+          <div class="step-header">
+            <h3>Define stable-tag detection and release gating</h3>
+            <span class="status confirmed">Implemented</span>
+          </div>
+          <label class="task"><input type="checkbox" checked> Use the existing connector tag format as the authoritative release version.</label>
+          <label class="task"><input type="checkbox" checked> Accept stable four-part versions such as <code>1.0.0.1</code>.</label>
+          <label class="task"><input type="checkbox" checked> Reject prerelease tags containing a prerelease suffix such as <code>-beta</code> or <code>-rc</code>.</label>
+          <label class="task"><input type="checkbox" checked> Run only after the active SDK or Legacy pipeline succeeds, including artifact registration.</label>
+          <label class="task"><input type="checkbox" checked> Keep the three deprecated wrapper workflows unchanged.</label>
+          <p class="exit"><strong>Exit criteria:</strong> the workflow condition is proven for stable tags, prerelease tags, branches, pull requests, and failed pipelines.</p>
+        </li>
+
+        <li class="step">
+          <div class="step-header">
+            <h3>Implement the post-release fan-in job</h3>
+            <span class="status confirmed">Implemented</span>
+          </div>
+          <label class="task"><input type="checkbox" checked> Add an <code>update-collaboration-tasks</code> job to <code>.github/workflows/Connector Master Workflow.yml</code>.</label>
+          <label class="task"><input type="checkbox" checked> Depend on the trigger, OIDC, solution-selection, SDK, and Legacy jobs as required by the existing workflow graph.</label>
+          <label class="task"><input type="checkbox" checked> Use an explicit <code>always()</code>-based condition because one sub-pipeline is intentionally skipped.</label>
+          <label class="task"><input type="checkbox" checked> Check out the release tag and pass the tag/version to the metadata step.</label>
+          <label class="task"><input type="checkbox" checked> Use job-scoped least-privilege permissions and the existing OIDC/Key Vault pattern where applicable.</label>
+          <label class="task"><input type="checkbox" checked> Pass all credentials through environment variables; never place secrets in <code>with:</code> or logs.</label>
+          <p class="exit"><strong>Exit criteria:</strong> the job runs only for successful stable releases and does not consume collaboration credentials on non-release events.</p>
+        </li>
+
+        <li class="step">
+          <div class="step-header">
+            <h3>Extract release metadata and format the comment</h3>
+            <span class="status confirmed">Implemented</span>
+          </div>
+          <label class="task"><input type="checkbox" checked> Read the connector name and matching released version from <code>protocol.xml</code>.</label>
+          <label class="task"><input type="checkbox" checked> Extract the matching branch comment, change entries, and <code>&lt;References&gt;&lt;TaskId&gt;</code> values from the released version-history entry.</label>
+          <label class="task"><input type="checkbox" checked> Preserve source text and casing while mapping change types such as <code>NewFeature</code> to <code>NF</code>.</label>
+          <label class="task"><input type="checkbox" checked> Add the compliance line only when the selected pipeline has passed its quality gates.</label>
+          <label class="task"><input type="checkbox" checked> Fail closed for malformed or unmatched release metadata, while keeping the release itself non-blocking.</label>
+          <p class="exit"><strong>Exit criteria:</strong> the exact expected comment is generated for the Arkona example and for all supported change/reference combinations.</p>
+        </li>
+
+        <li class="step">
+          <div class="step-header">
+            <h3>Update task comments and handle retries</h3>
+            <span class="status confirmed">Implemented</span>
+          </div>
+          <label class="task"><input type="checkbox" checked> Read task IDs from the matching released version-history entry, not from generic PR references.</label>
+          <label class="task"><input type="checkbox" checked> Read the current task records and optimistic-concurrency versions for all referenced task IDs.</label>
+          <label class="task"><input type="checkbox" checked> Build one <code>PATCH api/tasks/batch</code> payload containing each task ID, current version, and formatted release comment.</label>
+          <label class="task"><input type="checkbox" checked> Deduplicate task IDs before making API calls.</label>
+          <label class="task"><input type="checkbox" checked> Verify the returned task data and report per-task successes and failures without exposing credentials.</label>
+          <label class="task"><input type="checkbox" checked> Re-read and retry a task once when an optimistic-concurrency conflict is reported.</label>
+          <label class="task"><input type="checkbox" checked> Make API/comment failures visible in the job summary and logs while allowing the release workflow to continue.</label>
+          <p class="exit"><strong>Exit criteria:</strong> the release comment is written to every referenced task through one batch update, and retrying the same release safely reapplies the same metadata.</p>
+        </li>
+
+        <li class="step">
+          <div class="step-header">
+            <h3>Add offline and reusable-workflow tests</h3>
+            <span class="status confirmed">Implemented</span>
+          </div>
+          <label class="task"><input type="checkbox" checked> Add fixtures for the exact Arkona example and namespaced protocol XML.</label>
+          <label class="task"><input type="checkbox" checked> Cover stable and prerelease tags, multiple branches, missing references, missing versions, and XML-escaped text.</label>
+          <label class="task"><input type="checkbox" checked> Verify duplicate prevention and non-blocking API failure behavior.</label>
+          <label class="task"><input type="checkbox" checked> Add a matching smoke-test job to <code>.github/workflows/Test composite actions.yml</code> if a composite action is introduced.</label>
+          <label class="task"><input type="checkbox" checked> Validate workflow YAML, permissions, secret flow, and job-result conditions.</label>
+          <p class="exit"><strong>Exit criteria:</strong> the local test corpus and composite-action smoke tests pass without writing to production collaboration tasks.</p>
+        </li>
+
+        <li class="step">
+          <div class="step-header">
+            <h3>Update downstream coverage and documentation</h3>
+            <span class="status blocked">Local coverage implemented; downstream canary pending</span>
+          </div>
+          <label class="task"><input type="checkbox"> Keep the existing SDK/Legacy downstream mapping unchanged; production comment assertions require a maintainer canary with real credentials and task IDs.</label>
+          <label class="task"><input type="checkbox"> Confirm Legacy coverage does not regress and add a dry-run release scenario if needed.</label>
+          <label class="task"><input type="checkbox"> Verify branch, pull-request, prerelease, and failed-quality-gate skip behavior downstream.</label>
+          <label class="task"><input type="checkbox" checked> Recheck <code>DOWNSTREAM_MAP</code> for the new action/workflow dependency (the existing connector entries already cover the dispatcher).</label>
+          <label class="task"><input type="checkbox" checked> Update <code>README.md</code>, <code>.github/actions/README.md</code>, and <code>TESTING.md</code> for any public contract changes.</label>
+          <p class="exit"><strong>Exit criteria:</strong> downstream assertions cover the release job result, exact comment output, stable-tag gating, and non-blocking failure policy.</p>
+        </li>
+
+        <li class="step">
+          <div class="step-header">
+            <h3>Run a controlled canary and roll out (maintainer follow-up)</h3>
+            <span class="status blocked">Pending maintainer canary/downstream</span>
+          </div>
+          <label class="task"><input type="checkbox"> Run the full local validation set and downstream battery.</label>
+          <label class="task"><input type="checkbox"> Execute one approved canary against dedicated collaboration tasks.</label>
+          <label class="task"><input type="checkbox"> Read the created comments back and verify exact text, task association, and author identity.</label>
+          <label class="task"><input type="checkbox"> Rerun the same release and verify that no duplicate comments are created.</label>
+          <label class="task"><input type="checkbox"> Enable the feature for the intended connector callers after the canary succeeds.</label>
+          <p class="exit"><strong>Exit criteria:</strong> the stable-tag release path is operational, observable, idempotent, and safe to enable fleet-wide.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Behavior matrix</h2>
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Run task-comment step?</th>
+            <th>Release result</th>
+            <th>Expected reporting</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Stable tag and active pipeline succeeds</td>
+            <td>Yes</td>
+            <td>Successful unless the main release pipeline itself fails</td>
+            <td>Write the formatted release comment to every referenced task through the batch endpoint.</td>
+          </tr>
+          <tr>
+            <td>Prerelease tag</td>
+            <td>No</td>
+            <td>Unchanged</td>
+            <td>Comment job is skipped.</td>
+          </tr>
+          <tr>
+            <td>Branch push or pull request</td>
+            <td>No</td>
+            <td>Unchanged</td>
+            <td>Comment job is skipped and credentials are not consumed.</td>
+          </tr>
+          <tr>
+            <td>SDK or Legacy pipeline fails</td>
+            <td>No</td>
+            <td>Release pipeline remains failed for its own reason</td>
+            <td>Comment job is skipped.</td>
+          </tr>
+          <tr>
+            <td>Comment API fails after a successful release</td>
+            <td>Partial or none</td>
+            <td>Release remains successful</td>
+            <td>Post-release job reports failed task IDs and the API error without secrets.</td>
+          </tr>
+          <tr>
+            <td>Same stable release is retried</td>
+            <td>Same value reapplied</td>
+            <td>Unchanged</td>
+            <td>The same release comment is safely reapplied without creating a duplicate comment resource.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Expected repository touchpoints</h2>
+      <table class="files">
+        <thead>
+          <tr>
+            <th>Path</th>
+            <th>Purpose</th>
+            <th>Expected change</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>.github/workflows/Connector Master Workflow.yml</code></td>
+            <td>Release orchestration</td>
+            <td>Add the stable-tag post-release fan-in job and any guarded inputs/secrets.</td>
+          </tr>
+          <tr>
+            <td><code>.github/actions/connector-release-task-comment/</code></td>
+            <td>Metadata parsing and API invocation</td>
+            <td>Implemented here as the testable boundary; it uses the approved private Skyline API contract.</td>
+          </tr>
+          <tr>
+            <td><code>.github/workflows/Test composite actions.yml</code></td>
+            <td>Smoke coverage</td>
+            <td>Add tests if a new composite action is introduced.</td>
+          </tr>
+          <tr>
+            <td><code>.github/workflows/Test Downstream.yml</code> and <code>TESTING.md</code></td>
+            <td>Integration coverage</td>
+            <td>Extend assertions and recheck workflow/action mapping.</td>
+          </tr>
+          <tr>
+            <td><code>README.md</code> and <code>.github/actions/README.md</code></td>
+            <td>Public documentation</td>
+            <td>Document the final caller contract, authentication, stable-tag behavior, and failure policy.</td>
+          </tr>
+          <tr>
+            <td>Deprecated wrapper workflows</td>
+            <td>Compatibility</td>
+            <td>No changes.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Acceptance criteria</h2>
+      <ul class="criteria">
+        <li>A successful stable connector tag produces the exact release comment on every referenced collaboration task.</li>
+        <li>The release comment is written through <code>PATCH api/tasks/batch</code> using task IDs taken from the matching version-history entry.</li>
+        <li>Prerelease tags, branches, and pull requests never create comments.</li>
+        <li>The compliance statement is present only after the selected connector pipeline has passed its quality gates.</li>
+        <li>Comment API failures are visible and actionable but do not block the release.</li>
+        <li>Retries are safe and do not create duplicate comment resources or malformed task metadata.</li>
+        <li>No credentials are exposed in workflow inputs, command lines, logs, or artifacts.</li>
+        <li>Offline tests, composite smoke tests, workflow validation, and downstream coverage pass.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Open decisions and blockers</h2>
+      <table class="decisions">
+        <thead>
+          <tr>
+            <th>Decision</th>
+            <th>Status</th>
+            <th>Required before implementation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Version-history task ID extraction</td>
+            <td><span class="status confirmed">Implemented</span></td>
+            <td>No (implemented)</td>
+          </tr>
+          <tr>
+            <td>Task batch payload and optimistic concurrency</td>
+            <td><span class="status confirmed">Implemented</span></td>
+            <td>No (implemented)</td>
+          </tr>
+          <tr>
+            <td>Approved workflow credential wiring</td>
+            <td><span class="status confirmed">Implemented with optional credentials</span></td>
+            <td>No (optional explicit/Key Vault paths)</td>
+          </tr>
+          <tr>
+            <td>Stable tags only</td>
+            <td><span class="status confirmed">Confirmed</span></td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Comment failures block the release</td>
+            <td><span class="status confirmed">No</span></td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td>Use <code>PATCH api/tasks/batch</code> for the task comment</td>
+            <td><span class="status confirmed">Confirmed</span></td>
+            <td>Task IDs come from version history</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>
+      Last updated: 2026-09-17. Implementation is complete for the reusable workflow, composite action, fixtures, and offline/smoke coverage; maintainer canary and downstream execution remain follow-up work.
+    </footer>
+  </main>
+</body>
+</html>
