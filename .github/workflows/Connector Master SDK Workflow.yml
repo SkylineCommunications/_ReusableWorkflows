@@ -824,7 +824,7 @@ jobs:
           xml_file=$(find "${{ steps.findSlnFile.outputs.solutionDirPath }}" -maxdepth 1 -name "protocol.xml" -or -name "Protocol.xml" | head -n 1)
 
           # Extract the Protocol Version using awk and store it in a variable
-          protocol_version=$(awk -F '[><]' '/<Version>/ {print $3}' "$xml_file")
+          protocol_version=$(awk -F '[><]' '/<Version>/ {print $3; exit}' "$xml_file")
 
           # Print the extracted version for verification
           echo "Extracted Protocol Version: $protocol_version"
