@@ -194,7 +194,7 @@ jobs:
         - name: Deprecation Warning
           if: steps.checker.outputs.isSdk == 'false'
           run: |
-            echo "::notice::Please update your projects to the SDK-style. On the 2nd of November 2026, the legacy pipeline will be removed."
+            echo "::warning::Please update your projects to the SDK-style. On the 2nd of November 2026, the legacy pipeline will be removed."
 
   CI_Legacy:
     uses: ./.github/workflows/Connector Master Legacy Workflow.yml
