@@ -888,6 +888,8 @@ jobs:
             signing-key-vault-url
             protocol-signing-username
             protocol-signing-password
+            skyline-api-username
+            skyline-api-password
           overrides: |
             DATAMINER_TOKEN=${{ secrets.api-key }}
 
