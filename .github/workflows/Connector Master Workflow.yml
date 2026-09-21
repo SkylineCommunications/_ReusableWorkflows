@@ -191,6 +191,11 @@ jobs:
             echo "::error::solution-filter-name is only supported for SDK-style connectors; this repository resolved to the legacy pipeline."
             exit 1
 
+        - name: Deprecation Warning
+          if: steps.checker.outputs.isSdk == 'false'
+          run: |
+            echo "::notice::Please update your projects to the SDK-style. On the 2nd of November 2026, the legacy pipeline will be removed."
+
   CI_Legacy:
     uses: ./.github/workflows/Connector Master Legacy Workflow.yml
     needs: [check_solution_type, check_oidc]

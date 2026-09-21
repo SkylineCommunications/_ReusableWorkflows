@@ -989,6 +989,7 @@ jobs:
         if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' }}
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --version 2.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Administration --version 1.*
 
       - name: Sign generated dmprotocol package
         shell: pwsh
@@ -1023,3 +1024,15 @@ jobs:
             --branch "${{ steps.findBranch.outputs.branch }}" `
             --dm-catalog-token ${{ env.DATAMINER_TOKEN }} `
             --debug "${{ inputs.debug }}"
+
+      - name: Connector Administration
+        shell: pwsh
+        if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' }}
+        env:
+          SKYLINE_API_USERNAME: ${{ env.SKYLINE_API_USERNAME }}
+          SKYLINE_API_PASSWORD: ${{ env.SKYLINE_API_PASSWORD }}
+        run: |
+          dataminer-administration protocol-release `
+            --package-location "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" `
+            --debug "${{ inputs.debug }}"
+      
