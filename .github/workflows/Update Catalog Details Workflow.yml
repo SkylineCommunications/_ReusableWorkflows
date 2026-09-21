@@ -242,6 +242,8 @@ jobs:
 
         - name: Upload to Catalog
           shell: pwsh
+          env:
+            CICDIsForSkyline: "${{ github.repository_owner == 'SkylineCommunications' }}"
           run: |
             $catalogFiles = @'
             ${{ steps.detect_catalog_files.outputs.catalog-files }}
