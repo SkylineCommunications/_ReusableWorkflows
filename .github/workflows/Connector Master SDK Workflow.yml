@@ -1041,6 +1041,6 @@ jobs:
           SKYLINE_API_PASSWORD: ${{ env.SKYLINE_API_PASSWORD }}
         run: |
           dataminer-administration protocol release `
-            --package-location "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" `
+            --artifact-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" `
             --debug "${{ inputs.debug }}"
       
