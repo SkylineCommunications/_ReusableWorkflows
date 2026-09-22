@@ -1035,7 +1035,7 @@ jobs:
 
       - name: Connector Administration
         shell: pwsh
-        if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' }}
+        if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' && github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
         env:
           SKYLINE_API_USERNAME: ${{ env.SKYLINE_API_USERNAME }}
           SKYLINE_API_PASSWORD: ${{ env.SKYLINE_API_PASSWORD }}
