@@ -1040,7 +1040,7 @@ jobs:
           SKYLINE_API_USERNAME: ${{ env.SKYLINE_API_USERNAME }}
           SKYLINE_API_PASSWORD: ${{ env.SKYLINE_API_PASSWORD }}
         run: |
-          dataminer-administration protocol-release `
+          dataminer-administration protocol release `
             --package-location "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" `
             --debug "${{ inputs.debug }}"
       
