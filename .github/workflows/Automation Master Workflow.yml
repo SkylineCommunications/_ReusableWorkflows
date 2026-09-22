@@ -103,6 +103,10 @@ jobs:
             fi
           done
 
+      - name: Deprecation Warning
+        run: |
+          echo "::warning::Please update your solution to use the Skyline.DataMiner.Sdk projects. On the 2nd of November 2026, this workflow will be removed."
+
   check_oidc:
     name: Check OIDC
     runs-on: ubuntu-latest
