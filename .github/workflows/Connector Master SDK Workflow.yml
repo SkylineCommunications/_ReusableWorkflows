@@ -888,6 +888,9 @@ jobs:
             signing-key-vault-url
             protocol-signing-username
             protocol-signing-password
+            skyline-api-username
+            skyline-api-password
+            skylinecommunications-github-token
           overrides: |
             DATAMINER_TOKEN=${{ secrets.api-key }}
 
@@ -916,6 +919,11 @@ jobs:
       - name: Target Branch
         id: showResult
         run: echo "${{ steps.findBranch.outputs.branch }}"
+
+      - name: Setup Skyline NuGet sources
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+        with:
+          skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
 
       - parallel:
           - name: Retrieve Installation Package
@@ -989,6 +997,7 @@ jobs:
         if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' }}
         run: |
           dotnet tool install -g Skyline.DataMiner.CICD.Tools.PackageSign --version 2.*
+          dotnet tool install -g Skyline.DataMiner.CICD.Tools.Administration --version 1.*
 
       - name: Sign generated dmprotocol package
         shell: pwsh
@@ -1023,3 +1032,15 @@ jobs:
             --branch "${{ steps.findBranch.outputs.branch }}" `
             --dm-catalog-token ${{ env.DATAMINER_TOKEN }} `
             --debug "${{ inputs.debug }}"
+
+      - name: Connector Administration
+        shell: pwsh
+        if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' && github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
+        env:
+          SKYLINE_API_USERNAME: ${{ env.SKYLINE_API_USERNAME }}
+          SKYLINE_API_PASSWORD: ${{ env.SKYLINE_API_PASSWORD }}
+        run: |
+          dataminer-administration protocol release `
+            --artifact-file "${{ steps.findInstallationPackage.outputs.dmprotocolPackageName }}" `
+            --debug "${{ inputs.debug }}"
+      
