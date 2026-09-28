@@ -32,6 +32,24 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Report secret loading configuration
+      shell: bash
+      env:
+        USE_OIDC: ${{ inputs.use-oidc }}
+        SECRET_NAMES: ${{ inputs.secret-names }}
+        OVERRIDES: ${{ inputs.overrides }}
+      run: |
+        secret_name_count=$(printf '%s\n' "$SECRET_NAMES" | sed '/^[[:space:]]*$/d' | wc -l)
+        override_count=$(printf '%s\n' "$OVERRIDES" | sed '/^[[:space:]]*$/d' | wc -l)
+        echo "load-secrets action started (use-oidc=$USE_OIDC, secret-name-count=$secret_name_count, override-count=$override_count)."
+        if [[ "$USE_OIDC" != "true" ]]; then
+          echo "Key Vault retrieval will be skipped because use-oidc is not true."
+        elif [[ "$secret_name_count" -eq 0 ]]; then
+          echo "Key Vault retrieval will be skipped because no non-blank secret names were provided."
+        else
+          echo "Key Vault retrieval is enabled for $secret_name_count secret name(s)."
+        fi
+
     - name: Retrieve secrets from Azure Key Vault
       if: inputs.use-oidc == 'true' && inputs.secret-names != ''
       shell: bash
