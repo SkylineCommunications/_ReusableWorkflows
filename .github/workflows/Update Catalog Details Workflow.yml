@@ -132,6 +132,7 @@ jobs:
               --github-token ${{ secrets.GITHUB_TOKEN }} \
               --github-repository "${{ github.repository }}" \
               --catalog-identifier "${{ vars.catalogIdentifier }}" \
+              --allow-new-catalog-guid "${{ github.repository_owner != 'SkylineCommunications' }}" \
               --debug "${{ inputs.debug }}"
 
         - name: Apply source_code_url to manifest
