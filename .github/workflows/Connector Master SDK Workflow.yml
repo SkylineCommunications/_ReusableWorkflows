@@ -646,6 +646,7 @@ jobs:
             --github-token ${{ secrets.GITHUB_TOKEN }} \
             --github-repository "${{ github.repository }}" \
             --catalog-identifier "${{ vars.catalogIdentifier }}" \
+            --allow-new-catalog-guid "${{ github.repository_owner != 'SkylineCommunications' }}" \
             --debug "${{ inputs.debug }}"
         
       - name: Check if catalog.yml or manifest.yml exists
