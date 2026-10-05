@@ -6,9 +6,10 @@ against real consumer repositories before they reach the fleet.
 ## What a green battery means
 
 > When the complete battery passes for a PR, existing consumers, supported
-> inputs, the important execution contexts (branch, tag/release, pull_request),
-> failure behavior, and the critical side effects (packages, artifacts, catalog
-> registrations) of the reusable workflows still work.
+> inputs, the important execution contexts (branch, stable and prerelease
+> tags, pull_request), failure behavior, and the critical side effects
+> (packages, artifacts, catalog registrations) of the reusable workflows
+> still work.
 
 ## Architecture
 
@@ -16,15 +17,17 @@ against real consumer repositories before they reach the fleet.
 flowchart TD
     PR[PR in _ReusableWorkflows] -->|on: pull_request| Gate["Downstream Gate.yml<br/>posts commit status 'downstream-tests'<br/>pending (workflows/actions touched) or success (n/a)"]
     PR -->|maintainer comments /test| TD["Test Downstream.yml (runs from main)"]
+      MAIN["manual workflow_dispatch on main"] -->|test-all, no source PR| TD
       PR -->|maintainer comments /prepare-test| MANUAL["Create/update per-PR tag<br/>test-pr-&lt;number&gt;<br/>with self-consistent action refs"]
     TD -->|1. map changed workflows AND composite actions| MAP[DOWNSTREAM_MAP]
-    TD -->|2. force-push tag from PR head| TAG[(test-downstream tag)]
+      TD -->|2. force-push tag from PR head or main| TAG[(test-downstream tag)]
     TD -->|3. repository_dispatch<br/>pr_number, head_sha, tag_sha, correlation_id| RCV[pr-regression.yml receivers]
     RCV -->|verify-tag: ls-remote vs tag_sha| TAG
     RCV --> REG["BOOST-DailyRegression<br/>regression.yml (BRANCH + RELEASE)<br/>run-and-monitor.yml (single run)"]
     REG -->|gh workflow run -f correlation-id| CALLERS["scenario callers @test-downstream<br/>+ verify jobs"]
     TD -->|4. poll by correlation, ≤90 min| RCV
     TD -->|5. sticky PR comment + final commit status| PR
+   TD -->|5. Actions summary for manual runs| SUMMARY[Actions run summary]
 ```
 
 - **Gating**: `downstream-tests` is a commit status on the PR head SHA. Every
@@ -120,12 +123,21 @@ available only after its orchestrator changes merge.
 | `BOOST-DailyRegression-InternalNuGet` | Internal NuGet wrapper → Master Workflow; Wrapper Migration (dry run) | `SignedNugetPackages` artifact; on tags `Push NuGet Packages` job; migration rewrite/idempotency matches repo state |
 | `BOOST-DailyRegression-Skyline.DataMiner.Sdk` | App Packages wrapper → Master Workflow; Update Catalog Details | `SignedDataMinerPackages`; on tags `Upload to Catalog` job; `Catalog Details` artifact contains manifests |
 | `BOOST-DailyRegression-SharedLibrary` | Master Workflow direct (modern inputs), ProjectReference build order, signing dedup | `SignedDataMinerPackages`; signing dedup summary present with duplicates > 0 (Azure 429 guard); on tags catalog upload |
-| `BOOST-DailyRegression-MasterWorkflow` | Master Workflow feature matrix: NuGet path, multi-package + `override-catalog-identifiers`, `.slnf` filtering, `dxm-projects-ubuntu` (.deb), WiX partition, recursive `global.json` SDK updates, `pull_request` event (synthetic PR), no-filter negative | deep assertions incl. nupkg names (filter honored), manifest ids inside built packages (overrides applied), `.deb` presence, and zero/one/two `global.json` behavior |
+| `BOOST-DailyRegression-MasterWorkflow` | Master Workflow feature matrix: NuGet path, multi-package + `override-catalog-identifiers`, `.slnf` filtering, `dxm-projects-ubuntu` (.deb), WiX branch and prerelease, mixed DataMiner/NuGet/WiX `.slnx`, recursive `global.json` SDK updates, `pull_request` event (synthetic PR), no-filter negative | deep assertions incl. nupkg names, manifest ids, `.deb`, mixed package artifacts, prerelease `dev`/`qa` publication with no `prod` or stable-only WiX SBOM steps, and zero/one/two `global.json` behavior |
 | `BOOST-DailyRegression-NegativePaths` | Expected failures: broken build, invalid catalog mapping, validator criticals, missing validator results, `pull_request_target` rejection; plus the connector `solution-filter-name` positive control | run must fail **at the expected job** (`expected-failed-job` in run-and-monitor) |
 
 Scenario callers in the two purpose-built repos are `workflow_dispatch`-only:
 release flows dispatch *at* tag refs instead of using tag-push triggers, so tag
 pushes fan out zero redundant runs.
+
+`BOOST-DailyRegression-ExternalDependencies` is a separate daily/manual smoke
+repository, not a mapped battery consumer. Its own `external-services.yml`
+builds a small protocol, performs a volatile Catalog upload, and independently
+deploys an already-published test item to a sandbox agent without running the
+entire Master/Connector/Automation pipeline. See its README for the isolated
+`external-smoke` environment, keys, variables, and activation steps. The
+disabled Connector SDK schedule stays disabled; deprecated pipelines are not
+new daily hosts.
 
 ## Running and interpreting the battery
 
@@ -148,6 +160,29 @@ pushes fan out zero redundant runs.
    longer apply) or when no previous battery result exists on the PR.
 5. Merging is possible only with the status green (when configured as a
    required check).
+
+## Manual test-all on main (no PR)
+
+In this repository, open **Actions → Test Downstream → Run workflow** and
+select `main`. No inputs or PR are required. The workflow rejects other refs
+and checks that the checkout still matches the current `main` head. It then
+uses the same serialized `test-downstream` tag, all repos in `DOWNSTREAM_MAP`,
+SHA-verified receivers, and exact correlation-based polling as `/test-all`.
+The Actions run summary contains links and conclusions; no PR comment or
+`downstream-tests` commit status is posted. A failed/no-run/timeout receiver
+fails the manual run. Re-run manually after an infrastructure failure instead
+of using `/retest`. This uses `DOWNSTREAM_PAT` and trusted downstream
+credentials, and the mapped receiver still tests its *downstream* synthetic
+pull-request case. It does not substitute for the required check on a source
+PR. Do not start it while another battery is preparing or using the shared tag.
+
+For a targeted runner check, open **Actions → Master Workflow Runner Trial**
+in `BOOST-DailyRegression-MasterWorkflow` and run it from `main` with an
+`ubuntu-latest` or `ubuntu-YY.MM` hosted label. It calls Master Workflow
+`@main` against the mixed solution and asserts the three artifact families.
+Only the reusable workflow's CI job accepts the requested `runs-on` value;
+Windows packaging and other support jobs use their normal runners. This
+trial is manual-only and does not run as part of `/test` or the daily smoke.
 
 ## Diagnosing a failure
 
@@ -203,9 +238,10 @@ changed actions to the workflows that consume them and dispatches those repos.
    `/test <head-sha>` or `/test-all <head-sha>` run posts its pending status.
 - **`/test` runs `main`'s orchestrator** (`issue_comment` semantics): fixes to
   `Test Downstream.yml` itself only take effect after merge.
-- **WiX and debian release flows**: BRANCH-only. Date-based release tags exceed
-  MSI's ProductVersion major limit (by design of the version validation), and
-  the `.deb`/DxM release paths publish to shared infrastructure.
+- **WiX stable release and debian release flows**: not in the battery.
+   Date-based release tags exceed MSI's ProductVersion major limit; a separate
+   SemVer prerelease exercises WiX MSI publishing only to `dev` and `qa`.
+   The `.deb` release path still publishes to shared infrastructure.
 - **Missing-compare-results gate path (N8)**: no deterministic way to force it;
   uncovered.
 - **Missing-secret behavior**: not testable in Skyline-managed repos — OIDC/Key
@@ -223,3 +259,7 @@ scenario callers: merge the callers (new optional inputs) **before**
 `BOOST-DailyRegression` starts passing them, or `gh workflow run` fails on
 unexpected inputs. Orchestrator changes here are safe in any order — receivers
 tolerate missing payload fields (legacy dispatch path).
+Publish the MasterWorkflow fixture callers and receiver before using a manual
+`main` battery to claim prerelease/mixed coverage. The new daily repository
+requires sandbox credentials, an existing test Catalog item, and a first
+manual smoke run before its schedule can be treated as operational.
