@@ -42,7 +42,7 @@ jobs:
     name: Validate Trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+      - uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@test-downstream
 
   check_oidc:
     name: Check OIDC
@@ -74,14 +74,14 @@ jobs:
 
       - name: Resolve CI/CD OIDC parameters
         id: resolve-cicd
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@test-downstream
         with:
           repository-owner: ${{ github.repository_owner }}
           is-fork: ${{ steps.detect-fork.outputs.is-fork }}
 
       - name: Resolve LiveService OIDC parameters
         id: resolve-liveservice
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@test-downstream
         with:
           # LiveService OIDC identity for pushing test images to the LiveService ACR.
           # Federated credentials enforce that only workflows from _ReusableWorkflows can authenticate.
@@ -116,7 +116,7 @@ jobs:
           subscription-id: ${{ needs.check_oidc.outputs.cicd-subscription-id }}
 
       - name: Load NuGet secrets
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: ${{ needs.check_oidc.outputs.cicd-use-oidc }}
           secret-names: |
@@ -125,7 +125,7 @@ jobs:
             skylinecommunicationscore-github-token
 
       - name: Setup Skyline NuGet sources
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@test-downstream
         with:
           skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
           skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
