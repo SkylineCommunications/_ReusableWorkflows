@@ -1,0 +1,25 @@
+name: Notify DataMiner Dependabot
+description: Send signed Catalog publication notifications for one or more published items.
+
+inputs:
+  catalog-ids:
+    description: Newline-separated Catalog GUIDs from successfully published artifacts.
+    required: false
+    default: ''
+  version:
+    description: Published Catalog version.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Notify published Catalog items
+      shell: pwsh
+      env:
+        CATALOG_IDS: ${{ inputs.catalog-ids }}
+        VERSION: ${{ inputs.version }}
+        SOURCE_REPOSITORY: ${{ github.repository }}
+        WORKFLOW_RUN_ID: ${{ github.run_id }}
+        WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        DEPENDABOT_WEBHOOK_URL: https://ca-dataminer-dependabot-westeu.greenbay-05ffdefc.westeurope.azurecontainerapps.io/api/webhooks/catalog-notification
+      run: '& (Join-Path $env:GITHUB_ACTION_PATH "notify-dataminer-dependabot.ps1")'

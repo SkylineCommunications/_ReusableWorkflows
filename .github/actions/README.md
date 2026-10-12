@@ -44,6 +44,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `validate-inputs` | Validates mandatory Sonar/DataMiner inputs based on context. | [validate-inputs/README.md](validate-inputs/README.md) |
 | `update-global-json-sdks` | Rewrites managed `msbuild-sdks` versions in `global.json`. | [update-global-json-sdks/README.md](update-global-json-sdks/README.md) |
 | `apply-catalog-identifiers` | Rewrites manifest `id:` fields from mapping input. | [apply-catalog-identifiers/README.md](apply-catalog-identifiers/README.md) |
+| `notify-dataminer-dependabot` | Sends signed publication notifications for published Catalog IDs. | [notify-dataminer-dependabot/README.md](notify-dataminer-dependabot/README.md) |
 | `compute-next-version` | Computes the next SemVer version from the latest final tag + Change-Type bump. | [compute-next-version/README.md](compute-next-version/README.md) |
 | `determine-version` | Determines public, informational, assembly/file, and MSI versions from the git ref. | [determine-version/README.md](determine-version/README.md) |
 | `set-repo-type` | Writes the enterprise `Workflow-Repo-Type` custom property (idempotent read-before-write). | [set-repo-type/README.md](set-repo-type/README.md) |

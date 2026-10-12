@@ -388,6 +388,22 @@ jobs:
         with:
           mappings: ''
 
+  notify-dataminer-dependabot:
+    name: notify-dataminer-dependabot
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Assert signed delivery and failure reporting
+        shell: pwsh
+        run: ./.github/actions/notify-dataminer-dependabot/test.ps1
+
+      - name: Invoke composite without a live signing secret
+        uses: ./.github/actions/notify-dataminer-dependabot
+        with:
+          catalog-ids: 7d3e9f10-1111-4aaa-8bbb-000000000001
+          version: 1.0.0
+
   apply-source-code-url:
     name: apply-source-code-url
     runs-on: ubuntu-latest
