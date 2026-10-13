@@ -1034,6 +1034,36 @@ jobs:
             --dm-catalog-token ${{ env.DATAMINER_TOKEN }} `
             --debug "${{ inputs.debug }}"
 
+      - name: Find published Catalog ID
+        id: catalog-id
+        if: inputs.use-oidc == 'true' && (github.repository_owner == 'SkylineCommunications' || github.repository_owner == 'SkylineCommunicationsCore')
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -LiteralPath $env:catalogDetails -Raw
+          $idMatch = [regex]::Match($manifest, '(?m)^id:\s*[''\"]?(?<id>[0-9a-fA-F-]{36})[''\"]?\s*(?:#.*)?$')
+          $catalogId = [guid]::Empty
+          if (-not $idMatch.Success -or -not [guid]::TryParseExact($idMatch.Groups['id'].Value, 'D', [ref]$catalogId)) {
+            throw "No valid Catalog ID in $env:catalogDetails"
+          }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "id=$($catalogId.ToString('D'))"
+
+      - name: Load DataMiner Dependabot signing secret
+        if: inputs.use-oidc == 'true' && (github.repository_owner == 'SkylineCommunications' || github.repository_owner == 'SkylineCommunicationsCore')
+        continue-on-error: true
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: 'true'
+          secret-names: |
+            dataminer-dependabot-catalog-webhook-secret
+
+      - name: Notify DataMiner Dependabot
+        if: success() && inputs.use-oidc == 'true' && (github.repository_owner == 'SkylineCommunications' || github.repository_owner == 'SkylineCommunicationsCore')
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/notify-dataminer-dependabot@main
+        with:
+          catalog-ids: ${{ steps.catalog-id.outputs.id }}
+          version: ${{ github.ref_name }}
+
       - name: Connector Administration
         shell: pwsh
         if: ${{ inputs.use-oidc == 'true' && github.repository_owner == 'SkylineCommunications' && github.ref_type == 'tag' && !contains(github.ref_name, '-') }}

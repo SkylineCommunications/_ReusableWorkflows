@@ -1407,3 +1407,51 @@ jobs:
             --configuration "$env:CONFIGURATION" `
             -p:SkylineDataMinerSdkDebug="$env:DEBUG_FLAG" `
             -p:IsPublishable=false
+
+      - name: Find published Catalog IDs
+        id: catalog-ids
+        if: needs.check_oidc.outputs.is-skyline-managed == 'true' && needs.check_oidc.outputs.use-oidc == 'true'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression
+          $ids = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+          $archives = @(Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File -Filter '*.CatalogInformation.zip')
+          foreach ($archivePath in $archives) {
+            $archive = [IO.Compression.ZipFile]::OpenRead($archivePath.FullName)
+            try {
+              $manifest = $archive.GetEntry('manifest.yml')
+              if ($null -eq $manifest) { throw "Missing manifest.yml in $($archivePath.FullName)" }
+              $reader = [IO.StreamReader]::new($manifest.Open())
+              try { $content = $reader.ReadToEnd() } finally { $reader.Dispose() }
+              $idMatch = [regex]::Match($content, '(?m)^id:\s*[''\"]?(?<id>[0-9a-fA-F-]{36})[''\"]?\s*(?:#.*)?$')
+              $catalogId = [guid]::Empty
+              if (-not $idMatch.Success -or -not [guid]::TryParseExact($idMatch.Groups['id'].Value, 'D', [ref]$catalogId)) {
+                throw "Invalid Catalog ID in $($archivePath.FullName)"
+              }
+              $null = $ids.Add($catalogId.ToString('D'))
+            } finally {
+              $archive.Dispose()
+            }
+          }
+          if ($ids.Count -eq 0) { throw 'No CatalogInformation.zip archives found in restored artifacts.' }
+          $delimiter = "catalog_ids_$([guid]::NewGuid().ToString('N'))"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "ids<<$delimiter"
+          foreach ($id in $ids) { Add-Content -Path $env:GITHUB_OUTPUT -Value $id }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value $delimiter
+
+      - name: Load DataMiner Dependabot signing secret
+        if: needs.check_oidc.outputs.is-skyline-managed == 'true' && needs.check_oidc.outputs.use-oidc == 'true'
+        continue-on-error: true
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: 'true'
+          secret-names: |
+            dataminer-dependabot-catalog-webhook-secret
+
+      - name: Notify DataMiner Dependabot
+        if: success() && needs.check_oidc.outputs.is-skyline-managed == 'true' && needs.check_oidc.outputs.use-oidc == 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/notify-dataminer-dependabot@main
+        with:
+          catalog-ids: ${{ steps.catalog-ids.outputs.ids }}
+          version: ${{ github.ref_name }}
