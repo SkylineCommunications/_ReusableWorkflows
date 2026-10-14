@@ -61,6 +61,7 @@ jobs:
       contents: read
       id-token: write
       packages: read
+      pull-requests: write
     outputs:
       quality: ${{ steps.quality-step.outputs.results }}
     steps:
@@ -689,6 +690,8 @@ jobs:
       - name: Retrieve reusable workflows token from Key Vault
         if: inputs.use-oidc == 'true'
         shell: bash
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           echo "Fetching reusable-workflows-token from Azure Key Vault..."
@@ -697,6 +700,10 @@ jobs:
             --name reusable-workflows-token \
             --query value -o tsv 2>/dev/null || true)
           if [ -z "$secret_value" ]; then
+            if [ "$REPOSITORY_OWNER" = "SkylineCommunications" ] || [ "$REPOSITORY_OWNER" = "SkylineCommunicationsCore" ]; then
+              echo "::error::Missing reusable-workflows-token in Key Vault; cannot push catalog metadata with a read-only GITHUB_TOKEN."
+              exit 1
+            fi
             echo "::warning::No 'reusable-workflows-token' secret in Azure Key Vault 'kv-master-cicd-secrets'. Falling back to GITHUB_TOKEN for git push."
           else
             echo "::add-mask::$secret_value"
