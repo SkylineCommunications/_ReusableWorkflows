@@ -20,7 +20,7 @@ across the fleet and can be evolved in a single place.
 | `Internal NuGet Solution Master Workflow.yml`             | *(deprecated)* Thin redirect to `Master Workflow.yml` for internal NuGet.     |
 | `DataMiner App Packages Master Workflow.yml`              | *(deprecated)* Thin redirect to `Master Workflow.yml` for app packages.       |
 | `Update Catalog Details Workflow.yml`                     | Update Catalog metadata on release.                                           |
-| `Auto-tag.yml`                                            | Create an on-demand prerelease tag from the `Create-Prerelease` PR label.     |
+| `Create Prerelease Workflow.yml`                           | Admin-only `/create-prerelease` command for forked NuGet PRs.                 |
 
 ## Internal / maintenance workflows
 
@@ -58,6 +58,60 @@ jobs:
       sonarcloud-project-name: my-org_my-repo
     secrets: inherit
 ```
+
+### Internal prerelease from a fork PR
+
+Install a thin `issue_comment: created` caller on the repository's default
+branch. It must pass the existing release workflow filename to
+`Create Prerelease Workflow.yml`, pass a repository secret named
+`PRERELEASE_TAG_TOKEN`, and grant `contents: read` and `pull-requests: write`
+to the job's `GITHUB_TOKEN`. Create a user-owned PAT with `Contents: write`
+access only to the participating repositories. Its owner must be allowed by
+every applicable tag-creation ruleset (including organization rulesets); the
+PAT must be authorized for the organization. Missing credentials fail closed.
+The release workflow must have a matching `push.tags` trigger and be available
+at the PR head. See the caller workflows in the CICD NuGet repositories for
+the complete example and their internal GitHub Packages routing.
+
+```yaml
+name: Create internal prerelease
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  create-prerelease:
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/create-prerelease ')
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Create Prerelease Workflow.yml@main
+    with:
+      release-workflow: release.yml
+    secrets:
+      PRERELEASE_TAG_TOKEN: ${{ secrets.PRERELEASE_TAG_TOKEN }}
+```
+
+Configure the existing release caller to select the GitHub Packages source
+and a `packages: write` token for `-internal.` tags, keeping the normal
+NuGet.org source and key for other tags. This command uses its tag-push path.
+
+An administrator comments `/create-prerelease 1.2.3-internal.4` on an open fork
+PR. The command uses the **current** PR head and requires an unused version tag,
+then tags that commit in the upstream repository without merging the PR. It
+does not inspect PR checks; the admin is responsible for reviewing and
+approving the current head before commenting. The command does not accept a
+reviewed SHA. It creates the tag with the PAT so the existing tag-push release
+workflow starts automatically; it does not dispatch a second run. Internal
+NuGet packages go to GitHub Packages
+only when the caller's release workflow routes `-internal.` tags there; the
+shared Master Workflow does not infer the destination from the version.
+
+The command does not restrict manual tags or manual dispatches. Release jobs
+run code and workflow YAML from the approved fork commit using their usual
+publishing credentials; other tag-only side effects, including Catalog uploads
+where configured, still occur. Failed or stale requests do not move existing
+tags. A tag left by a late failure must be inspected and recovered manually;
+use a new version for a new request rather than retrying an already-created tag.
 
 ### Example: with OIDC override and catalog identifier mappings
 

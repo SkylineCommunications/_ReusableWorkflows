@@ -1,0 +1,52 @@
+name: Create internal prerelease from PR
+
+on:
+  workflow_call:
+    inputs:
+      release-workflow:
+        description: Filename of the repository's existing workflow_dispatch release workflow.
+        required: true
+        type: string
+    secrets:
+      PRERELEASE_TAG_TOKEN:
+        description: User-owned PAT permitted by tag rulesets to create prerelease tags.
+        required: true
+
+jobs:
+  create-prerelease:
+    name: Authorize and dispatch internal prerelease
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/create-prerelease ')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: create-prerelease-${{ github.repository }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Reject unsafe trigger
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+
+      - name: Checkout trusted command implementation
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: SkylineCommunications/_ReusableWorkflows
+          ref: main
+          path: _workflow
+          persist-credentials: false
+
+      - name: Authorize and create tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE_TAG_TOKEN: ${{ secrets.PRERELEASE_TAG_TOKEN }}
+          RELEASE_WORKFLOW: ${{ inputs.release-workflow }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 _workflow/.github/scripts/create_prerelease.py \
+            --event "$GITHUB_EVENT_PATH" \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-workflow "$RELEASE_WORKFLOW"

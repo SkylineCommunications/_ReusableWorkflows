@@ -576,6 +576,7 @@ jobs:
           sonar-status: ${{ inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true' && steps.sonarcloud-quality-gate-check.outputs.quality-gate-status || '' }}
           sonarcloud-project-name: ${{ github.actor != 'dependabot[bot]' && needs.check_oidc.outputs.is-fork != 'true' && inputs.sonarcloud-project-name || '' }}
           dependabot-bypass: ${{ github.actor == 'dependabot[bot]' }}
+          post-pr-comment: ${{ needs.check_oidc.outputs.is-fork != 'true' }}
 
   # ════════════════════════════════════════════════════════════════
   # Ubuntu packaging: one .deb per project in dxm-projects-ubuntu. Runs on every

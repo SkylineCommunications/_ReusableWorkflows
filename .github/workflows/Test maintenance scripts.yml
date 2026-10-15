@@ -9,6 +9,7 @@ on:
       - '.github/workflows/Master Workflow.yml'
       - '.github/workflows/Test composite actions.yml'
       - '.github/workflows/Test Downstream.yml'
+      - '.github/workflows/Create Prerelease Workflow.yml'
       - '.github/workflows/Test maintenance scripts.yml'
       - '.github/workflows/Update managed dependency versions.yml'
   push:
@@ -20,6 +21,7 @@ on:
       - '.github/workflows/Master Workflow.yml'
       - '.github/workflows/Test composite actions.yml'
       - '.github/workflows/Test Downstream.yml'
+      - '.github/workflows/Create Prerelease Workflow.yml'
       - '.github/workflows/Test maintenance scripts.yml'
       - '.github/workflows/Update managed dependency versions.yml'
 

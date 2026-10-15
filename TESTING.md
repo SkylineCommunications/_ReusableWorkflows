@@ -161,6 +161,26 @@ new daily hosts.
 5. Merging is possible only with the status green (when configured as a
    required check).
 
+## Admin prerelease command
+
+`Create Prerelease Workflow.yml` runs from an `issue_comment` caller on the
+target repository's default branch. Its script tests run with the maintenance
+test workflow. Before enabling it in another NuGet repository, check that the
+existing release workflow has a matching `push.tags` trigger, internal tags
+select the GitHub Packages feed and credentials, and `PRERELEASE_TAG_TOKEN`
+is a user-owned PAT permitted by all tag-creation rulesets. The admin comment
+is the release approval; the command does not query PR checks or branch protection.
+
+Pilot against an open fork PR using `/create-prerelease 1.2.3-internal.4` with
+an unused version: confirm the upstream tag points at the PR head, the PR
+remains open, exactly one tag-push release starts (no explicit dispatch), and
+packages land only in GitHub Packages. A failed or missing PR check must not block a valid admin
+command. A missing PAT, write-only/non-admin commenter, version reuse, or a
+changed PR head must not create a release tag.
+The command deliberately retains any existing release-workflow tag side
+effects. A `GITHUB_TOKEN`-created tag would not trigger the release; verify
+the PAT-created tag does.
+
 ## Manual test-all on main (no PR)
 
 In this repository, open **Actions → Test Downstream → Run workflow** and
