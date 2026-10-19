@@ -1179,6 +1179,76 @@ jobs:
           STATUS: ${{ steps.validator-pass.outputs.status }}
         run: test "$STATUS" = "passed"
 
+      - name: Stage approved connector compare exception
+        shell: bash
+        run: |
+          cat > validator-gate-state.json <<'EOF'
+          {
+            "status": "passed",
+            "mode": "compare-skipped",
+            "version": "2.0.0.7",
+            "currentSolution": { "critical": 0, "major": 2, "minor": 3 },
+            "failures": []
+          }
+          EOF
+          cat > mcc-gate-state.json <<'EOF'
+          {
+            "status": "skipped",
+            "skipped": true,
+            "skippedReason": "Approved connector compare exception for this revision.",
+            "issueCount": 0,
+            "failures": []
+          }
+          EOF
+
+      - name: Approved compare exception passes the gate
+        id: compare-exception
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          post-pr-comment: 'false'
+          unit-tests-outcome: success
+          validator-outcome: success
+          validator-state-file: ${{ github.workspace }}/validator-gate-state.json
+          major-change-checker-outcome: success
+          major-change-checker-state-file: ${{ github.workspace }}/mcc-gate-state.json
+
+      - name: Assert approved compare exception is visible
+        shell: bash
+        env:
+          STATUS: ${{ steps.compare-exception.outputs.status }}
+        run: |
+          test "$STATUS" = "passed"
+          grep -Fq 'Validation passed; compare checks skipped for approved connector revision' "$GITHUB_WORKSPACE/quality-gate-comment.md"
+          grep -Fq 'Skipped - Approved connector compare exception for this revision.' "$GITHUB_WORKSPACE/quality-gate-comment.md"
+
+      - name: Stage failed validation with compare exception
+        shell: bash
+        run: |
+          jq '.status = "failed" | .currentSolution.critical = 1 | .failures = ["Current critical issues"]' \
+            validator-gate-state.json > validator-gate-state.failed.json
+
+      - name: Validation still fails with compare exception
+        id: compare-exception-validation-fail
+        continue-on-error: true
+        uses: ./.github/actions/quality-gate-summary
+        with:
+          post-pr-comment: 'false'
+          unit-tests-outcome: success
+          validator-outcome: failure
+          validator-state-file: ${{ github.workspace }}/validator-gate-state.failed.json
+          major-change-checker-outcome: success
+          major-change-checker-state-file: ${{ github.workspace }}/mcc-gate-state.json
+
+      - name: Assert validation failure is not skipped
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.compare-exception-validation-fail.outcome }}
+          STATUS: ${{ steps.compare-exception-validation-fail.outputs.status }}
+        run: |
+          test "$OUTCOME" = "failure"
+          test "$STATUS" = "failed"
+          grep -Fq 'Validator quality gate failed' "$GITHUB_WORKSPACE/quality-gate-comment.md"
+
       - name: Stage MCC state file (skipped on revision==1)
         run: |
           cat > mcc-gate-state.json <<'EOF'

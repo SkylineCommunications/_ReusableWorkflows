@@ -263,7 +263,9 @@ changed actions to the workflows that consume them and dispatches those repos.
    SemVer prerelease exercises WiX MSI publishing only to `dev` and `qa`.
    The `.deb` release path still publishes to shared infrastructure.
 - **Missing-compare-results gate path (N8)**: no deterministic way to force it;
-  uncovered.
+   uncovered in the downstream battery. The approved Key Vault compare exception
+   is exercised with isolated workflow-script tests and a summary smoke test;
+   the shared, single-value Key Vault secret is not a stable downstream fixture.
 - **Missing-secret behavior**: not testable in Skyline-managed repos — OIDC/Key
   Vault always supplies secrets.
 - **Automation and Connector-Legacy pipelines**: frozen at run-conclusion
