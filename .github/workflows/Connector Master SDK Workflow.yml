@@ -267,8 +267,54 @@ jobs:
             ${{ github.workspace }}/currentValidateResults.html
         continue-on-error: true
 
+      - name: Check connector compare exception
+        id: compare-exception
+        if: inputs.use-oidc == 'true'
+        continue-on-error: true
+        env:
+          SOLUTION_FILE: ${{ steps.findSlnFile.outputs.solutionFilePath }}
+        run: |
+          $secretJson = az keyvault secret show --vault-name kv-master-cicd-secrets --name skip-connector-compare --query value -o json 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            if (($secretJson -join "`n") -match '\bSecretNotFound\b') {
+              Write-Output 'No connector compare exception configured.'
+              exit 0
+            }
+            throw 'Could not check the connector compare exception in Key Vault.'
+          }
+
+          $secretValue = ConvertFrom-Json -InputObject ($secretJson -join "`n")
+          foreach ($line in ($secretValue -split '\r?\n')) {
+            if ($line) { Write-Output "::add-mask::$line" }
+          }
+
+          $solutionDirectory = Split-Path -Path (Resolve-Path -LiteralPath $env:SOLUTION_FILE).Path -Parent
+          $protocolFiles = @(Get-ChildItem -LiteralPath $solutionDirectory -File | Where-Object { $_.Name -ieq 'protocol.xml' })
+          if ($protocolFiles.Count -ne 1) { throw 'Expected one protocol.xml next to the solution.' }
+
+          [xml]$protocolXml = Get-Content -LiteralPath $protocolFiles[0].FullName -Raw
+          $nameNode = $protocolXml.DocumentElement.SelectSingleNode("*[local-name()='Name']")
+          $versionNode = $protocolXml.DocumentElement.SelectSingleNode("*[local-name()='Version']")
+          if ($null -eq $nameNode -or $null -eq $versionNode -or
+              [string]::IsNullOrWhiteSpace($nameNode.InnerText) -or
+              [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
+            throw 'Protocol name or version is missing.'
+          }
+
+          $expectedValue = '{0}:{1}' -f $nameNode.InnerText, $versionNode.InnerText
+          if ([string]::Equals($secretValue, $expectedValue, [StringComparison]::Ordinal)) {
+            'enabled=true' >> $env:GITHUB_OUTPUT
+            "version=$($versionNode.InnerText)" >> $env:GITHUB_OUTPUT
+            Write-Output 'Connector compare exception approved for this revision.'
+          }
+        shell: pwsh
+
       - name: Validator Quality Gate
         id: validator-quality-gate
+        env:
+          COMPARE_EXCEPTION: ${{ steps.compare-exception.outputs.enabled == 'true' }}
+          COMPARE_LOOKUP_FAILED: ${{ steps.compare-exception.outcome == 'failure' }}
+          EXEMPT_VERSION: ${{ steps.compare-exception.outputs.version }}
         run: |
           # Allowed delta in Major/Minor counts between previous and current
           # validate results (regular increment only). Hard-coded for now.
@@ -316,7 +362,7 @@ jobs:
           # are apples-to-apples with previousValidateResults (also XML-based).
           # Only produced when a previous version exists; for initial versions we fall back to the
           # solution-based counts above.
-          if [ -f "$currentValidateFile" ]; then
+          if [ "$COMPARE_EXCEPTION" != "true" ] && [ -f "$currentValidateFile" ]; then
             currentValidateJson=$(cat "$currentValidateFile")
             curCritical=$(echo "$currentValidateJson" | jq -r '.CriticalIssueCount')
             curMajor=$(echo "$currentValidateJson" | jq -r '.MajorIssueCount')
@@ -332,7 +378,10 @@ jobs:
           # rules. Record that as a failure and continue so the summary still
           # surfaces what we do have.
           compareMissing="false"
-          if [ ! -f "$compareFile" ]; then
+          if [ "$COMPARE_EXCEPTION" = "true" ]; then
+            version="$EXEMPT_VERSION"
+            compareIssueCount=0
+          elif [ ! -f "$compareFile" ]; then
             compareMissing="true"
             version=""
             compareIssueCount=0
@@ -346,7 +395,7 @@ jobs:
           prevMajor="null"
           prevMinor="null"
           prevVersion=""
-          if [ -f "$previousValidateFile" ]; then
+          if [ "$COMPARE_EXCEPTION" != "true" ] && [ -f "$previousValidateFile" ]; then
             prevJson=$(cat "$previousValidateFile")
             prevCritical=$(echo "$prevJson" | jq -r '.CriticalIssueCount')
             prevMajor=$(echo "$prevJson" | jq -r '.MajorIssueCount')
@@ -355,8 +404,25 @@ jobs:
           fi
 
           failures=()
+          if [ "$COMPARE_LOOKUP_FAILED" = "true" ]; then
+            failures+=("Could not check the connector compare exception in Key Vault.")
+          fi
 
-          if [ "$compareMissing" = "true" ]; then
+          if [ "$COMPARE_EXCEPTION" = "true" ]; then
+            mode="compare-skipped"
+            echo "Compare checks skipped for approved connector revision $version; enforcing validation counts."
+            if [ "$solCritical" != 0 ]; then
+              failures+=("Current critical issues: $solCritical (expected 0)")
+            fi
+            if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.1$ ]] && [ ! -f "$previousValidateFile" ]; then
+              if [ "$solMajor" != 0 ]; then
+                failures+=("Major issue count is expected to be 0 for the initial version. (current=$solMajor)")
+              fi
+              if [ "$solMinor" != 0 ]; then
+                failures+=("Minor issue count is expected to be 0 for the initial version. (current=$solMinor)")
+              fi
+            fi
+          elif [ "$compareMissing" = "true" ]; then
             mode="missing-compare"
             failures+=("Compare results file not found ($compareFile) - the compare step did not produce results, so version-based rules could not be evaluated.")
             # Critical must always be 0; still report it on top of the missing-compare failure.
@@ -478,9 +544,28 @@ jobs:
 
       - name: Major Change Checker Quality Gate
         id: mcc-quality-gate
+        env:
+          COMPARE_EXCEPTION: ${{ steps.compare-exception.outputs.enabled == 'true' }}
+          EXEMPT_VERSION: ${{ steps.compare-exception.outputs.version }}
         run: |
           compareFile="${{ github.workspace }}/compareResults.json"
           stateFile="${{ github.workspace }}/mcc-gate-state.json"
+
+          if [ "$COMPARE_EXCEPTION" = "true" ]; then
+            jq -n \
+              --arg version "$EXEMPT_VERSION" \
+              '{
+                status: "skipped",
+                skipped: true,
+                skippedReason: "Approved connector compare exception for this revision.",
+                issueCount: 0,
+                version: $version,
+                previousVersion: "",
+                failures: []
+              }' > "$stateFile"
+            echo "Major Change Checker Quality Gate skipped for approved connector revision."
+            exit 0
+          fi
 
           if [ ! -f "$compareFile" ]; then
             # No compare results file at all - this can happen when the compare

@@ -71,6 +71,11 @@ With the Validator (Connector Master SDK):
     validator-state-file: ${{ github.workspace }}/validator-gate-state.json
 ```
 
+For SDK connectors, a validator state with `mode: compare-skipped` and
+`status: passed` shows the approved compare exception as skipped. A validation
+failure still fails the overall gate; the Major Change Checker reports its
+own skipped state when the same exception applies.
+
 With the dependabot bypass (Master Workflow):
 
 ```yaml

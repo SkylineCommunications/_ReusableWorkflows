@@ -94,7 +94,9 @@ if [ "$render_validator" = "true" ]; then
     v_prevMi=$(jq -r '.previous.minor // 0' "$VALIDATOR_STATE_FILE")
     v_prevVer=$(jq -r '.previous.version // ""' "$VALIDATOR_STATE_FILE")
 
-    if [ "$v_status" = "passed" ]; then
+    if [ "$v_status" = "passed" ] && [ "$v_mode" = "compare-skipped" ]; then
+      vg_icon=$(icon skip); vg_detail="Validation passed; compare checks skipped for approved connector revision"
+    elif [ "$v_status" = "passed" ]; then
       vg_icon=$(icon pass); vg_detail="Validator quality gate passed"
     elif [ "$v_mode" = "missing-results" ]; then
       vg_icon=$(icon fail); vg_detail="Validator quality gate failed - validation did not produce results"
@@ -202,6 +204,13 @@ comment_file="${GITHUB_WORKSPACE}/quality-gate-comment.md"
       echo ""
     elif [ "$v_mode" = "missing-compare" ]; then
       echo "**Validator details** (compare results missing - version-based rules not evaluated):"
+      echo ""
+      echo "| | Critical | Major | Minor |"
+      echo "| --- | :---: | :---: | :---: |"
+      echo "| Current (solution) | $v_solC | $v_solM | $v_solMi |"
+      echo ""
+    elif [ "$v_mode" = "compare-skipped" ]; then
+      echo "**Validator details** (version \`$v_version\`; compare checks skipped for approved connector revision):"
       echo ""
       echo "| | Critical | Major | Minor |"
       echo "| --- | :---: | :---: | :---: |"

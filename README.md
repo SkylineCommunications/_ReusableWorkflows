@@ -145,6 +145,23 @@ jobs:
     secrets: inherit
 ```
 
+### SDK connector compare exception
+
+For one SDK connector revision, the compare-based quality checks can be skipped
+by setting the optional `skip-connector-compare` secret in the
+`kv-master-cicd-secrets` Azure Key Vault to the exact `Name:Version` from the
+solution's `protocol.xml` (for example, `My Connector:2.0.0.7`). Matching is
+case- and whitespace-sensitive and requires OIDC. A missing or nonmatching
+secret does not change the quality gate; a Key Vault lookup error fails it.
+
+The validator and compare commands still run; only compare-dependent gate
+failures are waived. Validation results are required, and critical issues still
+fail the gate, as do major or minor issues for an initial version without a
+previous revision. Unit tests and SonarCloud are unaffected. The summary
+identifies the skipped compare checks and Major Change Checker. Remove the
+secret when the exception is no longer needed; its single value authorizes only
+one connector revision at a time.
+
 ### Example: automation dispatcher (`Automation Master Workflow.yml`)
 
 ```yaml
