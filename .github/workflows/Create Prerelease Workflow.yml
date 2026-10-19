@@ -28,7 +28,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Reject unsafe trigger
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@test-pr-191
 
       - name: Checkout trusted command implementation
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
