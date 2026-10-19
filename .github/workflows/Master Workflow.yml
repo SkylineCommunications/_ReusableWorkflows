@@ -130,7 +130,7 @@ jobs:
       has-ubuntu-dxm: ${{ inputs.dxm-projects-ubuntu != '' }}
       solution-path: ${{ steps.find-solution-file.outputs.path }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Find solution file
         id: find-solution-file
@@ -323,7 +323,7 @@ jobs:
               subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
           - name: Checkout
-            uses: actions/checkout@v7
+            uses: actions/checkout@v7.0.1
             with:
               fetch-depth: 0
 
@@ -599,7 +599,7 @@ jobs:
               subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
           - name: Checkout
-            uses: actions/checkout@v7
+            uses: actions/checkout@v7.0.1
 
       - name: Load secrets
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
@@ -689,7 +689,7 @@ jobs:
               subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
           - name: Checkout
-            uses: actions/checkout@v7
+            uses: actions/checkout@v7.0.1
             with:
               fetch-depth: 0
 
@@ -1117,7 +1117,7 @@ jobs:
               subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
           - name: Checkout
-            uses: actions/checkout@v7
+            uses: actions/checkout@v7.0.1
 
       - name: Load package feed secrets
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
@@ -1259,7 +1259,7 @@ jobs:
               subscription-id: ${{ needs.check_oidc.outputs.subscription-id }}
 
           - name: Checkout
-            uses: actions/checkout@v7
+            uses: actions/checkout@v7.0.1
             with:
               fetch-depth: 0
 

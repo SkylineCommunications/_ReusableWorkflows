@@ -26,7 +26,7 @@ jobs:
     name: guard-trigger
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Invoke composite
         uses: ./.github/actions/guard-trigger
       - name: Confirm pass
@@ -36,7 +36,7 @@ jobs:
     name: is-skyline-managed-org
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: SkylineCommunications is managed
         id: skylinecommunications
@@ -70,7 +70,7 @@ jobs:
     name: resolve-oidc
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Explicit inputs
         id: explicit
@@ -147,7 +147,7 @@ jobs:
     name: load-secrets (overrides only)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Invoke composite with overrides only
         uses: ./.github/actions/load-secrets
@@ -169,7 +169,7 @@ jobs:
     name: setup-nuget-sources
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Invoke composite (no Skyline feeds, no azure token)
         uses: ./.github/actions/setup-nuget-sources
@@ -224,7 +224,7 @@ jobs:
     name: add-github-nuget-source
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Invoke composite
         uses: ./.github/actions/add-github-nuget-source
@@ -252,7 +252,7 @@ jobs:
     name: add-azure-nuget-source
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Invoke composite
         uses: ./.github/actions/add-azure-nuget-source
@@ -280,7 +280,7 @@ jobs:
     name: setup-skyline-nuget-sources
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Invoke composite
         uses: ./.github/actions/setup-skyline-nuget-sources
@@ -314,7 +314,7 @@ jobs:
     name: setup-skyline-nuget-sources (skip empty tokens)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Invoke composite with only Core GitHub token
         uses: ./.github/actions/setup-skyline-nuget-sources
@@ -332,7 +332,7 @@ jobs:
     name: validate-inputs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: All inputs set (should pass)
         uses: ./.github/actions/validate-inputs
@@ -364,7 +364,7 @@ jobs:
     name: apply-catalog-identifiers
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Stage fake manifest
         run: |
@@ -392,7 +392,7 @@ jobs:
     name: notify-dataminer-dependabot
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Assert signed delivery and failure reporting
         shell: pwsh
@@ -408,7 +408,7 @@ jobs:
     name: apply-source-code-url
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Stage fake manifest with empty source_code_url
         run: |
@@ -434,7 +434,7 @@ jobs:
     name: detect-test-runner
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: No global.json (default vstest)
         id: default
@@ -466,7 +466,7 @@ jobs:
     name: run-unit-tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Scaffold a minimal MSTest solution
         shell: bash
@@ -507,7 +507,7 @@ jobs:
     name: update-global-json-sdks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       # The composite hard-codes the centrally-managed DataMiner SDK
       # version. Keep this in sync with $DATAMINER_SDK_VERSION in
@@ -612,7 +612,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Check prerequisites
         id: prereq
@@ -640,7 +640,7 @@ jobs:
     name: references-parser
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Run 16-case parser corpus
         shell: pwsh
@@ -676,7 +676,7 @@ jobs:
     name: determine-version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Run 24-case version corpus
         shell: pwsh
@@ -738,7 +738,7 @@ jobs:
     name: set-repo-type
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Run repo-type mapping unit tests
         shell: pwsh
@@ -749,7 +749,7 @@ jobs:
     name: package-debian
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Scaffold two DxM projects with Debian skeletons
         run: |
@@ -834,7 +834,7 @@ jobs:
     name: remove-wix-projects
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Run offline test corpus
         shell: pwsh
@@ -878,7 +878,7 @@ jobs:
     name: partition-solution-projects
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Run offline test corpus
         shell: pwsh
@@ -942,7 +942,7 @@ jobs:
     # corpus shadows the `sign` tool so no live Key Vault is needed.
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Run offline test corpus
         shell: pwsh
@@ -1037,7 +1037,7 @@ jobs:
     # needs `pull-requests: write`. We exercise the render + enforce paths
     # here; the comment step is covered by real PRs against caller repos.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: All pass (unit tests only)
         id: all-pass

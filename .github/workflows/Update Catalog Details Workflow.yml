@@ -63,7 +63,7 @@ jobs:
     outputs:
       has-dataminer-projects: ${{ steps.detect-projects.outputs.has-dataminer-projects }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Detect DataMiner SDK projects
         id: detect-projects
@@ -115,7 +115,7 @@ jobs:
         - name: Enable long paths
           run: git config --global core.longpaths true
 
-        - uses: actions/checkout@v7
+        - uses: actions/checkout@v7.0.1
           with:
             persist-credentials: false
 

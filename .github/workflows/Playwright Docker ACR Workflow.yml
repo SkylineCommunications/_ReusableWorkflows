@@ -105,7 +105,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Azure Login (CI/CD)
         if: needs.check_oidc.outputs.cicd-use-oidc == 'true'
@@ -169,7 +169,7 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Download published tests
         uses: actions/download-artifact@v8

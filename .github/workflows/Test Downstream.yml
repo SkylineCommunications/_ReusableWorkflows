@@ -161,7 +161,7 @@ jobs:
           echo "head_ref=$(jq -r '.headRefName' <<<"$pr_json")" >> "$GITHUB_OUTPUT"
           echo "is_cross_repository=$(jq -r '.isCrossRepository' <<<"$pr_json")" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           token: ${{ secrets.DOWNSTREAM_PAT }}
@@ -305,7 +305,7 @@ jobs:
           echo "head_sha=$(jq -r '.headRefOid' /tmp/source-pr.json)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout orchestrator
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -505,7 +505,7 @@ jobs:
           echo "is_cross_repository=$(echo "$pr_json" | jq -r '.isCrossRepository')" >> "$GITHUB_OUTPUT"
           echo "PR #${{ github.event.issue.number }}: branch=$head_ref sha=$head_sha"
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           # Use a PAT with `workflow` scope so we can push changes

@@ -67,7 +67,7 @@ jobs:
               subscription-id: ${{ inputs.oidc-subscription-id }}
 
           - name: Checkout
-            uses: actions/checkout@v7
+            uses: actions/checkout@v7.0.1
             with:
               fetch-depth: 0
 
@@ -315,7 +315,7 @@ jobs:
               subscription-id: ${{ inputs.oidc-subscription-id }}
 
           - name: Checkout
-            uses: actions/checkout@v7
+            uses: actions/checkout@v7.0.1
             with:
               persist-credentials: false
 
@@ -468,7 +468,7 @@ jobs:
               subscription-id: ${{ inputs.oidc-subscription-id }}
 
           - name: Checkout
-            uses: actions/checkout@v7
+            uses: actions/checkout@v7.0.1
 
       - name: Load secrets
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
@@ -585,7 +585,7 @@ jobs:
               subscription-id: ${{ inputs.oidc-subscription-id }}
 
           - name: Checkout
-            uses: actions/checkout@v7
+            uses: actions/checkout@v7.0.1
             with:
               fetch-depth: 0
 
