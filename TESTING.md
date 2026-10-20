@@ -177,6 +177,8 @@ remains open, exactly one tag-push release starts (no explicit dispatch), and
 packages land only in GitHub Packages. A failed or missing PR check must not block a valid admin
 command. A missing PAT, write-only/non-admin commenter, version reuse, or a
 changed PR head must not create a release tag.
+For other suffixes, such as `-beta.2`, check the caller's `push.tags` trigger
+and package destination first; non-internal tags may publish to NuGet.org.
 The command deliberately retains any existing release-workflow tag side
 effects. A `GITHUB_TOKEN`-created tag would not trigger the release; verify
 the PAT-created tag does.

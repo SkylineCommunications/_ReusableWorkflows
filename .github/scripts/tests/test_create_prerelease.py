@@ -109,9 +109,16 @@ class PrereleaseTests(unittest.TestCase):
     def test_exact_command_and_version(self):
         self.assertEqual(parse_command(EVENT["comment"]["body"]), "1.2.3-internal.4")
         for body in ("/create-prerelease", "/create-prerelease 1.2.3", "/create-prerelease 01.2.3-internal.4",
+                     "/create-prerelease 1.2.3-beta..1", "/create-prerelease 1.2.3-beta_1",
+                     "/create-prerelease 1.2.3-01", "/create-prerelease 1.2.3-internal.04",
                      "/create-prerelease 1.2.3-internal.4\nother", "/create-prerelease 1.2.3-internal.4 --force"):
             with self.subTest(body=body), self.assertRaises(ValueError):
                 parse_command(body)
+
+    def test_accepts_any_prerelease_identifier(self):
+        for version in ("1.2.3-alpha", "1.2.3-beta.2", "1.2.3-rc-1.0", "1.2.3-preview.2026.10"):
+            with self.subTest(version=version):
+                self.assertEqual(parse_command(f"/create-prerelease {version}"), version)
 
     def test_admin_tags_pr_head_without_explicit_dispatch(self):
         api = FakeAPI()
@@ -119,6 +126,13 @@ class PrereleaseTests(unittest.TestCase):
         self.assertEqual(create_prerelease(api, tag_api, EVENT, REPOSITORY, WORKFLOW), ("1.2.3-internal.4", HEAD))
         self.assertEqual(api.posts, [])
         self.assertEqual(tag_api.posts, [(f"/repos/{REPOSITORY}/git/refs", {"ref": "refs/tags/1.2.3-internal.4", "sha": HEAD})])
+
+    def test_admin_tags_non_internal_prerelease(self):
+        api = FakeAPI()
+        tag_api = FakeAPI()
+        event = {**EVENT, "comment": {**EVENT["comment"], "body": "/create-prerelease 1.2.3-beta.2"}}
+        self.assertEqual(create_prerelease(api, tag_api, event, REPOSITORY, WORKFLOW), ("1.2.3-beta.2", HEAD))
+        self.assertEqual(tag_api.posts, [(f"/repos/{REPOSITORY}/git/refs", {"ref": "refs/tags/1.2.3-beta.2", "sha": HEAD})])
 
     def test_missing_pat_does_not_create_tag(self):
         api = FakeAPI()

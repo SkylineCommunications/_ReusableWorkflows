@@ -1,4 +1,4 @@
-name: Create internal prerelease from PR
+name: Create prerelease from PR
 
 on:
   workflow_call:
@@ -14,7 +14,7 @@ on:
 
 jobs:
   create-prerelease:
-    name: Authorize and dispatch internal prerelease
+    name: Authorize and create prerelease tag
     if: >-
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
@@ -31,7 +31,7 @@ jobs:
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
 
       - name: Checkout trusted command implementation
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@v7
         with:
           repository: SkylineCommunications/_ReusableWorkflows
           ref: main

@@ -1,4 +1,4 @@
-"""Authorize and tag an internal NuGet prerelease from a fork PR comment."""
+"""Authorize and tag a NuGet prerelease from a fork PR comment."""
 
 from __future__ import annotations
 
@@ -13,8 +13,10 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 
+PRERELEASE_IDENTIFIER = r"(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
 VERSION = re.compile(
-    r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-internal\.(0|[1-9][0-9]*)"
+    rf"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+    rf"-{PRERELEASE_IDENTIFIER}(?:\.{PRERELEASE_IDENTIFIER})*"
 )
 COMMAND = re.compile(r"/create-prerelease ([^\s]+)")
 
@@ -22,7 +24,7 @@ COMMAND = re.compile(r"/create-prerelease ([^\s]+)")
 def parse_command(body: str) -> str:
     match = COMMAND.fullmatch(body)
     if match is None or VERSION.fullmatch(match.group(1)) is None:
-        raise ValueError("Expected /create-prerelease <major.minor.patch-internal.number> on one line")
+        raise ValueError("Expected /create-prerelease <major.minor.patch-suffix> on one line")
     return match.group(1)
 
 

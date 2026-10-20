@@ -59,7 +59,7 @@ jobs:
     secrets: inherit
 ```
 
-### Internal prerelease from a fork PR
+### Prerelease from a fork PR
 
 Install a thin `issue_comment: created` caller on the repository's default
 branch. It must pass the existing release workflow filename to
@@ -69,12 +69,12 @@ to the job's `GITHUB_TOKEN`. Create a user-owned PAT with `Contents: write`
 access only to the participating repositories. Its owner must be allowed by
 every applicable tag-creation ruleset (including organization rulesets); the
 PAT must be authorized for the organization. Missing credentials fail closed.
-The release workflow must have a matching `push.tags` trigger and be available
-at the PR head. See the caller workflows in the CICD NuGet repositories for
+The release workflow must have a `push.tags` trigger matching the requested
+tag and be available at the PR head. See the caller workflows in the CICD NuGet repositories for
 the complete example and their internal GitHub Packages routing.
 
 ```yaml
-name: Create internal prerelease
+name: Create prerelease from PR
 on:
   issue_comment:
     types: [created]
@@ -94,6 +94,9 @@ jobs:
 Configure the existing release caller to select the GitHub Packages source
 and a `packages: write` token for `-internal.` tags, keeping the normal
 NuGet.org source and key for other tags. This command uses its tag-push path.
+It accepts any SemVer prerelease suffix, such as `1.2.3-beta.2`. Check the
+caller's tag filter and publishing destination before using another suffix:
+non-internal tags may publish to NuGet.org.
 
 An administrator comments `/create-prerelease 1.2.3-internal.4` on an open fork
 PR. The command uses the **current** PR head and requires an unused version tag,
