@@ -25,7 +25,7 @@ jobs:
       contents: read
     steps:
       - name: Validate trigger
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@test-downstream
 
   dry_run:
     name: Check managed dependency versions (dry run)
@@ -88,7 +88,7 @@ jobs:
       - name: Resolve OIDC parameters
         if: steps.versions.outputs.changed == 'true'
         id: oidc
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/resolve-oidc@test-downstream
         with:
           repository-owner: ${{ github.repository_owner }}
 
@@ -109,7 +109,7 @@ jobs:
 
       - name: Load pull request token
         if: steps.versions.outputs.changed == 'true' && steps.oidc.outputs.use-oidc == 'true'
-        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@test-downstream
         with:
           use-oidc: 'true'
           secret-names: reusable-workflows-token
