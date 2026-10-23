@@ -59,6 +59,14 @@ runs:
         SECRET_NAMES: ${{ inputs.secret-names }}
       run: bash ./load-from-keyvault.sh
 
+    - name: Verify retrieved secrets
+      if: inputs.use-oidc == 'true' && inputs.secret-names != ''
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        SECRET_NAMES: ${{ inputs.secret-names }}
+      run: bash ./verify-loaded.sh
+
     - name: Apply caller-provided overrides
       if: inputs.overrides != ''
       shell: bash
