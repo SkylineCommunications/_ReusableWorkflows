@@ -14,8 +14,14 @@ fi
 
 echo "GITHUB_ENV is configured at '$GITHUB_ENV'."
 
-# Read newline-separated secret names into an array, dropping blank lines.
-mapfile -t secret_names < <(printf '%s\n' "$SECRET_NAMES" | sed '/^[[:space:]]*$/d')
+# Read newline-separated secret names without a subprocess.
+secret_names=()
+while IFS= read -r secret_name; do
+  secret_name="${secret_name//[[:space:]]/}"
+  if [[ -n "$secret_name" ]]; then
+    secret_names+=("$secret_name")
+  fi
+done <<< "$SECRET_NAMES"
 echo "Parsed ${#secret_names[@]} non-blank secret name(s) from SECRET_NAMES."
 
 if [[ "${#secret_names[@]}" -eq 0 ]]; then
@@ -24,14 +30,15 @@ if [[ "${#secret_names[@]}" -eq 0 ]]; then
 fi
 
 for secret_name in "${secret_names[@]}"; do
-  secret_name="${secret_name//[[:space:]]/}"
-  [[ -z "$secret_name" ]] && continue
-
   env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
   echo "Fetching Key Vault secret '$secret_name' for environment variable '$env_var_name'."
 
   if ! secret_value=$(az keyvault secret show --vault-name "$VAULT_NAME" --name "$secret_name" --query value -o tsv); then
     echo "ERROR: Failed to fetch Key Vault secret '$secret_name'." >&2
+    exit 1
+  fi
+  if [[ -z "$secret_value" ]]; then
+    echo "ERROR: Key Vault secret '$secret_name' returned an empty value." >&2
     exit 1
   fi
   echo "Fetched Key Vault secret '$secret_name'; masking and exporting it."

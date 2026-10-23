@@ -165,6 +165,49 @@ jobs:
           # Empty override must be skipped.
           test -z "${TEST_BAR:-}"
 
+  load-secrets-keyvault:
+    name: load-secrets (mock Key Vault)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Mock Azure CLI
+        shell: bash
+        run: |
+          mock_bin="$(cygpath -u "$RUNNER_TEMP")/mock-bin"
+          mkdir -p "$mock_bin"
+          printf '#!/bin/sh\nprintf "%%s" "$MOCK_SECRET_VALUE"\n' > "$mock_bin/az"
+          chmod +x "$mock_bin/az"
+          cygpath -w "$mock_bin" >> "$GITHUB_PATH"
+
+      - name: Reject empty Key Vault value
+        id: empty
+        continue-on-error: true
+        uses: ./.github/actions/load-secrets
+        env:
+          MOCK_SECRET_VALUE: ''
+        with:
+          use-oidc: 'true'
+          secret-names: test-credential
+
+      - name: Assert empty value failed
+        shell: bash
+        env:
+          RESULT: ${{ steps.empty.outcome }}
+        run: test "$RESULT" = "failure"
+
+      - name: Load mock Key Vault value
+        uses: ./.github/actions/load-secrets
+        env:
+          MOCK_SECRET_VALUE: fixture-value
+        with:
+          use-oidc: 'true'
+          secret-names: test-credential
+
+      - name: Assert retrieved value
+        shell: bash
+        run: test "$TEST_CREDENTIAL" = "fixture-value"
+
   setup-nuget-sources:
     name: setup-nuget-sources
     runs-on: ubuntu-latest

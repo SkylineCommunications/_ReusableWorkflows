@@ -327,27 +327,26 @@ jobs:
             with:
               fetch-depth: 0
 
-      - parallel:
-          - name: Load secrets
-            uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
-            with:
-              use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
-              secret-names: |
-                azure-token
-                sonar-token
-                skylinecommunications-github-token
-                skylinecommunicationscore-github-token
-                ${{ needs.discover_projects.outputs.has-dataminer-projects == 'true' && 'dataminer-token' || '' }}
-              overrides: |
-                AZURE_TOKEN=${{ secrets.AZURE_TOKEN }}
-                SONAR_TOKEN=${{ secrets.SONAR_TOKEN }}
-                DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
+      - name: Load secrets
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
+        with:
+          use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
+          secret-names: |
+            azure-token
+            sonar-token
+            skylinecommunications-github-token
+            skylinecommunicationscore-github-token
+            ${{ needs.discover_projects.outputs.has-dataminer-projects == 'true' && 'dataminer-token' || '' }}
+          overrides: |
+            AZURE_TOKEN=${{ secrets.AZURE_TOKEN }}
+            SONAR_TOKEN=${{ secrets.SONAR_TOKEN }}
+            DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
 
-          - name: Cache and Install Mono
-            if: runner.os == 'Linux'
-            uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
-            with:
-              packages: mono-complete
+      - name: Cache and Install Mono
+        if: runner.os == 'Linux'
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: mono-complete
 
       - name: Validate inputs
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/validate-inputs@main

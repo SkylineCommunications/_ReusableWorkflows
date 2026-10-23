@@ -6,6 +6,9 @@ Loads secrets into the job environment in two stages:
 2. Apply caller-provided overrides from `ENV_VAR=VALUE` pairs.
 
 This action writes values to `$GITHUB_ENV` and masks secret values in logs.
+When Key Vault retrieval is enabled, empty values and missing exports fail the action
+before caller overrides are applied. A successful Azure CLI exit alone does not
+count as a successful retrieval.
 
 ## Inputs
 
