@@ -1,5 +1,5 @@
 # Central source of truth for all managed SDK versions.
-$DATAMINER_SDK_VERSION = '2.6.1'
+$DATAMINER_SDK_VERSION = '2.6.2-internal.1'
 
 $dataMinerSdkPatterns = @(
     '^Skyline\.DataMiner\..*'
