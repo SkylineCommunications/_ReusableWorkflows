@@ -73,6 +73,21 @@ class ManagedDependencyUpdaterTests(unittest.TestCase):
             with self.subTest(version=version), self.assertRaises(UPDATER.UpdateError):
                 UPDATER.parse_stable_version(version)
 
+    def test_stable_candidate_compares_against_prerelease_pin(self):
+        for candidate, expected in (("2.6.1", -1), ("2.6.2", 1), ("2.6.3", 1)):
+            with self.subTest(candidate=candidate):
+                self.assertEqual(
+                    expected,
+                    UPDATER.compare_versions(candidate, "2.6.2-internal.1"),
+                )
+        with self.assertRaises(UPDATER.UpdateError):
+            UPDATER.compare_versions("2.6.3-internal.1", "2.6.2")
+
+    def test_invalid_prerelease_pin_fails_closed(self):
+        for version in ("2.6.2-", "2.6.2-rc..1", "2.6.2-rc/1"):
+            with self.subTest(version=version), self.assertRaises(UPDATER.UpdateError):
+                UPDATER.compare_versions("2.6.3", version)
+
     def test_fetch_latest_stable_requires_exact_package_and_ignores_prerelease(self):
         payload = {
             "data": [
@@ -152,6 +167,20 @@ class ManagedDependencyUpdaterTests(unittest.TestCase):
         )
         self.assertIn('echo "version=2.5.7"', self.test_workflow_path.read_text())
 
+    def test_prerelease_pin_waits_for_matching_or_newer_stable_release(self):
+        self._write_fixture_versions("4.1.0", "2.6.2-internal.1", "2.6.2-internal.1")
+        updates, current = self._prepare(sdk_version="2.6.1")
+        self.assertEqual({}, updates)
+        self.assertEqual("2.6.2-internal.1", current["dataminer-sdk"])
+
+        updates, _ = self._prepare(sdk_version="2.6.2")
+        self.assertEqual(2, len(updates))
+        UPDATER.write_updates(self.repo_root, updates)
+        self.assertIn(
+            "$DATAMINER_SDK_VERSION = '2.6.2'", self.action_script_path.read_text()
+        )
+        self.assertIn('echo "version=2.6.2"', self.test_workflow_path.read_text())
+
     def test_updates_both_dependencies_and_second_run_is_idempotent(self):
         latest = {"apppackageinstaller": "4.2.0", "dataminer-sdk": "2.5.7"}
         updates, _ = UPDATER.prepare_updates(self.repo_root, latest)
@@ -171,8 +200,6 @@ class ManagedDependencyUpdaterTests(unittest.TestCase):
             {"apppackageinstaller", "dataminer-sdk"},
             set(current),
         )
-        for version in current.values():
-            UPDATER.parse_stable_version(version)
 
     def test_write_failure_rolls_back_already_replaced_files(self):
         latest = {"apppackageinstaller": "4.2.0", "dataminer-sdk": "2.5.7"}

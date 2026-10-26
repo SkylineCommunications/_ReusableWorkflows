@@ -73,12 +73,17 @@ def parse_stable_version(value: str) -> Version:
 
 
 def compare_versions(left: str, right: str) -> int:
+    """Compare a stable candidate against a stable or prerelease current pin."""
     left_parts = parse_stable_version(left)
-    right_parts = parse_stable_version(right)
+    right_core, separator, prerelease = right.partition("-")
+    right_parts = parse_stable_version(right_core)
+    if separator and not re.fullmatch(r"[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*", prerelease):
+        raise UpdateError(f"Invalid prerelease NuGet version: {right!r}")
     width = max(len(left_parts), len(right_parts))
     normalized_left = left_parts + (0,) * (width - len(left_parts))
     normalized_right = right_parts + (0,) * (width - len(right_parts))
-    return (normalized_left > normalized_right) - (normalized_left < normalized_right)
+    comparison = (normalized_left > normalized_right) - (normalized_left < normalized_right)
+    return comparison or int(bool(separator))
 
 
 def fetch_latest_stable(
