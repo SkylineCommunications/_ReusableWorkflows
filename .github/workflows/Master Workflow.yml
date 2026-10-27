@@ -1268,8 +1268,27 @@ jobs:
           use-oidc: ${{ needs.check_oidc.outputs.use-oidc }}
           secret-names: |
             dataminer-token
+            azure-token
+            skylinecommunications-github-token
+            skylinecommunicationscore-github-token
           overrides: |
             DATAMINER_TOKEN=${{ secrets.DATAMINER_TOKEN }}
+            AZURE_TOKEN=${{ secrets.AZURE_TOKEN }}
+
+      - name: Setup Skyline NuGet sources
+        if: needs.check_oidc.outputs.is-skyline-managed == 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/setup-skyline-nuget-sources@main
+        with:
+          skylinecommunications-github-token: ${{ env.SKYLINECOMMUNICATIONS_GITHUB_TOKEN }}
+          skylinecommunicationscore-github-token: ${{ env.SKYLINECOMMUNICATIONSCORE_GITHUB_TOKEN }}
+          azure-token: ${{ env.AZURE_TOKEN }}
+
+      - name: Setup local GitHub NuGet source
+        if: needs.check_oidc.outputs.is-skyline-managed != 'true'
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+        with:
+          organization: ${{ github.repository_owner }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Find Version Comment
         id: findVersionComment
