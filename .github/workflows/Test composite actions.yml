@@ -22,6 +22,15 @@ permissions:
 
 jobs:
 
+  okf-source-sync:
+    name: okf-source-sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise detection action
+        shell: pwsh
+        run: pwsh -NoLogo -NoProfile -File .github/actions/okf-source-sync/test.ps1
+
   guard-trigger:
     name: guard-trigger
     runs-on: ubuntu-latest
