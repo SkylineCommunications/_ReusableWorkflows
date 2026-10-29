@@ -23,6 +23,16 @@ sources:
 
 Initial projection.
 "@ | Set-Content -LiteralPath (Join-Path $root 'OKF\concept.md') -Encoding utf8
+@"
+---
+type: Guidance
+title: Moving reference concept
+sources:
+  - resource: https://github.com/example/example/blob/main/source.md
+---
+
+Initial projection.
+"@ | Set-Content -LiteralPath (Join-Path $root 'OKF\moving-reference.md') -Encoding utf8
     & git -C $root add .
     & git -C $root commit --quiet -m concept
 
@@ -53,13 +63,24 @@ Initial projection.
     }
 
     $output = Get-Content -LiteralPath $outputPath -Raw
-    if ($output -notmatch 'status=changes-detected') {
-        throw "Expected changes-detected output. Actual output: $output"
+    if ($output -notmatch 'status=blocked') {
+        throw "Expected blocked output for the moving reference. Actual output: $output"
     }
 
     $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+    if ($report.status -ne 'blocked') {
+        throw "Expected blocked status for moving source references. Actual status: $($report.status)"
+    }
+
     if ($report.affected_concepts.Count -ne 1 -or $report.affected_concepts[0].concept -ne 'concept.md') {
         throw 'Expected exactly one affected concept.'
+    }
+
+    if (-not ($report.diagnostics | Where-Object {
+            $_.code -eq 'reviewed-commit-required' -and
+            $_.concept -eq 'moving-reference.md'
+        })) {
+        throw 'Expected a reviewed-commit-required diagnostic.'
     }
 
     Write-Output 'okf-source-sync test passed.'

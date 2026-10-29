@@ -175,6 +175,16 @@ foreach ($file in $files) {
             continue
         }
 
+        if ($source.Commit -notmatch '^[0-9a-fA-F]{7,40}$') {
+            $diagnostics.Add([pscustomobject]@{
+                code = 'reviewed-commit-required'
+                concept = $conceptPath
+                resource = $resource
+                message = "Source reference uses moving ref '$($source.Commit)'; an immutable reviewed commit is required."
+            })
+            continue
+        }
+
         $commitExists = & git -C $workspace cat-file -e "$($source.Commit)^{commit}" 2>$null
         if ($LASTEXITCODE -ne 0) {
             $diagnostics.Add([pscustomobject]@{
@@ -209,7 +219,11 @@ foreach ($file in $files) {
     }
 }
 
-$status = if ($diagnostics | Where-Object { $_.code -eq 'baseline-unavailable' -or $_.code -eq 'comparison-failed' }) {
+$status = if ($diagnostics | Where-Object {
+        $_.code -eq 'baseline-unavailable' -or
+        $_.code -eq 'comparison-failed' -or
+        $_.code -eq 'reviewed-commit-required'
+    }) {
     'blocked'
 } elseif ($affected.Count -gt 0) {
     'changes-detected'
