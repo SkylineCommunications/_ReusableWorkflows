@@ -74,3 +74,8 @@ used across every workflow in this repo and the wider Skyline fleet:
 
 Third-party `uses:` (e.g. `actions/checkout@v6`) must still be pinned to
 a tag or full commit SHA.
+
+The checked-out smoke-test workflow is the only exception: it may invoke a
+new or changed local composite with `./.github/actions/<name>` so the PR
+tests the action before it exists on `main`. Production workflows and caller
+repositories must use the repository reference pinned to `@main`.

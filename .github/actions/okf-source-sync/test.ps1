@@ -125,6 +125,53 @@ $env:DRY_RUN = 'false'
         throw 'Expected an external-source-unchecked diagnostic.'
     }
 
+    $missingCommit = '0000000000000000000000000000000000000000'
+    @"
+---
+type: Guidance
+title: Missing baseline concept
+sources:
+  - resource: https://github.com/example/example/blob/$missingCommit/source.md
+---
+
+Missing baseline.
+"@ | Set-Content -LiteralPath (Join-Path $root 'OKF\missing-baseline.md') -Encoding utf8
+
+    Remove-Item -LiteralPath $outputPath -Force
+    & pwsh -NoLogo -NoProfile -File $scriptPath
+    $missingReport = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+    if ($missingReport.status -ne 'blocked' -or
+        -not ($missingReport.diagnostics | Where-Object {
+            $_.code -eq 'baseline-unavailable' -and
+            $_.concept -eq 'missing-baseline.md'
+        })) {
+        throw 'Expected a baseline-unavailable diagnostic without a script failure.'
+    }
+
+    $blob = (& git -C $root hash-object (Join-Path $root 'source.md')).Trim()
+    @"
+---
+type: Guidance
+title: Non-commit baseline concept
+sources:
+  - resource: https://github.com/example/example/blob/$blob/source.md
+---
+
+Non-commit baseline.
+"@ | Set-Content -LiteralPath (Join-Path $root 'OKF\non-commit-baseline.md') -Encoding utf8
+
+    Remove-Item -LiteralPath $outputPath -Force
+    & pwsh -NoLogo -NoProfile -File $scriptPath
+    $nonCommitReport = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+    if ($nonCommitReport.status -ne 'blocked' -or
+        -not ($nonCommitReport.diagnostics | Where-Object {
+            $_.code -eq 'reviewed-commit-required' -and
+            $_.concept -eq 'non-commit-baseline.md' -and
+            $_.message -match 'blob object'
+        })) {
+        throw 'Expected a reviewed-commit-required diagnostic for a blob object.'
+    }
+
     Write-Output 'okf-source-sync test passed.'
 } finally {
     if (Test-Path -LiteralPath $root) {

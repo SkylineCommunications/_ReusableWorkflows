@@ -188,13 +188,30 @@ foreach ($file in $files) {
             continue
         }
 
-        $commitType = (& git -C $workspace cat-file -t $source.Commit 2>$null).Trim()
-        if ($LASTEXITCODE -ne 0 -or $commitType -ne 'commit') {
+        $commitTypeOutput = & git -C $workspace cat-file -t $source.Commit 2>$null
+        $commitTypeExitCode = $LASTEXITCODE
+        $commitType = if ($null -eq $commitTypeOutput) {
+            ''
+        } else {
+            ($commitTypeOutput -join "`n").Trim()
+        }
+
+        if ($commitTypeExitCode -ne 0) {
             $diagnostics.Add([pscustomobject]@{
                 code = 'baseline-unavailable'
                 concept = $conceptPath
                 resource = $resource
                 message = "Reviewed source commit $($source.Commit) is not available in the checkout."
+            })
+            continue
+        }
+
+        if ($commitType -ne 'commit') {
+            $diagnostics.Add([pscustomobject]@{
+                code = 'reviewed-commit-required'
+                concept = $conceptPath
+                resource = $resource
+                message = "Source reference must identify a commit object; '$($source.Commit)' identifies a $commitType object."
             })
             continue
         }
