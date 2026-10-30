@@ -13,7 +13,7 @@ inputs:
     required: false
     default: ${{ github.repository }}
   dry-run:
-    description: Keep this detection-only action report-only. Must be true in the pilot.
+    description: Keep this detection-only action report-only. The action never mutates source or OKF files.
     required: false
     default: 'true'
   report-path:
@@ -23,7 +23,7 @@ inputs:
 
 outputs:
   status:
-    description: Detection result: no-change, changes-detected, or blocked.
+    description: 'Detection result: no-change, changes-detected, or blocked.'
     value: ${{ steps.detect.outputs.status }}
   affected-concepts:
     description: Number of existing concepts affected by changed declared sources.

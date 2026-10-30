@@ -15,7 +15,7 @@ baseline, and unavailable commits remain explicit diagnostics.
 | --- | --- | --- | --- |
 | `okf-root` | no | `OKF` | Repository-relative OKF root. |
 | `source-repository` | no | `${{ github.repository }}` | Full GitHub repository name whose source references are eligible. |
-| `dry-run` | no | `true` | Report-only mode. Keep enabled during the pilot. |
+| `dry-run` | no | `true` | Records whether the detection is being run in report-only mode. This action is detection-only for either value. |
 | `report-path` | no | `okf-source-sync-report.json` | JSON report path. |
 
 ## Outputs
@@ -37,6 +37,17 @@ baseline, and unavailable commits remain explicit diagnostics.
     source-repository: SkylineCommunications/internal-docs
     dry-run: 'true'
 ```
+
+The caller must check out the repository with `fetch-depth: 0` (or otherwise
+make every referenced reviewed commit available locally). Each source
+reference must contain the full 40-character commit SHA of a commit object.
+Missing or invalid baselines, external sources, and unsupported source
+providers produce diagnostics and make the result `blocked`; any source-level
+changes found before blocking remain in the report.
+
+The `affected-concepts` output counts distinct concept paths. The JSON
+`affected_concepts` array remains one entry per changed source so callers can
+inspect each source that caused the impact.
 
 The caller must run on a trusted branch and keep internal source content out of
 public logs and artifacts. The action does not grant source permissions and does

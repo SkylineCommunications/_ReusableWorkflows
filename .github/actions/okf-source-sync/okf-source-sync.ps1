@@ -169,24 +169,27 @@ foreach ($file in $files) {
         })
 
         if ($source.Kind -ne 'supported') {
-            if ($source.Kind -eq 'unsupported') {
-                $diagnostics.Add($source)
-            }
-            continue
-        }
-
-        if ($source.Commit -notmatch '^[0-9a-fA-F]{7,40}$') {
             $diagnostics.Add([pscustomobject]@{
-                code = 'reviewed-commit-required'
+                code = if ($source.Kind -eq 'external') { 'external-source-unchecked' } else { 'unsupported-source' }
                 concept = $conceptPath
                 resource = $resource
-                message = "Source reference uses moving ref '$($source.Commit)'; an immutable reviewed commit is required."
+                message = $source.Message
             })
             continue
         }
 
-        $commitExists = & git -C $workspace cat-file -e "$($source.Commit)^{commit}" 2>$null
-        if ($LASTEXITCODE -ne 0) {
+        if ($source.Commit -notmatch '^[0-9a-fA-F]{40}$') {
+            $diagnostics.Add([pscustomobject]@{
+                code = 'reviewed-commit-required'
+                concept = $conceptPath
+                resource = $resource
+                message = "Source reference must use a full 40-character reviewed commit SHA; '$($source.Commit)' is not valid."
+            })
+            continue
+        }
+
+        $commitType = (& git -C $workspace cat-file -t $source.Commit 2>$null).Trim()
+        if ($LASTEXITCODE -ne 0 -or $commitType -ne 'commit') {
             $diagnostics.Add([pscustomobject]@{
                 code = 'baseline-unavailable'
                 concept = $conceptPath
@@ -219,17 +222,15 @@ foreach ($file in $files) {
     }
 }
 
-$status = if ($diagnostics | Where-Object {
-        $_.code -eq 'baseline-unavailable' -or
-        $_.code -eq 'comparison-failed' -or
-        $_.code -eq 'reviewed-commit-required'
-    }) {
+$status = if ($diagnostics.Count -gt 0) {
     'blocked'
 } elseif ($affected.Count -gt 0) {
     'changes-detected'
 } else {
     'no-change'
 }
+
+$affectedConceptCount = @($affected | Select-Object -ExpandProperty concept -Unique).Count
 
 $report = [ordered]@{
     schema = 'skyline.okf-source-sync/0.1'
@@ -261,7 +262,7 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- Status: **$status**",
         "- Candidate commit: $head",
         "- Concepts scanned: $($files.Count)",
-        "- Affected concepts: $($affected.Count)",
+        "- Affected concepts: $affectedConceptCount",
         "- Diagnostics: $($diagnostics.Count)",
         '',
         'This action is detection-only. It does not generate or publish knowledge changes.'
@@ -269,5 +270,5 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
 }
 
 Write-OutputValue -Name 'status' -Value $status
-Write-OutputValue -Name 'affected-concepts' -Value ([string]$affected.Count)
+Write-OutputValue -Name 'affected-concepts' -Value ([string]$affectedConceptCount)
 Write-OutputValue -Name 'report-path' -Value ((Resolve-Path -LiteralPath $reportPath).Path)
