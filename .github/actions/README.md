@@ -59,6 +59,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `unit-tests` | Wrapper combining detect + run unit test actions. | [unit-tests/README.md](unit-tests/README.md) |
 | `references-parser` | Parses and validates the mandatory PR `References:` line and renders the sticky-comment summary. | [references-parser/README.md](references-parser/README.md) |
 | `quality-gate-summary` | Aggregates unit-test / SonarCloud / Validator outcomes, renders a Job Summary + sticky PR comment, and fails the job on any failed sub-gate. | [quality-gate-summary/README.md](quality-gate-summary/README.md) |
+| `okf-source-sync` | Detects changes to same-repository immutable OKF source references and writes a deterministic report. | [okf-source-sync/README.md](okf-source-sync/README.md) |
 
 ## Referencing from a reusable workflow in this repo
 
@@ -73,3 +74,8 @@ used across every workflow in this repo and the wider Skyline fleet:
 
 Third-party `uses:` (e.g. `actions/checkout@v6`) must still be pinned to
 a tag or full commit SHA.
+
+The checked-out smoke-test workflow is the only exception: it may invoke a
+new or changed local composite with `./.github/actions/<name>` so the PR
+tests the action before it exists on `main`. Production workflows and caller
+repositories must use the repository reference pinned to `@main`.

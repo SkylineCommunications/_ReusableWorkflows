@@ -22,6 +22,59 @@ permissions:
 
 jobs:
 
+  okf-source-sync:
+    name: okf-source-sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Prepare composite fixture
+        shell: pwsh
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          $fixture = Join-Path $env:GITHUB_WORKSPACE '.okf-source-sync-smoke'
+          $okf = Join-Path $fixture 'OKF'
+          New-Item -ItemType Directory -Force -Path $okf | Out-Null
+          $commit = (& git -C $env:GITHUB_WORKSPACE rev-parse HEAD).Trim()
+          @"
+          ---
+          type: Guidance
+          title: Composite smoke fixture
+          sources:
+            - resource: https://github.com/$env:REPOSITORY/blob/$commit/.github/actions/okf-source-sync/action.yml
+          ---
+
+          Composite smoke fixture.
+          "@ | Set-Content -LiteralPath (Join-Path $okf 'concept.md') -Encoding utf8
+
+      - name: Exercise detection action through its composite interface
+        id: okf-sync
+        uses: ./.github/actions/okf-source-sync
+        with:
+          okf-root: .okf-source-sync-smoke/OKF
+          dry-run: 'false'
+          report-path: ${{ runner.temp }}/okf-source-sync-report.json
+
+      - name: Assert composite outputs
+        shell: pwsh
+        env:
+          STATUS: ${{ steps.okf-sync.outputs.status }}
+          AFFECTED_CONCEPTS: ${{ steps.okf-sync.outputs.affected-concepts }}
+          REPORT_PATH: ${{ steps.okf-sync.outputs.report-path }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if ($env:STATUS -ne 'no-change') { throw "Unexpected status: $env:STATUS" }
+          if ($env:AFFECTED_CONCEPTS -ne '0') { throw "Unexpected affected concept count: $env:AFFECTED_CONCEPTS" }
+          if (-not (Test-Path -LiteralPath $env:REPORT_PATH)) { throw "Missing report: $env:REPORT_PATH" }
+          $report = Get-Content -LiteralPath $env:REPORT_PATH -Raw | ConvertFrom-Json
+          if ($report.repository -ne $env:REPOSITORY) { throw "Unexpected repository: $($report.repository)" }
+          if ($report.dry_run) { throw 'Expected dry_run=false.' }
+
+      - name: Exercise script regression tests
+        shell: pwsh
+        run: pwsh -NoLogo -NoProfile -File .github/actions/okf-source-sync/test.ps1
+
   guard-trigger:
     name: guard-trigger
     runs-on: ubuntu-latest

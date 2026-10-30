@@ -1,0 +1,46 @@
+name: OKF source sync
+description: >
+  Detects changes to same-repository source files declared by existing OKF
+  concepts and writes a deterministic, reviewable drift report.
+
+inputs:
+  okf-root:
+    description: Repository-relative OKF root to inspect.
+    required: false
+    default: OKF
+  source-repository:
+    description: Full GitHub repository name whose declared source files may be checked.
+    required: false
+    default: ${{ github.repository }}
+  dry-run:
+    description: Record whether the detection is report-only. Both values write the configured report and do not generate or publish knowledge changes.
+    required: false
+    default: 'true'
+  report-path:
+    description: Repository-relative or absolute path for the JSON drift report; choose a destination separate from source and OKF files.
+    required: false
+    default: okf-source-sync-report.json
+
+outputs:
+  status:
+    description: 'Detection result: no-change, changes-detected, or blocked.'
+    value: ${{ steps.detect.outputs.status }}
+  affected-concepts:
+    description: Number of existing concepts affected by changed declared sources.
+    value: ${{ steps.detect.outputs.affected-concepts }}
+  report-path:
+    description: Absolute path to the JSON drift report.
+    value: ${{ steps.detect.outputs.report-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect declared source changes
+      id: detect
+      shell: pwsh
+      env:
+        OKF_ROOT: ${{ inputs.okf-root }}
+        SOURCE_REPOSITORY: ${{ inputs.source-repository }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        REPORT_PATH: ${{ inputs.report-path }}
+      run: '& "$env:GITHUB_ACTION_PATH/okf-source-sync.ps1"'
