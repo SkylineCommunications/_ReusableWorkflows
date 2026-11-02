@@ -90,7 +90,7 @@ previously approved head.
 
 - `needs: CI`, `if: always()`, first assert `needs.CI.result == 'success'` (skip/cancel = fail).
 - Artifacts: `gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts" --jq '.artifacts[].name'` + `grep -Fxq`; deep-inspect via `gh run download $RUN_ID -n <artifact>`.
-- Job/step conclusions: `gh api .../runs/$RUN_ID/jobs`; nested reusable jobs are named `<caller job> / <nested job>` (e.g. `CI / CI`, `CI / CI_SDK / SDK Skyline Quality Gate`).
+- Job/step conclusions: `gh api .../runs/$RUN_ID/jobs`; nested reusable jobs are named `<caller job> / <nested job>` (e.g. `CI / CI`, `CI / SDK Skyline Quality Gate`).
 - Expected failures: no verify job — use run-and-monitor's `expected-conclusion: failure` + `expected-failed-job: <job-name substring>`.
 
 ## Gotchas (all hit in practice)

@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 
 
-WORKFLOW = Path(__file__).resolve().parents[3] / ".github/workflows/Connector Master SDK Workflow.yml"
+WORKFLOW = Path(__file__).resolve().parents[3] / ".github/workflows/Connector Master Workflow.yml"
 STEPS = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["validate_skyline_quality_gate"]["steps"]
 POWERSHELL = shutil.which("pwsh")
 BASH = shutil.which("bash") or next(
@@ -27,7 +27,10 @@ class ConnectorCompareExceptionTests(unittest.TestCase):
     @unittest.skipUnless(POWERSHELL, "PowerShell is required")
     def test_key_vault_match_is_exact_and_optional(self):
         script = workflow_step("Check connector compare exception")["run"]
-        self.assertEqual("inputs.use-oidc == 'true'", workflow_step("Check connector compare exception")["if"])
+        self.assertEqual(
+            "needs.check_oidc.outputs.use-oidc == 'true'",
+            workflow_step("Check connector compare exception")["if"],
+        )
 
         az_stub = """
 function az {
@@ -103,8 +106,10 @@ $global:LASTEXITCODE=0
                 "COMPARE_LOOKUP_FAILED": str(lookup_failed).lower(),
                 "EXEMPT_VERSION": version if exception else "",
             }
+            # Avoid Windows re-quoting embedded Bash strings passed with -c.
             result = subprocess.run(
-                [BASH, "-e", "-o", "pipefail", "-c", script],
+                [BASH, "-e", "-o", "pipefail"],
+                input=script,
                 env=environment,
                 capture_output=True,
                 text=True,

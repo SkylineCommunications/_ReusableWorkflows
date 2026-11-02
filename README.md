@@ -10,11 +10,7 @@ across the fleet and can be evolved in a single place.
 | Workflow                                                  | Purpose                                                                       |
 | --------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `Master Workflow.yml`                                     | Core CI/CD engine — build, validate, package, publish.                        |
-| `Connector Master Workflow.yml`                           | CI/CD for DataMiner connector solutions (SDK and Legacy).                     |
-| `Connector Master SDK Workflow.yml`                       | SDK-style connector pipeline (validator, Sonar, packaging).                   |
-| `Connector Master Legacy Workflow.yml`                    | Legacy connector pipeline.                                                    |
-| `Automation Master Workflow.yml`                          | CI/CD for Automation scripts (SDK and Legacy).                                |
-| `Automation Master SDK Workflow.yml` / `Legacy`           | SDK / Legacy automation pipelines.                                            |
+| `Connector Master Workflow.yml`                           | SDK-style connector pipeline (validator, Sonar, packaging, Catalog).          |
 | `Playwright Docker ACR Workflow.yml`                      | Build and push Playwright .NET test projects to Azure Container Registry.     |
 | `NuGet Solution Master Workflow.yml`                      | *(deprecated)* Thin redirect to `Master Workflow.yml` for public NuGet.       |
 | `Internal NuGet Solution Master Workflow.yml`             | *(deprecated)* Thin redirect to `Master Workflow.yml` for internal NuGet.     |
@@ -38,8 +34,9 @@ the legacy wrappers.
 ## Using master workflows
 
 The entry point for most caller repositories is `Master Workflow.yml`.
-The connector and automation master workflows are dispatchers: they detect
-SDK vs. Legacy projects and then call the corresponding sub-pipeline.
+`Connector Master Workflow.yml` directly runs the SDK-style connector pipeline.
+Automation solutions use `Master Workflow.yml` after migration to
+`Skyline.DataMiner.Sdk` projects; see the [retirement guidance](#2-november-2026-workflow-retirement).
 
 ### Example: generic solution pipeline (`Master Workflow.yml`)
 
@@ -133,20 +130,23 @@ jobs:
     secrets: inherit
 ```
 
-### Example: connector dispatcher (`Connector Master Workflow.yml`)
+### Example: SDK connector pipeline (`Connector Master Workflow.yml`)
 
 ```yaml
 jobs:
   ci:
     uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Connector Master Workflow.yml@main
     with:
-      connector-name: My Connector
-      sonarcloud-project-name: my-org_my-connector
+      sonarCloudProjectName: my-org_my-connector
       # Only needed when the repository contains more than one solution.
       # SDK-style connectors only; accepts a .sln or .slnx file name.
       # solution-filter-name: MyConnector.sln
     secrets: inherit
 ```
+
+Existing SDK-style Connector Master callers keep the same workflow reference,
+inputs, secrets, and `quality_gate` output. OIDC is resolved in the workflow
+before validation, packaging, and Catalog jobs; there is no SDK/Legacy dispatch.
 
 ### SDK connector compare exception
 
@@ -165,16 +165,41 @@ identifies the skipped compare checks and Major Change Checker. Remove the
 secret when the exception is no longer needed; its single value authorizes only
 one connector revision at a time.
 
-### Example: automation dispatcher (`Automation Master Workflow.yml`)
+### 2 November 2026 workflow retirement
+
+The cutover removes these entry points rather than retaining redirect wrappers:
+
+| Removed workflow | Migration |
+| --- | --- |
+| `Automation Master Workflow.yml` | Convert the solution to `Skyline.DataMiner.Sdk` projects and call `Master Workflow.yml`. |
+| `Automation Master SDK Workflow.yml` | Convert the solution to `Skyline.DataMiner.Sdk` projects and call `Master Workflow.yml`. |
+| `Automation Master Legacy Workflow.yml` | Convert the solution to `Skyline.DataMiner.Sdk` projects and call `Master Workflow.yml`. |
+| `Connector Master Legacy Workflow.yml` | Convert the connector to SDK-style projects and call `Connector Master Workflow.yml`. |
+| `Connector Master SDK Workflow.yml` | Call `Connector Master Workflow.yml`, which now owns the SDK pipeline directly. |
+
+Legacy connectors are no longer supported by Connector Master. Direct callers
+of the former Connector SDK entry point must remove its internal `use-oidc`
+input; Connector Master resolves OIDC from the owner and optional OIDC ID inputs.
+
+For Automation, changing only the workflow filename is not sufficient: migrate
+the projects and review the [Master Workflow contract](.github/workflows/Master%20Workflow.yml).
+Use `sonarcloud-project-name` instead of `sonarCloudProjectName`. When explicitly
+passing secrets, use `SONAR_TOKEN`, `DATAMINER_TOKEN`, and `AZURE_TOKEN` instead
+of `sonarCloudToken`, `api-key`, and `azureToken`. Remove the obsolete metadata
+inputs (`referenceName`, `runNumber`, `referenceType`, `repository`, `owner`).
+
+Example after migrating an Automation solution:
 
 ```yaml
 jobs:
   ci:
-    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Automation Master Workflow.yml@main
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Master Workflow.yml@main
     with:
       sonarcloud-project-name: my-org_my-automation
     secrets: inherit
 ```
+
+Before merging the removal, follow the [battery rollout order](TESTING.md#2-november-2026-retirement-rollout).
 
 ### OIDC boundary (Skyline tenant)
 

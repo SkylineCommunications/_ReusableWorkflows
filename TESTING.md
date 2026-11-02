@@ -117,9 +117,7 @@ available only after its orchestrator changes merge.
 
 | Repository | Exercises | Key assertions |
 | --- | --- | --- |
-| `BOOST-DailyRegression-Connector-SDK` | Connector Master (SDK route), BRANCH + RELEASE | `Connector Package` + `validatorResults` artifacts; on tags `SBOM` + catalog registration job |
-| `BOOST-DailyRegression-Connector-Legacy` | Connector Master (Legacy route) — frozen (deprecating) | run conclusion only |
-| `BOOST-DailyRegression-Automation-SDK` / `-Legacy` | Automation Master — frozen (deprecating) | run conclusion only |
+| `BOOST-DailyRegression-Connector-SDK` | SDK-only Connector Master, BRANCH + RELEASE | `Connector Package` + `validatorResults` artifacts; on tags `SBOM` + catalog registration job |
 | `BOOST-DailyRegression-InternalNuGet` | Internal NuGet wrapper → Master Workflow; Wrapper Migration (dry run) | `SignedNugetPackages` artifact; on tags `Push NuGet Packages` job; migration rewrite/idempotency matches repo state |
 | `BOOST-DailyRegression-Skyline.DataMiner.Sdk` | App Packages wrapper → Master Workflow; Update Catalog Details | `SignedDataMinerPackages`; on tags `Upload to Catalog` job; `Catalog Details` artifact contains manifests |
 | `BOOST-DailyRegression-SharedLibrary` | Master Workflow direct (modern inputs), ProjectReference build order, signing dedup | `SignedDataMinerPackages`; signing dedup summary present with duplicates > 0 (Azure 429 guard); on tags catalog upload |
@@ -134,10 +132,67 @@ pushes fan out zero redundant runs.
 repository, not a mapped battery consumer. Its own `external-services.yml`
 builds a small protocol, performs a volatile Catalog upload, and independently
 deploys an already-published test item to a sandbox agent without running the
-entire Master/Connector/Automation pipeline. See its README for the isolated
+entire Master or Connector pipeline. See its README for the isolated
 `external-smoke` environment, keys, variables, and activation steps. The
 disabled Connector SDK schedule stays disabled; deprecated pipelines are not
 new daily hosts.
+
+### 2 November 2026 retirement rollout
+
+The retired `BOOST-DailyRegression-Connector-Legacy`,
+`BOOST-DailyRegression-Automation-SDK`, and
+`BOOST-DailyRegression-Automation-Legacy` receivers are no longer mapped.
+Connector coverage remains in `BOOST-DailyRegression-Connector-SDK` and
+`BOOST-DailyRegression-NegativePaths`, both through `Connector Master Workflow.yml`.
+
+**Stage the orchestrator change first.** `/test` loads `Test Downstream.yml`
+from `main`, not from the PR head. In a preparatory PR, remove the three retired
+repository entries from `DOWNSTREAM_MAP` while retaining the Connector SDK
+workflow dependency in the two surviving connector entries. Merge that pruning
+before running `/test` on the workflow-removal PR. The removal PR then drops
+the redundant SDK workflow dependency as it folds that file into Connector
+Master. Merely changing the map in the removal PR would still dispatch the
+retired receivers against missing workflows.
+
+Before merging that preparatory pruning, a maintainer can post this on the
+workflow-removal PR to prepare the separate downstream changes. The old
+default-branch map must still include the retired repositories for
+`/prepare-downstream-fixes` to create their linked issues:
+
+```text
+/prepare-downstream-fixes
+- In Automation and legacy-connector regression repositories, remove the retired scenarios' daily schedules, tag-push/manual callers, and receivers. Preserve repository history; do not substitute no-op successful tests.
+- Keep SDK-connector and NegativePaths receivers calling Connector Master Workflow.yml. Preserve connector BRANCH/RELEASE coverage and the solution-filter-name positive control; leave other mapped repositories' existing scenarios intact.
+- Retained SDK connector runs must produce Connector Package and validatorResults; tag runs must also produce SBOM and complete Artifact Registration and Upload. Critical-validator and missing-results connector scenarios must fail at SDK Skyline Quality Gate.
+```
+
+The affected retirement repositories are
+`SkylineCommunications/BOOST-DailyRegression-Connector-Legacy`,
+`SkylineCommunications/BOOST-DailyRegression-Automation-SDK`, and
+`SkylineCommunications/BOOST-DailyRegression-Automation-Legacy`. The same
+command also targets the retained Connector SDK and NegativePaths repositories
+for compatibility validation. Review the linked downstream PRs separately:
+merge the map pruning first, then retire the old callers and schedules before
+releasing the workflow removal. Removing an entry from the map does not stop
+its independent daily regression schedule.
+
+For the cutover, verify:
+
+- Connector SDK BRANCH and RELEASE scenarios succeed, with `Connector Package`
+  and `validatorResults`; tag runs also produce `SBOM` and complete
+  `Artifact Registration and Upload`.
+- The NegativePaths connector positive control selects the requested `.slnx`.
+  Critical-validator and missing-results scenarios still fail at
+  `SDK Skyline Quality Gate`, not at workflow loading or OIDC resolution.
+- SDK jobs run directly under the caller (for example,
+  `CI / SDK Skyline Quality Gate`), without the former `CI_SDK` nesting.
+  The existing retained receivers use display-name substrings, so their
+  selectors remain compatible. Consumers matching full job paths must update.
+
+The retirement does not archive downstream repositories or rewrite their
+standalone callers. Disable any remaining retired-pipeline schedules or
+migrate those callers separately; the source change only removes them from
+the supported battery.
 
 ## Running and interpreting the battery
 

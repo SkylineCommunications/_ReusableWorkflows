@@ -57,7 +57,7 @@ Minimal (unit tests + sonar only):
     sonar-status: ${{ steps.sonarcloud-quality-gate-check.outputs.quality-gate-status }}
 ```
 
-With the Validator (Connector Master SDK):
+With the Validator (Connector Master):
 
 ```yaml
 - name: Quality Gate
