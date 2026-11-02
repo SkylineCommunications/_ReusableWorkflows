@@ -1,6 +1,9 @@
+import json
 import sys
 import unittest
 from pathlib import Path
+
+import yaml
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -28,6 +31,63 @@ class RecordingClient:
         if method == "GET":
             return {"assignees": [{"login": "Copilot"}]}
         return {}
+
+
+class DownstreamMapTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.workflow_directory = Path(__file__).resolve().parents[3] / ".github" / "workflows"
+        workflow = yaml.safe_load(
+            (cls.workflow_directory / "Test Downstream.yml").read_text(encoding="utf-8")
+        )
+        cls.downstream_map = json.loads(workflow["env"]["DOWNSTREAM_MAP"])
+
+    def test_only_supported_repositories_are_dispatched(self):
+        repositories = [entry["repo"] for entry in self.downstream_map]
+        expected = {
+            "SkylineCommunications/BOOST-DailyRegression-Connector-SDK",
+            "SkylineCommunications/BOOST-DailyRegression-InternalNuGet",
+            "SkylineCommunications/BOOST-DailyRegression-Skyline.DataMiner.Sdk",
+            "SkylineCommunications/BOOST-DailyRegression-SharedLibrary",
+            "SkylineCommunications/BOOST-DailyRegression-MasterWorkflow",
+            "SkylineCommunications/BOOST-DailyRegression-NegativePaths",
+        }
+        self.assertEqual(expected, set(repositories))
+        self.assertEqual(len(expected), len(repositories))
+
+    def test_every_mapped_workflow_exists(self):
+        for entry in self.downstream_map:
+            for workflow in entry["workflows"]:
+                with self.subTest(repository=entry["repo"], workflow=workflow):
+                    self.assertTrue((self.workflow_directory / workflow).is_file())
+
+    def test_connector_changes_cover_positive_and_negative_paths(self):
+        targets = select_targets(self.downstream_map, {"Connector Master Workflow.yml"})
+        self.assertEqual(
+            [
+                {
+                    "repo": "SkylineCommunications/BOOST-DailyRegression-Connector-SDK",
+                    "workflows": ["Connector Master Workflow.yml"],
+                },
+                {
+                    "repo": "SkylineCommunications/BOOST-DailyRegression-NegativePaths",
+                    "workflows": ["Connector Master Workflow.yml"],
+                },
+            ],
+            targets,
+        )
+
+    def test_retired_pipelines_are_not_dispatched(self):
+        targets = select_targets(
+            self.downstream_map,
+            {
+                "Automation Master Workflow.yml",
+                "Automation Master SDK Workflow.yml",
+                "Automation Master Legacy Workflow.yml",
+                "Connector Master Legacy Workflow.yml",
+            },
+        )
+        self.assertEqual([], targets)
 
 
 class PrepareDownstreamFixesTests(unittest.TestCase):

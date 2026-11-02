@@ -26,10 +26,7 @@ No explicit outputs. Variables are exported through `$GITHUB_ENV`.
 ## Used by
 
 - [Master Workflow.yml](../../workflows/Master%20Workflow.yml)
-- [Connector Master SDK Workflow.yml](../../workflows/Connector%20Master%20SDK%20Workflow.yml)
-- [Connector Master Legacy Workflow.yml](../../workflows/Connector%20Master%20Legacy%20Workflow.yml)
-- [Automation Master SDK Workflow.yml](../../workflows/Automation%20Master%20SDK%20Workflow.yml)
-- [Automation Master Legacy Workflow.yml](../../workflows/Automation%20Master%20Legacy%20Workflow.yml)
+- [Connector Master Workflow.yml](../../workflows/Connector%20Master%20Workflow.yml)
 - [Update Catalog Details Workflow.yml](../../workflows/Update%20Catalog%20Details%20Workflow.yml)
 
 ## Limitations
