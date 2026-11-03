@@ -40,7 +40,7 @@ runs:
       run: bash "${{ github.action_path }}/../is-skyline-managed-org/is-skyline-managed-org.sh"
 
     - name: Register GitHub NuGet source
-      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@test-downstream
       with:
         organization: ${{ inputs.repository-owner }}
         token: ${{ inputs.github-token }}
@@ -48,7 +48,7 @@ runs:
 
     - name: Register Skyline Cloud NuGet source
       if: ${{ inputs.public-only != 'true' && inputs.azure-token != '' && (inputs.include-skyline == 'true' || (inputs.include-skyline != 'false' && steps.skyline-managed-org.outputs.is-skyline-managed == 'true')) }}
-      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@main
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@test-downstream
       with:
         url: https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json
         token: ${{ inputs.azure-token }}
@@ -56,7 +56,7 @@ runs:
 
     - name: Register Skyline Private Azure NuGet source
       if: ${{ inputs.public-only != 'true' && inputs.azure-token != '' && (inputs.include-skyline == 'true' || (inputs.include-skyline != 'false' && steps.skyline-managed-org.outputs.is-skyline-managed == 'true')) }}
-      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@main
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@test-downstream
       with:
         url: https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json
         token: ${{ inputs.azure-token }}
