@@ -516,7 +516,7 @@ jobs:
 
           failures=()
           if [ "$COMPARE_LOOKUP_FAILED" = "true" ]; then
-            failures+=("Could not check the connector compare exception in Key Vault.")
+            echo "::warning title=Connector compare exception unavailable::Could not check the connector compare exception in Key Vault. No exception granted; enforcing all normal validation and compare checks."
           fi
 
           if [ "$COMPARE_EXCEPTION" = "true" ]; then
