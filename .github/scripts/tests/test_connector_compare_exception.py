@@ -84,7 +84,8 @@ $global:LASTEXITCODE=0
                         self.assertNotIn(value, visible_output)
 
     def run_gate(self, name, *, exception, version="2.0.0.7", counts=(0, 2, 3),
-                 validate=True, partial_compare=False, lookup_failed=False, compare_version=None):
+                 validate=True, partial_compare=False, lookup_failed=False, compare_version=None,
+                 current_counts=None, previous_counts=None, compare_issues=()):
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
             if validate:
@@ -92,9 +93,18 @@ $global:LASTEXITCODE=0
                     json.dumps(dict(zip(("CriticalIssueCount", "MajorIssueCount", "MinorIssueCount"), counts))),
                     encoding="utf-8",
                 )
+            for filename, issue_counts in (
+                ("currentValidateResults.json", current_counts),
+                ("previousValidateResults.json", previous_counts),
+            ):
+                if issue_counts is not None:
+                    (directory / filename).write_text(
+                        json.dumps(dict(zip(("CriticalIssueCount", "MajorIssueCount", "MinorIssueCount"), issue_counts))),
+                        encoding="utf-8",
+                    )
             if compare_version is not None:
                 (directory / "compareResults.json").write_text(
-                    json.dumps({"Version": compare_version, "Issues": []}), encoding="utf-8",
+                    json.dumps({"Version": compare_version, "Issues": compare_issues}), encoding="utf-8",
                 )
             if partial_compare:
                 for name_part in ("compareResults.json", "currentValidateResults.json", "previousValidateResults.json"):
@@ -147,15 +157,56 @@ $global:LASTEXITCODE=0
         self.assertEqual("passed", state["status"])
 
     @unittest.skipUnless(BASH and JQ, "Bash and jq are required")
-    def test_key_vault_lookup_failure_fails_an_otherwise_clean_gate(self):
+    def test_key_vault_lookup_failure_does_not_fail_an_otherwise_clean_gate(self):
+        for version, mode, xml_counts in (
+            ("1.0.0.1", "initial", None),
+            ("1.0.0.8", "regular", (0, 0, 0)),
+        ):
+            with self.subTest(version=version):
+                result, state = self.run_gate(
+                    "Validator Quality Gate", exception=False, counts=(0, 0, 0),
+                    lookup_failed=True, compare_version=version,
+                    current_counts=xml_counts, previous_counts=xml_counts,
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(mode, state["mode"])
+                self.assertEqual("passed", state["status"])
+                self.assertEqual([], state["failures"])
+                self.assertIn("::warning title=Connector compare exception unavailable::", result.stdout)
+
+    @unittest.skipUnless(BASH and JQ, "Bash and jq are required")
+    def test_key_vault_lookup_failure_does_not_waive_normal_gate_failures(self):
+        for scenario, overrides, expected_failure in (
+            ("missing-validation", {"validate": False}, "Validate results file not found"),
+            ("missing-compare", {"compare_version": None}, "Compare results file not found"),
+            ("missing-previous", {"previous_counts": None}, "Previous validate results file not found"),
+            ("missing-current", {"current_counts": None}, "XML-based current validate results file not found"),
+            ("critical", {"current_counts": (1, 0, 0)}, "Critical issue count is expected to be 0"),
+            ("major-delta", {"current_counts": (0, 1, 0)}, "Major issue count is expected to decrease"),
+            ("minor-delta", {"current_counts": (0, 0, 1)}, "Minor issue count is expected to decrease"),
+        ):
+            with self.subTest(scenario=scenario):
+                arguments = {
+                    "counts": (0, 0, 0), "compare_version": "1.0.0.8",
+                    "current_counts": (0, 0, 0), "previous_counts": (0, 0, 0),
+                } | overrides
+                result, state = self.run_gate(
+                    "Validator Quality Gate", exception=False, lookup_failed=True, **arguments,
+                )
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertEqual("failed", state["status"])
+                self.assertTrue(any(expected_failure in failure for failure in state["failures"]))
+
+    @unittest.skipUnless(BASH and JQ, "Bash and jq are required")
+    def test_key_vault_lookup_failure_does_not_waive_major_changes(self):
         result, state = self.run_gate(
-            "Validator Quality Gate", exception=False, counts=(0, 0, 0),
-            lookup_failed=True, compare_version="1.0.0.1",
+            "Major Change Checker Quality Gate", exception=False, lookup_failed=True,
+            compare_version="1.0.0.8", compare_issues=[{"Description": "Breaking protocol change"}],
         )
         self.assertEqual(1, result.returncode, result.stderr)
-        self.assertEqual("initial", state["mode"])
         self.assertEqual("failed", state["status"])
-        self.assertIn("Could not check the connector compare exception in Key Vault.", state["failures"])
+        self.assertFalse(state["skipped"])
+        self.assertEqual(1, state["issueCount"])
 
     @unittest.skipUnless(BASH and JQ, "Bash and jq are required")
     def test_major_change_checker_skips_only_when_approved(self):
