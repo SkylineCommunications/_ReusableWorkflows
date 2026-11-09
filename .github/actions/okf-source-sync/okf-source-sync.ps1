@@ -139,7 +139,7 @@ $reportPath = if ([string]::IsNullOrWhiteSpace($env:REPORT_PATH)) {
     Join-Path $workspace $env:REPORT_PATH
 }
 
-$okfPath = Join-Path $workspace $okfRoot
+$okfPath = [IO.Path]::GetFullPath((Join-Path $workspace $okfRoot))
 if (-not (Test-Path -LiteralPath $okfPath -PathType Container)) {
     throw "OKF root '$okfRoot' was not found."
 }
