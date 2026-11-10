@@ -20,6 +20,8 @@ declarations remain explicit diagnostics.
 | `source-repository` | no | `${{ github.repository }}` | Full GitHub repository name whose source references are eligible. |
 | `dry-run` | no | `true` | Records whether detection is being run in report-only mode. Both values remain detection-only; both write the report. |
 | `report-path` | no | `okf-source-sync-report.json` | JSON report path. Use a separate path such as `${{ runner.temp }}/okf-source-sync-report.json`; the action overwrites its destination on each run. |
+| `changed-files` | no | empty | Newline-delimited paths from the triggering PR. When supplied, only these paths are considered; include both names for renames. |
+| `candidate-commit` | no | checked-out `HEAD` | Commit containing the merged PR snapshot. |
 
 ## Outputs
 
@@ -28,6 +30,7 @@ declarations remain explicit diagnostics.
 | `status` | `no-change`, `changes-detected`, or `blocked`. |
 | `affected-concepts` | Number of existing concepts affected by changed declared sources. |
 | `report-path` | Absolute JSON report path. |
+| `changed-files` | Number of supplied changed paths. |
 
 ## Usage
 
@@ -64,6 +67,12 @@ write, or OIDC permission is required by this action itself.
 The `affected-concepts` output counts distinct concept paths. The JSON
 `affected_concepts` array remains one entry per changed source so callers can
 inspect each source that caused the impact.
+
+For merged-PR workflows, pass the verified PR file list through `changed-files`
+and the merge commit through `candidate-commit`. The JSON `changed_paths` array
+is preserved for a semantic stage to inspect changed source content that is not
+yet referenced by an existing concept. When `changed-files` is omitted, the
+original repository-wide detection behavior is retained.
 
 The caller must run on a trusted branch and keep internal source content out of
 public logs and artifacts. The action does not grant source permissions and does

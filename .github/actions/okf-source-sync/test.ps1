@@ -73,6 +73,8 @@ Literal path.
     $oldOutput = $env:GITHUB_OUTPUT
     $oldReport = $env:REPORT_PATH
     $oldSummary = $env:GITHUB_STEP_SUMMARY
+    $oldChangedFiles = $env:CHANGED_FILES
+    $oldCandidateCommit = $env:CANDIDATE_COMMIT
     try {
         $env:GITHUB_WORKSPACE = $root
         $env:SOURCE_REPOSITORY = 'example/example'
@@ -81,6 +83,8 @@ Literal path.
         $env:GITHUB_STEP_SUMMARY = Join-Path $root 'summary.md'
         $env:OKF_ROOT = 'OKF'
         $env:DRY_RUN = 'true'
+        $env:CHANGED_FILES = ''
+        $env:CANDIDATE_COMMIT = ''
         & pwsh -NoLogo -NoProfile -File $scriptPath
     } finally {
         $env:GITHUB_WORKSPACE = $oldWorkspace
@@ -88,6 +92,8 @@ Literal path.
         $env:GITHUB_OUTPUT = $oldOutput
         $env:REPORT_PATH = $oldReport
         $env:GITHUB_STEP_SUMMARY = $oldSummary
+        $env:CHANGED_FILES = $oldChangedFiles
+        $env:CANDIDATE_COMMIT = $oldCandidateCommit
     }
 
     $output = Get-Content -LiteralPath $outputPath -Raw
@@ -123,6 +129,24 @@ Literal path.
         throw 'Expected the unchanged literal bracket path to remain unaffected.'
     }
 
+    $scopedOutputPath = Join-Path $root 'scoped-outputs.txt'
+    $env:GITHUB_WORKSPACE = $root
+    $env:SOURCE_REPOSITORY = 'example/example'
+    $env:GITHUB_OUTPUT = $scopedOutputPath
+    $env:REPORT_PATH = $reportPath
+    $env:OKF_ROOT = 'OKF'
+    $env:DRY_RUN = 'true'
+    $env:CHANGED_FILES = "second-source.md`nOKF/concept.md"
+    $env:CANDIDATE_COMMIT = (& git -C $root rev-parse HEAD).Trim()
+    & pwsh -NoLogo -NoProfile -File $scriptPath
+    $scopedReport = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+    if (-not $scopedReport.scoped_detection -or
+        @($scopedReport.changed_paths).Count -ne 2 -or
+        @($scopedReport.affected_concepts | Where-Object { $_.concept -eq 'concept.md' }).Count -ne 1 -or
+        @($scopedReport.affected_concepts | Where-Object { $_.concept -eq 'flow-source.md' }).Count -ne 0) {
+        throw 'Expected scoped detection to inspect only the supplied PR paths.'
+    }
+
     Set-Content -LiteralPath (Join-Path $root 'docs\[ab].md') -Value 'changed bracket source' -Encoding utf8
     & git -C $root add .
     & git -C $root commit --quiet -m 'change literal path'
@@ -132,6 +156,8 @@ Literal path.
     $env:REPORT_PATH = $reportPath
     $env:OKF_ROOT = 'OKF'
     $env:DRY_RUN = 'true'
+    $env:CHANGED_FILES = ''
+    $env:CANDIDATE_COMMIT = ''
     Remove-Item -LiteralPath $outputPath -Force
     & pwsh -NoLogo -NoProfile -File $scriptPath
     $literalReport = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json

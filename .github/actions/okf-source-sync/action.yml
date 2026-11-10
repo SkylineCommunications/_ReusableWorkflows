@@ -21,6 +21,14 @@ inputs:
     description: Repository-relative or absolute path for the JSON drift report; choose a destination separate from source and OKF files.
     required: false
     default: okf-source-sync-report.json
+  changed-files:
+    description: Optional newline-delimited repository-relative paths changed by the triggering PR. When provided, detection is limited to these paths; include both old and new names for renames.
+    required: false
+    default: ''
+  candidate-commit:
+    description: Optional candidate commit to inspect. Defaults to the checked-out HEAD.
+    required: false
+    default: ''
 
 outputs:
   status:
@@ -32,6 +40,9 @@ outputs:
   report-path:
     description: Absolute path to the JSON drift report.
     value: ${{ steps.detect.outputs.report-path }}
+  changed-files:
+    description: Number of changed paths supplied for scoped detection.
+    value: ${{ steps.detect.outputs.changed-files }}
 
 runs:
   using: composite
@@ -44,4 +55,6 @@ runs:
         SOURCE_REPOSITORY: ${{ inputs.source-repository }}
         DRY_RUN: ${{ inputs.dry-run }}
         REPORT_PATH: ${{ inputs.report-path }}
+        CHANGED_FILES: ${{ inputs.changed-files }}
+        CANDIDATE_COMMIT: ${{ inputs.candidate-commit }}
       run: '& "$env:GITHUB_ACTION_PATH/okf-source-sync.ps1"'

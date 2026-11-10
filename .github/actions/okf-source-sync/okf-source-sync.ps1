@@ -128,6 +128,21 @@ function Try-ParseGitHubSource {
     }
 }
 
+function Get-ChangedPaths {
+    param([AllowEmptyString()][string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return @()
+    }
+
+    return @(
+        $Value -split "`r?`n" |
+            ForEach-Object { $_.Trim().Replace('\', '/') } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique
+    )
+}
+
 if ([string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
     throw 'GITHUB_WORKSPACE must be set.'
 }
@@ -154,12 +169,18 @@ if (-not (Test-Path -LiteralPath $okfPath -PathType Container)) {
     throw "OKF root '$okfRoot' was not found."
 }
 
-$headOutput = & git -C $workspace rev-parse HEAD
-$headExitCode = $LASTEXITCODE
-if ($headExitCode -ne 0 -or [string]::IsNullOrWhiteSpace(($headOutput -join "`n"))) {
-    throw 'Unable to resolve the candidate commit at HEAD.'
+if ([string]::IsNullOrWhiteSpace($env:CANDIDATE_COMMIT)) {
+    $candidateOutput = & git -C $workspace rev-parse HEAD
+} else {
+    $candidateOutput = & git -C $workspace rev-parse --verify "$($env:CANDIDATE_COMMIT)^{commit}"
 }
-$head = ($headOutput -join "`n").Trim()
+$candidateExitCode = $LASTEXITCODE
+if ($candidateExitCode -ne 0 -or [string]::IsNullOrWhiteSpace(($candidateOutput -join "`n"))) {
+    throw 'Unable to resolve the candidate commit.'
+}
+$head = ($candidateOutput -join "`n").Trim()
+$changedPaths = @(Get-ChangedPaths -Value $env:CHANGED_FILES)
+$scopedDetection = -not [string]::IsNullOrWhiteSpace($env:CHANGED_FILES)
 $concepts = [System.Collections.Generic.List[object]]::new()
 $diagnostics = [System.Collections.Generic.List[object]]::new()
 $affected = [System.Collections.Generic.List[object]]::new()
@@ -170,8 +191,12 @@ $files = Get-ChildItem -LiteralPath $okfPath -Filter '*.md' -File -Recurse |
 
 foreach ($file in $files) {
     $conceptPath = $file.FullName.Substring($okfPath.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar).Replace('\', '/')
+    $conceptChanged = $changedPaths -contains "$okfRoot/$conceptPath" -or $changedPaths -contains "$okfRoot\$conceptPath" -or $changedPaths -contains $conceptPath
     $metadata = Get-SourceMetadata -Path $file.FullName -Python $python -DependencyRoot $dependencyRoot
     foreach ($parserDiagnostic in @($metadata.diagnostics)) {
+        if ($scopedDetection -and -not $conceptChanged) {
+            continue
+        }
         $diagnostics.Add([pscustomobject]@{
             code = [string]$parserDiagnostic.code
             concept = $conceptPath
@@ -189,6 +214,9 @@ foreach ($file in $files) {
         })
 
         if ($source.Kind -ne 'supported') {
+            if ($scopedDetection -and -not $conceptChanged) {
+                continue
+            }
             $diagnostics.Add([pscustomobject]@{
                 code = if ($source.Kind -eq 'external') { 'external-source-unchecked' } else { 'unsupported-source' }
                 concept = $conceptPath
@@ -199,6 +227,9 @@ foreach ($file in $files) {
         }
 
         if ($source.Commit -notmatch '^[0-9a-fA-F]{40}$') {
+            if ($scopedDetection -and -not $conceptChanged) {
+                continue
+            }
             $diagnostics.Add([pscustomobject]@{
                 code = 'reviewed-commit-required'
                 concept = $conceptPath
@@ -217,6 +248,9 @@ foreach ($file in $files) {
         }
 
         if ($commitTypeExitCode -ne 0) {
+            if ($scopedDetection -and -not $conceptChanged -and $source.Path -notin $changedPaths) {
+                continue
+            }
             $diagnostics.Add([pscustomobject]@{
                 code = 'baseline-unavailable'
                 concept = $conceptPath
@@ -227,6 +261,9 @@ foreach ($file in $files) {
         }
 
         if ($commitType -ne 'commit') {
+            if ($scopedDetection -and -not $conceptChanged -and $source.Path -notin $changedPaths) {
+                continue
+            }
             $diagnostics.Add([pscustomobject]@{
                 code = 'reviewed-commit-required'
                 concept = $conceptPath
@@ -236,7 +273,11 @@ foreach ($file in $files) {
             continue
         }
 
-        $changedPaths = @(& git -C $workspace --literal-pathspecs diff --name-only $source.Commit $head -- $source.Path)
+        if ($scopedDetection -and $source.Path -notin $changedPaths) {
+            continue
+        }
+
+        $sourceChangedPaths = @(& git -C $workspace --literal-pathspecs diff --name-only $source.Commit $head -- $source.Path)
         if ($LASTEXITCODE -ne 0) {
             $diagnostics.Add([pscustomobject]@{
                 code = 'comparison-failed'
@@ -247,7 +288,7 @@ foreach ($file in $files) {
             continue
         }
 
-        if ($changedPaths.Count -gt 0) {
+        if ($sourceChangedPaths.Count -gt 0) {
             $affected.Add([pscustomobject]@{
                 concept = $conceptPath
                 resource = $resource
@@ -276,6 +317,8 @@ $report = [ordered]@{
     repository = $sourceRepository
     okf_root = $okfRoot
     candidate_commit = $head
+    scoped_detection = $scopedDetection
+    changed_paths = $changedPaths
     concepts_scanned = $files.Count
     declared_sources = $concepts
     affected_concepts = $affected
@@ -298,6 +341,7 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         '### OKF source sync detection',
         "- Status: **$status**",
         "- Candidate commit: $head",
+        "- Changed paths supplied: $($changedPaths.Count)",
         "- Concepts scanned: $($files.Count)",
         "- Affected concepts: $affectedConceptCount",
         "- Diagnostics: $($diagnostics.Count)",
@@ -309,4 +353,5 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
 Write-OutputValue -Name 'status' -Value $status
 Write-OutputValue -Name 'affected-concepts' -Value ([string]$affectedConceptCount)
 Write-OutputValue -Name 'report-path' -Value ((Resolve-Path -LiteralPath $reportPath).Path)
+Write-OutputValue -Name 'changed-files' -Value ([string]$changedPaths.Count)
 exit 0
