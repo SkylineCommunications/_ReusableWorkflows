@@ -22,8 +22,7 @@ It also validates token usability and emits actionable errors.
 ## Used by
 
 - [Master Workflow.yml](../../workflows/Master%20Workflow.yml)
-- [Connector Master SDK Workflow.yml](../../workflows/Connector%20Master%20SDK%20Workflow.yml)
-- [Automation Master SDK Workflow.yml](../../workflows/Automation%20Master%20SDK%20Workflow.yml)
+- [Connector Master Workflow.yml](../../workflows/Connector%20Master%20Workflow.yml)
 
 ## Usage
 

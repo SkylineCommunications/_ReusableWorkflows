@@ -32,7 +32,7 @@ concurrency:
 #
 # To add a new target repo:
 #   1. Add an entry to DOWNSTREAM_MAP below with the repo and its dependent workflow files
-#      (include transitive dependencies — e.g. if Connector Master calls Connector Master Legacy, list both)
+#      (include transitive dependencies — e.g. if a NuGet wrapper calls Master Workflow, list both)
 #   2. Create the receiver workflow in that repo: .github/workflows/pr-regression.yml,
 #      triggered by `repository_dispatch: types: [test-reusable-workflow]`, calling
 #      SkylineCommunications/BOOST-DailyRegression/.github/workflows/regression.yml@main
@@ -45,29 +45,7 @@ env:
       {
         "repo": "SkylineCommunications/BOOST-DailyRegression-Connector-SDK",
         "workflows": [
-          "Connector Master Workflow.yml",
-          "Connector Master SDK Workflow.yml"
-        ]
-      },
-      {
-        "repo": "SkylineCommunications/BOOST-DailyRegression-Connector-Legacy",
-        "workflows": [
-          "Connector Master Workflow.yml",
-          "Connector Master Legacy Workflow.yml"
-        ]
-      },
-      {
-        "repo": "SkylineCommunications/BOOST-DailyRegression-Automation-SDK",
-        "workflows": [
-          "Automation Master Workflow.yml",
-          "Automation Master SDK Workflow.yml"
-        ]
-      },
-      {
-        "repo": "SkylineCommunications/BOOST-DailyRegression-Automation-Legacy",
-        "workflows": [
-          "Automation Master Workflow.yml",
-          "Automation Master Legacy Workflow.yml"
+          "Connector Master Workflow.yml"
         ]
       },
       {
@@ -102,8 +80,7 @@ env:
         "repo": "SkylineCommunications/BOOST-DailyRegression-NegativePaths",
         "workflows": [
           "Master Workflow.yml",
-          "Connector Master Workflow.yml",
-          "Connector Master SDK Workflow.yml"
+          "Connector Master Workflow.yml"
         ]
       }
     ]

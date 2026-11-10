@@ -37,7 +37,7 @@ After editing a reusable workflow:
 
 1. Run the editor diagnostics or an available YAML/workflow validator and fix structural errors before reviewing warnings.
 2. Check that every job-level mapping (`name`, `runs-on`, `needs`, `permissions`, `steps`) is aligned consistently.
-3. Verify both relevant branches when conditional behavior is changed: legacy connector/automation and DataMiner SDK multi-package repositories.
+3. Verify each supported branch affected by conditional changes: SDK connector branch/tag flows for Connector Master, and DataMiner SDK multi-package or legacy catalog behavior where still supported by Master / Update Catalog Details.
 4. Confirm that skipped steps cannot be referenced as though they produced outputs in the active branch.
 5. Review the final diff for unrelated changes and confirm permissions remain least-privilege.
 

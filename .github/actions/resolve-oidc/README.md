@@ -33,7 +33,6 @@ Resolution order:
 
 - [Master Workflow.yml](../../workflows/Master%20Workflow.yml)
 - [Connector Master Workflow.yml](../../workflows/Connector%20Master%20Workflow.yml)
-- [Automation Master Workflow.yml](../../workflows/Automation%20Master%20Workflow.yml)
 - [Update Catalog Details Workflow.yml](../../workflows/Update%20Catalog%20Details%20Workflow.yml)
 
 ## Limitations
