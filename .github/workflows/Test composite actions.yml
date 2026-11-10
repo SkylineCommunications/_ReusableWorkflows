@@ -47,6 +47,16 @@ jobs:
 
           Composite smoke fixture.
           "@ | Set-Content -LiteralPath (Join-Path $okf 'concept.md') -Encoding utf8
+          @"
+          ---
+          type: Guidance
+          title: Missing baseline fixture
+          sources:
+            - resource: https://github.com/$env:REPOSITORY/blob/0000000000000000000000000000000000000000/.github/actions/okf-source-sync/action.yml
+          ---
+
+          Missing baseline fixture.
+          "@ | Set-Content -LiteralPath (Join-Path $okf 'missing-baseline.md') -Encoding utf8
 
       - name: Exercise detection action through its composite interface
         id: okf-sync
@@ -64,12 +74,18 @@ jobs:
           REPORT_PATH: ${{ steps.okf-sync.outputs.report-path }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          if ($env:STATUS -ne 'no-change') { throw "Unexpected status: $env:STATUS" }
+          if ($env:STATUS -ne 'blocked') { throw "Unexpected status: $env:STATUS" }
           if ($env:AFFECTED_CONCEPTS -ne '0') { throw "Unexpected affected concept count: $env:AFFECTED_CONCEPTS" }
           if (-not (Test-Path -LiteralPath $env:REPORT_PATH)) { throw "Missing report: $env:REPORT_PATH" }
           $report = Get-Content -LiteralPath $env:REPORT_PATH -Raw | ConvertFrom-Json
           if ($report.repository -ne $env:REPOSITORY) { throw "Unexpected repository: $($report.repository)" }
           if ($report.dry_run) { throw 'Expected dry_run=false.' }
+          if (-not ($report.diagnostics | Where-Object {
+                $_.code -eq 'baseline-unavailable' -and
+                $_.concept -eq 'missing-baseline.md'
+              })) {
+            throw 'Expected a baseline-unavailable diagnostic.'
+          }
 
       - name: Exercise script regression tests
         shell: pwsh

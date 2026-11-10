@@ -1,7 +1,8 @@
 name: OKF source sync
 description: >
   Detects changes to same-repository source files declared by existing OKF
-  concepts and writes a deterministic, reviewable drift report.
+  concepts and writes a deterministic, reviewable drift report. Uses the
+  pinned PyYAML dependency in an isolated temporary directory.
 
 inputs:
   okf-root:

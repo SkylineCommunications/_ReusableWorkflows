@@ -13,51 +13,59 @@ function Write-OutputValue {
     "$Name=$Value" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 }
 
-function Unquote {
-    param([AllowNull()][string]$Value)
-
-    if ($null -eq $Value) {
-        return ''
+function Get-Python {
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($null -eq $python) {
+        throw 'Python 3.8 or later is required to parse OKF front matter.'
     }
 
-    $trimmed = $Value.Trim()
-    if ($trimmed.Length -ge 2 -and
-        (($trimmed.StartsWith("'") -and $trimmed.EndsWith("'")) -or
-         ($trimmed.StartsWith('"') -and $trimmed.EndsWith('"')))) {
-        return $trimmed.Substring(1, $trimmed.Length - 2)
-    }
-
-    return $trimmed
+    return $python.Source
 }
 
-function Get-SourceResources {
-    param([Parameter(Mandatory = $true)][string]$Path)
+function Ensure-PyYaml {
+    param([Parameter(Mandatory = $true)][string]$Python)
 
-    $lines = Get-Content -LiteralPath $Path
-    if ($lines.Count -lt 3 -or $lines[0].Trim() -ne '---') {
-        return @()
-    }
-
-    $frontmatter = [System.Collections.Generic.List[string]]::new()
-    for ($index = 1; $index -lt $lines.Count; $index++) {
-        if ($lines[$index].Trim() -eq '---') {
-            break
-        }
-
-        $frontmatter.Add($lines[$index])
-    }
-
-    $resources = [System.Collections.Generic.List[string]]::new()
-    foreach ($line in $frontmatter) {
-        if ($line -match '^\s*(?:-\s*)?resource\s*:\s*(?<resource>.+?)\s*$') {
-            $resource = Unquote $Matches.resource
-            if (-not [string]::IsNullOrWhiteSpace($resource)) {
-                $resources.Add($resource)
-            }
+    $dependencyRoot = Join-Path ([IO.Path]::GetTempPath()) 'okf-source-sync-pyyaml-6.0.3'
+    $yamlModule = Join-Path $dependencyRoot 'yaml'
+    if (-not (Test-Path -LiteralPath $yamlModule -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $dependencyRoot | Out-Null
+        $requirements = Join-Path $PSScriptRoot 'requirements.txt'
+        & $Python -m pip install --disable-pip-version-check --no-warn-script-location --target $dependencyRoot -r $requirements | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to install the pinned PyYAML dependency into '$dependencyRoot'."
         }
     }
 
-    return $resources.ToArray()
+    return $dependencyRoot
+}
+
+function Get-SourceMetadata {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Python,
+        [Parameter(Mandatory = $true)][string]$DependencyRoot
+    )
+
+    $oldPythonPath = $env:PYTHONPATH
+    try {
+        $env:PYTHONPATH = if ([string]::IsNullOrWhiteSpace($oldPythonPath)) {
+            $DependencyRoot
+        } else {
+            "$DependencyRoot$([IO.Path]::PathSeparator)$oldPythonPath"
+        }
+        $json = & $Python (Join-Path $PSScriptRoot 'parse-frontmatter.py') $Path
+    } finally {
+        $env:PYTHONPATH = $oldPythonPath
+    }
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to parse OKF front matter in '$Path'."
+    }
+
+    try {
+        return ($json -join "`n") | ConvertFrom-Json
+    } catch {
+        throw "The OKF front matter parser returned invalid JSON for '$Path'."
+    }
 }
 
 function Try-ParseGitHubSource {
@@ -125,6 +133,8 @@ if ([string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
 }
 
 $workspace = (Resolve-Path -LiteralPath $env:GITHUB_WORKSPACE).Path
+$python = Get-Python
+$dependencyRoot = Ensure-PyYaml -Python $python
 $okfRoot = if ([string]::IsNullOrWhiteSpace($env:OKF_ROOT)) { 'OKF' } else { $env:OKF_ROOT }
 $sourceRepository = if ([string]::IsNullOrWhiteSpace($env:SOURCE_REPOSITORY)) {
     $env:GITHUB_REPOSITORY
@@ -144,7 +154,12 @@ if (-not (Test-Path -LiteralPath $okfPath -PathType Container)) {
     throw "OKF root '$okfRoot' was not found."
 }
 
-$head = (& git -C $workspace rev-parse HEAD).Trim()
+$headOutput = & git -C $workspace rev-parse HEAD
+$headExitCode = $LASTEXITCODE
+if ($headExitCode -ne 0 -or [string]::IsNullOrWhiteSpace(($headOutput -join "`n"))) {
+    throw 'Unable to resolve the candidate commit at HEAD.'
+}
+$head = ($headOutput -join "`n").Trim()
 $concepts = [System.Collections.Generic.List[object]]::new()
 $diagnostics = [System.Collections.Generic.List[object]]::new()
 $affected = [System.Collections.Generic.List[object]]::new()
@@ -155,12 +170,17 @@ $files = Get-ChildItem -LiteralPath $okfPath -Filter '*.md' -File -Recurse |
 
 foreach ($file in $files) {
     $conceptPath = $file.FullName.Substring($okfPath.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar).Replace('\', '/')
-    $resources = @(Get-SourceResources -Path $file.FullName)
-    if ($resources.Count -eq 0) {
-        continue
+    $metadata = Get-SourceMetadata -Path $file.FullName -Python $python -DependencyRoot $dependencyRoot
+    foreach ($parserDiagnostic in @($metadata.diagnostics)) {
+        $diagnostics.Add([pscustomobject]@{
+            code = [string]$parserDiagnostic.code
+            concept = $conceptPath
+            resource = $null
+            message = [string]$parserDiagnostic.message
+        })
     }
 
-    foreach ($resource in $resources) {
+    foreach ($resource in @($metadata.resources)) {
         $source = Try-ParseGitHubSource -Resource $resource -ExpectedRepository $sourceRepository -ConceptPath $conceptPath
         $concepts.Add([pscustomobject]@{
             concept = $conceptPath
@@ -216,7 +236,7 @@ foreach ($file in $files) {
             continue
         }
 
-        $changedPaths = @(& git -C $workspace diff --name-only $source.Commit $head -- $source.Path)
+        $changedPaths = @(& git -C $workspace --literal-pathspecs diff --name-only $source.Commit $head -- $source.Path)
         if ($LASTEXITCODE -ne 0) {
             $diagnostics.Add([pscustomobject]@{
                 code = 'comparison-failed'
@@ -289,3 +309,4 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
 Write-OutputValue -Name 'status' -Value $status
 Write-OutputValue -Name 'affected-concepts' -Value ([string]$affectedConceptCount)
 Write-OutputValue -Name 'report-path' -Value ((Resolve-Path -LiteralPath $reportPath).Path)
+exit 0

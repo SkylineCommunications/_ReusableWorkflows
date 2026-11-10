@@ -9,7 +9,8 @@ generate content, create concepts, or open pull requests. Writing the report is
 the only file mutation, and it occurs for either `dry-run` value; callers must
 choose a report destination that is not a source or OKF input file.
 Unsupported providers, moving references without an available immutable
-baseline, and unavailable commits remain explicit diagnostics.
+baseline, unavailable commits, and unsupported or malformed source
+declarations remain explicit diagnostics.
 
 ## Inputs
 
@@ -45,8 +46,17 @@ The caller must check out the repository with `fetch-depth: 0` (or otherwise
 make every referenced reviewed commit available locally). Each source
 reference must contain the full 40-character commit SHA of a commit object.
 Missing or invalid baselines, external sources, and unsupported source
-providers produce diagnostics and make the result `blocked`; any source-level
+providers produce diagnostics and make the result `blocked`; source-level
 changes found before blocking remain in the report.
+
+The action parses YAML front matter with the pinned `PyYAML==6.0.3`
+dependency. It supports block-style and flow-style `sources` lists whose
+entries contain a string `resource`. Malformed YAML, duplicate mapping keys,
+unsupported source entry shapes, and missing or non-string resources produce
+blocking diagnostics instead of being treated as an empty source list.
+Python 3.8 or later, `pip`, and access to install the pinned package are
+required. The package is installed into a runner-temporary directory and is
+not added to the caller workspace or global Python environment.
 
 The caller job needs `contents: read` for its checkout. No additional token,
 write, or OIDC permission is required by this action itself.

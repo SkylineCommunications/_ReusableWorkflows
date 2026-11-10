@@ -8,8 +8,11 @@ try {
     & git -C $root config user.email test@example.invalid
     & git -C $root config user.name 'OKF source sync test'
     New-Item -ItemType Directory -Force -Path (Join-Path $root 'OKF') | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $root 'docs') | Out-Null
     Set-Content -LiteralPath (Join-Path $root 'source.md') -Value 'initial source' -Encoding utf8
     Set-Content -LiteralPath (Join-Path $root 'second-source.md') -Value 'initial second source' -Encoding utf8
+    Set-Content -LiteralPath (Join-Path $root 'docs\[ab].md') -Value 'unchanged bracket source' -Encoding utf8
+    Set-Content -LiteralPath (Join-Path $root 'docs\a.md') -Value 'changed matching source' -Encoding utf8
     & git -C $root add .
     & git -C $root commit --quiet -m initial
     $baseline = (& git -C $root rev-parse HEAD).Trim()
@@ -35,6 +38,25 @@ sources:
 
 Initial projection.
 "@ | Set-Content -LiteralPath (Join-Path $root 'OKF\moving-reference.md') -Encoding utf8
+    @"
+---
+type: Guidance
+title: Flow source concept
+sources: [{resource: https://github.com/example/example/blob/$baseline/source.md}]
+---
+
+Flow source.
+"@ | Set-Content -LiteralPath (Join-Path $root 'OKF\flow-source.md') -Encoding utf8
+    @"
+---
+type: Guidance
+title: Literal path concept
+sources:
+  - resource: https://github.com/example/example/blob/$baseline/docs/%5Bab%5D.md
+---
+
+Literal path.
+"@ | Set-Content -LiteralPath (Join-Path $root 'OKF\literal-path.md') -Encoding utf8
     & git -C $root add .
     & git -C $root commit --quiet -m concept
 
@@ -78,13 +100,12 @@ Initial projection.
         throw "Expected blocked status for moving source references. Actual status: $($report.status)"
     }
 
-    if ($report.affected_concepts.Count -ne 2 -or
-        @($report.affected_concepts | Where-Object { $_.concept -eq 'concept.md' }).Count -ne 2) {
+    if (@($report.affected_concepts | Where-Object { $_.concept -eq 'concept.md' }).Count -ne 2) {
         throw 'Expected two changed source entries for one affected concept.'
     }
 
-    if ($output -notmatch 'affected-concepts=1') {
-        throw "Expected one distinct affected concept. Actual output: $output"
+    if ($output -notmatch 'affected-concepts=2') {
+        throw "Expected two distinct affected concepts. Actual output: $output"
     }
 
     if (-not ($report.diagnostics | Where-Object {
@@ -92,6 +113,30 @@ Initial projection.
             $_.concept -eq 'moving-reference.md'
         })) {
         throw 'Expected a reviewed-commit-required diagnostic.'
+    }
+
+    if (@($report.affected_concepts | Where-Object { $_.concept -eq 'flow-source.md' }).Count -ne 1) {
+        throw 'Expected the flow-style source declaration to be detected.'
+    }
+
+    if (@($report.affected_concepts | Where-Object { $_.concept -eq 'literal-path.md' }).Count -ne 0) {
+        throw 'Expected the unchanged literal bracket path to remain unaffected.'
+    }
+
+    Set-Content -LiteralPath (Join-Path $root 'docs\[ab].md') -Value 'changed bracket source' -Encoding utf8
+    & git -C $root add .
+    & git -C $root commit --quiet -m 'change literal path'
+    $env:GITHUB_WORKSPACE = $root
+    $env:SOURCE_REPOSITORY = 'example/example'
+    $env:GITHUB_OUTPUT = $outputPath
+    $env:REPORT_PATH = $reportPath
+    $env:OKF_ROOT = 'OKF'
+    $env:DRY_RUN = 'true'
+    Remove-Item -LiteralPath $outputPath -Force
+    & pwsh -NoLogo -NoProfile -File $scriptPath
+    $literalReport = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+    if (@($literalReport.affected_concepts | Where-Object { $_.concept -eq 'literal-path.md' }).Count -ne 1) {
+        throw 'Expected the changed literal bracket path to be detected.'
     }
 
     @"
@@ -139,6 +184,9 @@ Missing baseline.
 
     Remove-Item -LiteralPath $outputPath -Force
     & pwsh -NoLogo -NoProfile -File $scriptPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Expected handled baseline diagnostics to exit successfully. Exit code: $LASTEXITCODE"
+    }
     $missingReport = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
     if ($missingReport.status -ne 'blocked' -or
         -not ($missingReport.diagnostics | Where-Object {
@@ -170,6 +218,77 @@ Non-commit baseline.
             $_.message -match 'blob object'
         })) {
         throw 'Expected a reviewed-commit-required diagnostic for a blob object.'
+    }
+
+    @"
+---
+type: Guidance
+title: Partial source concept
+sources:
+  - resource: https://github.com/example/example/blob/$baseline/source.md
+  - invalid
+---
+
+Partial source.
+"@ | Set-Content -LiteralPath (Join-Path $root 'OKF\partial-source.md') -Encoding utf8
+    @"
+---
+type: Guidance
+title: Duplicate key concept
+sources:
+  - resource: https://github.com/example/example/blob/$baseline/source.md
+sources: []
+---
+
+Duplicate key.
+"@ | Set-Content -LiteralPath (Join-Path $root 'OKF\duplicate-key.md') -Encoding utf8
+
+    Remove-Item -LiteralPath $outputPath -Force
+    & pwsh -NoLogo -NoProfile -File $scriptPath
+    $parserReport = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+    if ($parserReport.status -ne 'blocked') {
+        throw 'Expected blocked status for unsupported and duplicate source declarations.'
+    }
+
+    if (-not ($parserReport.diagnostics | Where-Object {
+            $_.code -eq 'unsupported-source-declaration' -and
+            $_.concept -eq 'partial-source.md'
+        })) {
+        throw 'Expected an unsupported-source-declaration diagnostic.'
+    }
+
+    if (-not ($parserReport.diagnostics | Where-Object {
+            $_.code -eq 'invalid-frontmatter' -and
+            $_.concept -eq 'duplicate-key.md'
+        })) {
+        throw 'Expected an invalid-frontmatter diagnostic for duplicate keys.'
+    }
+
+    if (-not ($parserReport.affected_concepts | Where-Object { $_.concept -eq 'partial-source.md' })) {
+        throw 'Expected valid partial source results to be retained.'
+    }
+
+    $unborn = Join-Path $root 'unborn'
+    New-Item -ItemType Directory -Force -Path (Join-Path $unborn 'OKF') | Out-Null
+    & git -C $unborn init --quiet
+    @"
+---
+type: Guidance
+title: Unborn repository concept
+sources: []
+---
+
+Unborn repository.
+"@ | Set-Content -LiteralPath (Join-Path $unborn 'OKF\concept.md') -Encoding utf8
+    $env:GITHUB_WORKSPACE = $unborn
+    $env:SOURCE_REPOSITORY = 'example/example'
+    $env:GITHUB_OUTPUT = Join-Path $unborn 'outputs.txt'
+    $env:REPORT_PATH = Join-Path $unborn 'report.json'
+    $env:OKF_ROOT = 'OKF'
+    $env:DRY_RUN = 'true'
+    & pwsh -NoLogo -NoProfile -File $scriptPath
+    if ($LASTEXITCODE -eq 0) {
+        throw 'Expected an invalid candidate HEAD to fail explicitly.'
     }
 
     Write-Output 'okf-source-sync test passed.'
