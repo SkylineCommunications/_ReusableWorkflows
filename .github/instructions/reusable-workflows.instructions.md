@@ -82,7 +82,7 @@ When adding a new input or feature to a master workflow, add a scenario for it (
 
 - Use `@main` for intra-repo composite and reusable-workflow references. This is the de facto convention across the fleet and across every workflow in this repo today.
 - Third-party `uses:` (e.g. `actions/checkout@v6`, `azure/login@...`) must still be pinned to a tag or full commit SHA.
-- The relative form `uses: ./.github/actions/<name>` is reserved for the `guard-trigger` first-step chicken-and-egg exception. Do not use it elsewhere.
+- The relative form `uses: ./.github/actions/<name>` is reserved for the `guard-trigger` first-step chicken-and-egg exception and for the checked-out smoke-test workflow when testing a new or changed local composite before it exists on `main`. Do not use it in production workflows or caller repositories.
 
 ## Adding or editing composite actions (`.github/actions/<name>/`)
 
