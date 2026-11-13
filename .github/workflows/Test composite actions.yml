@@ -65,20 +65,25 @@ jobs:
           okf-root: .okf-source-sync-smoke/OKF
           dry-run: 'false'
           report-path: ${{ runner.temp }}/okf-source-sync-report.json
+          changed-files: .github/actions/okf-source-sync/action.yml
+          candidate-commit: ${{ github.sha }}
 
       - name: Assert composite outputs
         shell: pwsh
         env:
           STATUS: ${{ steps.okf-sync.outputs.status }}
           AFFECTED_CONCEPTS: ${{ steps.okf-sync.outputs.affected-concepts }}
+          CHANGED_FILES: ${{ steps.okf-sync.outputs.changed-files }}
           REPORT_PATH: ${{ steps.okf-sync.outputs.report-path }}
           REPOSITORY: ${{ github.repository }}
         run: |
           if ($env:STATUS -ne 'blocked') { throw "Unexpected status: $env:STATUS" }
           if ($env:AFFECTED_CONCEPTS -ne '0') { throw "Unexpected affected concept count: $env:AFFECTED_CONCEPTS" }
+          if ($env:CHANGED_FILES -ne '1') { throw "Unexpected changed file count: $env:CHANGED_FILES" }
           if (-not (Test-Path -LiteralPath $env:REPORT_PATH)) { throw "Missing report: $env:REPORT_PATH" }
           $report = Get-Content -LiteralPath $env:REPORT_PATH -Raw | ConvertFrom-Json
           if ($report.repository -ne $env:REPOSITORY) { throw "Unexpected repository: $($report.repository)" }
+          if (-not $report.scoped_detection) { throw 'Expected scoped detection.' }
           if ($report.dry_run) { throw 'Expected dry_run=false.' }
           if (-not ($report.diagnostics | Where-Object {
                 $_.code -eq 'baseline-unavailable' -and
