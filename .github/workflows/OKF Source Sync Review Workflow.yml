@@ -64,6 +64,7 @@ jobs:
             });
 
             const generatedPullRequests = pullRequests.filter(pullRequest =>
+              pullRequest.head.repo?.full_name === `${owner}/${repo}` &&
               pullRequest.head.ref.startsWith(generatedBranchPrefix) &&
               pullRequest.body?.includes(marker)
             );
