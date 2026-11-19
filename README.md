@@ -17,6 +17,38 @@ across the fleet and can be evolved in a single place.
 | `DataMiner App Packages Master Workflow.yml`              | *(deprecated)* Thin redirect to `Master Workflow.yml` for app packages.       |
 | `Update Catalog Details Workflow.yml`                     | Update Catalog metadata on release.                                           |
 | `Create Prerelease Workflow.yml`                           | Admin-only `/create-prerelease` command for forked NuGet PRs.                 |
+| `OKF Source Sync Review Workflow.yml`                      | Requests the original source PR author to review a generated OKF sync PR.      |
+
+### OKF source-sync reviewer follow-up
+
+Keep the `workflow_run` trigger in the caller repository, then delegate the
+trusted reviewer request to the shared workflow:
+
+```yaml
+name: Request OKF source-sync review
+
+on:
+  workflow_run:
+    workflows:
+      - OKF source sync
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  request-review:
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/OKF%20Source%20Sync%20Review%20Workflow.yml@main
+```
+
+The called workflow only acts after a successful run, matches the generated
+PR to that exact workflow run, validates the referenced merged source PR and
+author, and requests review idempotently. It never assigns users. Callers must
+grant `pull-requests: write`; the called workflow cannot elevate permissions
+provided by the caller.
 
 ## Internal / maintenance workflows
 
