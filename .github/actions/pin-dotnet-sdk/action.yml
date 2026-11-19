@@ -1,0 +1,22 @@
+name: Set up repository .NET SDK
+description: Installs the SDK requested by global.json or defaults to stable .NET 10.
+runs:
+  using: composite
+  steps:
+    - name: Detect repository SDK pin
+      id: detect-sdk
+      shell: pwsh
+      run: '& "$env:GITHUB_ACTION_PATH/pin-dotnet-sdk.ps1" -Detect'
+
+    - name: Set up .NET SDK
+      id: setup-dotnet
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: ${{ steps.detect-sdk.outputs.version || '10.0.x' }}
+
+    - name: Pin default SDK in global.json
+      if: steps.detect-sdk.outputs.version == ''
+      shell: pwsh
+      env:
+        DOTNET_SDK_VERSION: ${{ steps.setup-dotnet.outputs.dotnet-version }}
+      run: '& "$env:GITHUB_ACTION_PATH/pin-dotnet-sdk.ps1"'

@@ -182,6 +182,9 @@ jobs:
             with:
               fetch-depth: 0
 
+      - name: Set up repository .NET SDK
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/pin-dotnet-sdk@main
+
       - name: Load secrets
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
         with:
@@ -956,6 +959,9 @@ jobs:
 
           - name: Checkout
             uses: actions/checkout@v7
+
+      - name: Set up repository .NET SDK
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/pin-dotnet-sdk@main
 
       - name: Load secrets
         uses: SkylineCommunications/_ReusableWorkflows/.github/actions/load-secrets@main
