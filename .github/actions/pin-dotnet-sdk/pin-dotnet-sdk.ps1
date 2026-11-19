@@ -5,9 +5,11 @@ if ($env:DOTNET_SDK_VERSION -notmatch '^10\.0\.\d+$') {
 }
 
 $globalJsonPath = Join-Path $env:GITHUB_WORKSPACE 'global.json'
+$previousJson = $null
 $globalJson = @{}
 if (Test-Path -LiteralPath $globalJsonPath) {
-    $globalJson = Get-Content -LiteralPath $globalJsonPath -Raw | ConvertFrom-Json -AsHashtable
+    $previousJson = Get-Content -LiteralPath $globalJsonPath -Raw
+    $globalJson = $previousJson | ConvertFrom-Json -AsHashtable
 }
 
 $globalJson['sdk'] = [ordered]@{
@@ -17,3 +19,14 @@ $globalJson['sdk'] = [ordered]@{
 }
 
 $globalJson | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $globalJsonPath -Encoding utf8
+
+if ($null -eq $previousJson) {
+    Write-Host 'Created global.json.'
+} elseif ($previousJson -ceq (Get-Content -LiteralPath $globalJsonPath -Raw)) {
+    Write-Host 'global.json is unchanged.'
+} else {
+    Write-Host 'Updated global.json.'
+}
+
+$loggedConfig = @{ sdk = $globalJson['sdk'] } | ConvertTo-Json -Depth 3
+Write-Host "global.json (SDK settings):`n$loggedConfig"
