@@ -1,13 +1,14 @@
 # pin-dotnet-sdk
 
-Installs a stable .NET 10 SDK and pins the exact installed version in the
-checkout's root `global.json`. The action creates the file if missing or
-replaces only its `sdk` section, preserving other settings such as
-`msbuild-sdks` and `test`. It disables SDK roll-forward and does not change
-project target frameworks or nested `global.json` files.
+Installs the version specified by `sdk.version` in the checkout's root
+`global.json` and leaves that file unchanged, including its SDK resolution
+settings. If no version is specified, the action installs a stable .NET 10
+SDK and pins the exact installed version with roll-forward disabled, while
+preserving other top-level settings such as `msbuild-sdks` and `test`.
+The action does not change project target frameworks or nested `global.json` files.
 
-The action logs whether it created, updated, or left `global.json` unchanged
-and shows the resulting `sdk` section without logging unrelated settings.
+The action logs the requested version when leaving `global.json` unchanged,
+or shows the resulting `sdk` section when creating or updating the file.
 
 Run this action after checkout, before invoking `dotnet` from the workspace
 root. Each job that needs the pin must call the action independently.

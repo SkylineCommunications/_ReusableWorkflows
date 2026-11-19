@@ -641,16 +641,15 @@ jobs:
             throw "Expected dotnet to select the pinned .NET 10 SDK, found '$activeSdk'."
           }
 
-      - name: Stage an existing global.json with a .NET 11 pin
+      - name: Stage an existing global.json without an SDK version
         shell: pwsh
         run: |
           @{
-            sdk = @{ version = '11.0.100'; rollForward = 'latestMajor'; paths = @('.dotnet') }
             'msbuild-sdks' = @{ 'Microsoft.Build.NoTargets' = '3.7.0' }
             test = @{ runner = 'Microsoft.Testing.Platform' }
           } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath global.json
 
-      - name: Replace the old SDK pin
+      - name: Pin the default in the existing file
         uses: ./.github/actions/pin-dotnet-sdk
 
       - name: Verify SDK selection and preserved settings
@@ -667,19 +666,26 @@ jobs:
           if ($config.'msbuild-sdks'.'Microsoft.Build.NoTargets' -ne '3.7.0' -or $config.test.runner -ne 'Microsoft.Testing.Platform') {
             throw 'The pin changed unrelated global.json settings.'
           }
-          "PINNED_SDK=$activeSdk" >> $env:GITHUB_ENV
+      - name: Stage an explicit SDK version
+        shell: pwsh
+        run: |
+          '{"sdk":{"version":"8.0.428","rollForward":"disable","allowPrerelease":false},"test":{"runner":"Microsoft.Testing.Platform"}}' |
+            Set-Content -LiteralPath global.json
           "GLOBAL_JSON_HASH=$((Get-FileHash -LiteralPath global.json).Hash)" >> $env:GITHUB_ENV
 
-      - name: Reapply the SDK pin
+      - name: Honor the explicit SDK version
         uses: ./.github/actions/pin-dotnet-sdk
 
-      - name: Verify the same SDK pin leaves global.json unchanged
+      - name: Verify the requested SDK is active and global.json is unchanged
         shell: pwsh
         run: |
           $config = Get-Content -LiteralPath global.json -Raw | ConvertFrom-Json
-          # A new stable SDK may have become available between setup calls.
-          if ($config.sdk.version -eq $env:PINNED_SDK -and (Get-FileHash -LiteralPath global.json).Hash -ne $env:GLOBAL_JSON_HASH) {
-            throw 'Reapplying the same SDK pin changed global.json.'
+          $activeSdk = dotnet --version
+          if ($LASTEXITCODE -ne 0 -or $activeSdk -ne $config.sdk.version) {
+            throw "Expected dotnet to select SDK $($config.sdk.version), found '$activeSdk'."
+          }
+          if ((Get-FileHash -LiteralPath global.json).Hash -ne $env:GLOBAL_JSON_HASH) {
+            throw 'The action changed an explicitly pinned global.json.'
           }
 
   update-global-json-sdks:

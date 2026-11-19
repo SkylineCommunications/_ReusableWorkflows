@@ -42,7 +42,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `setup-nuget-sources` | Registers GitHub and optional Skyline NuGet feeds. | [setup-nuget-sources/README.md](setup-nuget-sources/README.md) |
 | `setup-skyline-nuget-sources` | Registers all Skyline GitHub and Azure NuGet feeds. | [setup-skyline-nuget-sources/README.md](setup-skyline-nuget-sources/README.md) |
 | `validate-inputs` | Validates mandatory Sonar/DataMiner inputs based on context. | [validate-inputs/README.md](validate-inputs/README.md) |
-| `pin-dotnet-sdk` | Installs .NET 10 and pins the exact SDK version in the checkout's root `global.json`. | [pin-dotnet-sdk/README.md](pin-dotnet-sdk/README.md) |
+| `pin-dotnet-sdk` | Honors the SDK version in the root `global.json`, or installs and pins stable .NET 10 if none is set. | [pin-dotnet-sdk/README.md](pin-dotnet-sdk/README.md) |
 | `update-global-json-sdks` | Rewrites managed `msbuild-sdks` versions in `global.json`. | [update-global-json-sdks/README.md](update-global-json-sdks/README.md) |
 | `apply-catalog-identifiers` | Rewrites manifest `id:` fields from mapping input. | [apply-catalog-identifiers/README.md](apply-catalog-identifiers/README.md) |
 | `notify-dataminer-dependabot` | Sends signed publication notifications for published Catalog IDs. | [notify-dataminer-dependabot/README.md](notify-dataminer-dependabot/README.md) |
