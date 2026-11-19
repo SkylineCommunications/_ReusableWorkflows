@@ -1123,8 +1123,8 @@ jobs:
 
   sign-assemblies:
     name: sign-assemblies
-    # Windows because the action drives Authenticode signing, and the offline
-    # corpus shadows the `sign` tool so no live Key Vault is needed.
+    # Exercise the real Windows verifier and the composite interface without
+    # live signing, Key Vault access, or certificate-store changes.
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -1133,86 +1133,191 @@ jobs:
         shell: pwsh
         run: ./.github/actions/sign-assemblies/test.ps1
 
-      - name: Scaffold build outputs with duplicates
+      - name: Scaffold real unsigned and trusted signed build outputs
         id: scaffold
         shell: pwsh
         run: |
-          $root = Join-Path $env:RUNNER_TEMP 'sign-demo'
+          $fixtureRoot = Join-Path $env:RUNNER_TEMP ("sign-assemblies-smoke-" + [guid]::NewGuid().ToString('N'))
+          $root = Join-Path $fixtureRoot 'mixed'
+          $signedRoot = Join-Path $fixtureRoot 'all-signed'
+          $sourceRoot = Join-Path $fixtureRoot 'sources'
+          New-Item -Path $sourceRoot -ItemType Directory -Force | Out-Null
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "fixture-root=$fixtureRoot"
 
-          # Shared.dll is byte-identical in three bin folders, Other.dll is
-          # unique, and Ignored.dll sits outside a bin folder.
+          $sharedSource = Join-Path $sourceRoot 'Shared.dll'
+          $otherSource = Join-Path $sourceRoot 'Other.dll'
+          Add-Type -TypeDefinition 'public static class ExampleShared { public static int Value => 1; }' -OutputAssembly $sharedSource -OutputType Library -ErrorAction Stop
+          Add-Type -TypeDefinition 'public static class ExampleOther { public static int Value => 2; }' -OutputAssembly $otherSource -OutputType Library -ErrorAction Stop
+          foreach ($source in @($sharedSource, $otherSource)) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $source -ErrorAction Stop
+            if ($signature.Status -ne 'NotSigned') {
+              throw "Expected an unsigned PE fixture but got status '$($signature.Status)'."
+            }
+          }
+
+          $trustedSource = Join-Path $PSHOME 'pwsh.exe'
+          $signature = Get-AuthenticodeSignature -LiteralPath $trustedSource -ErrorAction Stop
+          if ($signature.Status -ne 'Valid' -or $signature.SignatureType -ne 'Authenticode' -or $null -eq $signature.SignerCertificate) {
+            throw "The trusted source must have a Valid embedded Authenticode signature with a signer certificate; got '$($signature.Status)' / '$($signature.SignatureType)'."
+          }
+          if ($signature.SignerCertificate.Subject -notmatch '(^|,\s*)O=Microsoft Corporation(,|$)') {
+            throw 'The trusted smoke source must be a Microsoft-signed binary.'
+          }
+
+          # Four unsigned paths collapse to two representatives and two copies.
+          # Two trusted copies must be preserved, and obj/text files excluded.
           $files = @{
-            'ProjectA/bin/Release/Shared.dll'  = 'shared-content'
-            'ProjectB/bin/Release/Shared.dll'  = 'shared-content'
-            'ProjectC/bin/Debug/Shared.dll'    = 'shared-content'
-            'ProjectA/bin/Release/Other.dll'   = 'other-content'
-            'ProjectA/obj/Release/Ignored.dll' = 'ignored-content'
+            'ProjectA/bin/Release/Shared.dll'  = $sharedSource
+            'ProjectB/bin/Release/Shared.dll'  = $sharedSource
+            'ProjectC/bin/Debug/Shared.dll'    = $sharedSource
+            'ProjectA/bin/Release/Other.dll'   = $otherSource
+            'ProjectA/bin/Release/Trusted.exe' = $trustedSource
+            'ProjectB/bin/Release/Trusted.exe' = $trustedSource
+            'ProjectA/obj/Release/Ignored.dll' = $otherSource
           }
 
           foreach ($file in $files.GetEnumerator()) {
             $path = Join-Path $root $file.Key
             New-Item -Path (Split-Path $path -Parent) -ItemType Directory -Force | Out-Null
-            Set-Content -Path $path -Value $file.Value -NoNewline
+            Copy-Item -LiteralPath $file.Value -Destination $path
+          }
+          Set-Content -LiteralPath (Join-Path $root 'ProjectA/bin/Release/Notes.txt') -Value 'not-an-assembly' -NoNewline
+
+          foreach ($relative in @('ProjectA/bin/Release/Trusted.exe', 'ProjectB/bin/Release/Trusted.exe')) {
+            $path = Join-Path $signedRoot $relative
+            New-Item -Path (Split-Path $path -Parent) -ItemType Directory -Force | Out-Null
+            Copy-Item -LiteralPath $trustedSource -Destination $path
           }
 
-          "root=$root" >> $env:GITHUB_OUTPUT
+          $state = @{ mixed = @{}; signed = @{} }
+          foreach ($file in (Get-ChildItem -LiteralPath $root -Recurse -File)) {
+            $relative = [System.IO.Path]::GetRelativePath($root, $file.FullName)
+            $state['mixed'][$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+          }
+          foreach ($file in (Get-ChildItem -LiteralPath $signedRoot -Recurse -File)) {
+            $relative = [System.IO.Path]::GetRelativePath($signedRoot, $file.FullName)
+            $state['signed'][$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+          }
+          $statePath = Join-Path $fixtureRoot 'state.json'
+          $state | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $statePath -Encoding utf8
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value @(
+            "root=$root"
+            "signed-root=$signedRoot"
+            "state-path=$statePath"
+          )
 
-      - name: Invoke composite smoke test
+      - name: Invoke composite dry-run smoke test
         id: sign
         uses: ./.github/actions/sign-assemblies
         with:
           root: ${{ steps.scaffold.outputs.root }}
           dry-run: 'true'
+        env:
+          SIGNING_KEY_VAULT_URL: ''
+          SIGNING_KEY_VAULT_CERTIFICATE: ''
+          AZURE_TENANT_ID: ''
+          AZURE_CLIENT_ID: ''
+          AZURE_CLIENT_SECRET: ''
 
-      - name: Assert deduplicated plan
+      - name: Assert mixed preflight plan and unchanged dry-run bytes
         shell: pwsh
         env:
           ROOT: ${{ steps.scaffold.outputs.root }}
+          STATE_PATH: ${{ steps.scaffold.outputs.state-path }}
           FILES_TOTAL: ${{ steps.sign.outputs.files-total }}
           FILES_SIGNED: ${{ steps.sign.outputs.files-signed }}
           FILES_COPIED: ${{ steps.sign.outputs.files-copied }}
+          FILES_SKIPPED: ${{ steps.sign.outputs.files-skipped }}
           BATCHES: ${{ steps.sign.outputs.batches }}
         run: |
-          if ($env:FILES_TOTAL -ne '4') {
-            throw "Expected 4 build outputs but got '$($env:FILES_TOTAL)'."
+          if ($env:FILES_TOTAL -ne '6') {
+            throw "Expected 6 build outputs but got '$($env:FILES_TOTAL)'."
           }
 
-          # Three identical Shared.dll plus one unique Other.dll collapse to two
-          # signing requests; the file outside a bin folder is not counted.
-          if ($env:FILES_SIGNED -ne '2' -or $env:FILES_COPIED -ne '2') {
-            throw "Expected 2 signed and 2 copied but got '$($env:FILES_SIGNED)' and '$($env:FILES_COPIED)'."
+          if ($env:FILES_SIGNED -ne '2' -or $env:FILES_COPIED -ne '2' -or $env:FILES_SKIPPED -ne '2') {
+            throw "Expected 2 signed, 2 copied, and 2 skipped but got '$($env:FILES_SIGNED)', '$($env:FILES_COPIED)', and '$($env:FILES_SKIPPED)'."
           }
 
-          if (([int]$env:FILES_SIGNED + [int]$env:FILES_COPIED) -ne [int]$env:FILES_TOTAL) {
-            throw 'Signed plus copied must account for every build output.'
+          if (([int]$env:FILES_SIGNED + [int]$env:FILES_COPIED + [int]$env:FILES_SKIPPED) -ne [int]$env:FILES_TOTAL) {
+            throw 'Signed plus copied plus skipped must account for every build output.'
           }
 
           if ($env:BATCHES -ne '1') {
             throw "Expected a single batch but got '$($env:BATCHES)'."
           }
 
-          $shared = Get-Content -LiteralPath (Join-Path $env:ROOT 'ProjectA/bin/Release/Shared.dll') -Raw
-          if ($shared -ne 'shared-content') {
-            throw 'A dry run must not modify build outputs.'
+          $state = Get-Content -LiteralPath $env:STATE_PATH -Raw | ConvertFrom-Json -AsHashtable
+          $expected = $state['mixed']
+          $actualFiles = @(Get-ChildItem -LiteralPath $env:ROOT -Recurse -File)
+          if ($actualFiles.Count -ne $expected.Count) {
+            throw 'A dry run must not change the file set.'
+          }
+          foreach ($file in $actualFiles) {
+            $relative = [System.IO.Path]::GetRelativePath($env:ROOT, $file.FullName)
+            if (-not $expected.ContainsKey($relative) -or (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -ne $expected[$relative]) {
+              throw "A dry run must preserve the exact bytes of '$relative'."
+            }
           }
 
-      - name: Assert idempotency
+      - name: Invoke composite with only trusted outputs and no signing settings
         id: sign-again
         uses: ./.github/actions/sign-assemblies
         with:
-          root: ${{ steps.scaffold.outputs.root }}
-          dry-run: 'true'
+          root: ${{ steps.scaffold.outputs.signed-root }}
+          dry-run: 'false'
+        env:
+          SIGNING_KEY_VAULT_URL: ''
+          SIGNING_KEY_VAULT_CERTIFICATE: ''
+          AZURE_TENANT_ID: ''
+          AZURE_CLIENT_ID: ''
+          AZURE_CLIENT_SECRET: ''
 
-      - name: Assert unchanged plan on re-run
+      - name: Assert all-skipped execution preserves trusted outputs
         shell: pwsh
         env:
-          FIRST_TOTAL: ${{ steps.sign.outputs.files-total }}
-          FIRST_SIGNED: ${{ steps.sign.outputs.files-signed }}
-          SECOND_TOTAL: ${{ steps.sign-again.outputs.files-total }}
-          SECOND_SIGNED: ${{ steps.sign-again.outputs.files-signed }}
+          ROOT: ${{ steps.scaffold.outputs.signed-root }}
+          STATE_PATH: ${{ steps.scaffold.outputs.state-path }}
+          FILES_TOTAL: ${{ steps.sign-again.outputs.files-total }}
+          FILES_SIGNED: ${{ steps.sign-again.outputs.files-signed }}
+          FILES_COPIED: ${{ steps.sign-again.outputs.files-copied }}
+          FILES_SKIPPED: ${{ steps.sign-again.outputs.files-skipped }}
+          BATCHES: ${{ steps.sign-again.outputs.batches }}
         run: |
-          if ($env:FIRST_TOTAL -ne $env:SECOND_TOTAL -or $env:FIRST_SIGNED -ne $env:SECOND_SIGNED) {
-            throw 'Re-running the action must produce the same plan.'
+          if ($env:FILES_TOTAL -ne '2' -or $env:FILES_SKIPPED -ne '2') {
+            throw 'Both trusted paths must remain in files-total and files-skipped.'
+          }
+          if ($env:FILES_SIGNED -ne '0' -or $env:FILES_COPIED -ne '0' -or $env:BATCHES -ne '0') {
+            throw 'All-skipped execution must not sign, copy, or create signing batches.'
+          }
+          if (([int]$env:FILES_SIGNED + [int]$env:FILES_COPIED + [int]$env:FILES_SKIPPED) -ne [int]$env:FILES_TOTAL) {
+            throw 'The all-skipped output invariant must hold.'
+          }
+
+          $state = Get-Content -LiteralPath $env:STATE_PATH -Raw | ConvertFrom-Json -AsHashtable
+          $expected = $state['signed']
+          $actualFiles = @(Get-ChildItem -LiteralPath $env:ROOT -Recurse -File)
+          if ($actualFiles.Count -ne $expected.Count) {
+            throw 'All-skipped execution must not change the file set.'
+          }
+          foreach ($file in $actualFiles) {
+            $relative = [System.IO.Path]::GetRelativePath($env:ROOT, $file.FullName)
+            if (-not $expected.ContainsKey($relative) -or (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -ne $expected[$relative]) {
+              throw "All-skipped execution must preserve the exact bytes of '$relative'."
+            }
+            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName -ErrorAction Stop
+            if ($signature.Status -ne 'Valid' -or $signature.SignatureType -ne 'Authenticode' -or $null -eq $signature.SignerCertificate) {
+              throw 'Preserved outputs must retain their valid embedded Authenticode signatures.'
+            }
+          }
+
+      - name: Clean up smoke fixtures
+        if: always()
+        shell: pwsh
+        env:
+          FIXTURE_ROOT: ${{ steps.scaffold.outputs.fixture-root }}
+        run: |
+          if ($env:FIXTURE_ROOT -and (Test-Path -LiteralPath $env:FIXTURE_ROOT)) {
+            Remove-Item -LiteralPath $env:FIXTURE_ROOT -Recurse -Force
           }
 
   quality-gate-summary:

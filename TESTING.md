@@ -354,6 +354,12 @@ changed actions to the workflows that consume them and dispatches those repos.
    the shared, single-value Key Vault secret is not a stable downstream fixture.
 - **Missing-secret behavior**: not testable in Skyline-managed repos — OIDC/Key
   Vault always supplies secrets.
+- **Already-signed assembly preservation**: covered by the Windows
+  `sign-assemblies` composite smoke test, but not yet asserted by downstream
+  verify jobs. Extend `BOOST-DailyRegression-SharedLibrary` to verify preserved
+  trusted dependency bytes and a nonzero skipped count while retaining its
+  unsigned deduplication assertion. Exercise preservation in the WiX and mixed
+  package scenarios in `BOOST-DailyRegression-MasterWorkflow` as well.
 - **Automation and Connector-Legacy pipelines**: frozen at run-conclusion
   coverage (both deprecating).
 - **SonarCloud paths**: excluded (org is moving away from SonarCloud).
