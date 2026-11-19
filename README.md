@@ -40,6 +40,12 @@ Automation solutions use `Master Workflow.yml` after migration to
 
 ### Example: generic solution pipeline (`Master Workflow.yml`)
 
+Project discovery, CI builds and unit tests, and Windows and Ubuntu packaging
+use a stable .NET 10 SDK pinned in the checkout's root `global.json` by
+[`pin-dotnet-sdk`](.github/actions/pin-dotnet-sdk/README.md). The action preserves
+existing `msbuild-sdks` and test-runner settings and does not change project
+target frameworks.
+
 ```yaml
 name: CI
 
@@ -131,6 +137,9 @@ jobs:
 ```
 
 ### Example: SDK connector pipeline (`Connector Master Workflow.yml`)
+
+The quality gate and connector package creation jobs also use
+[`pin-dotnet-sdk`](.github/actions/pin-dotnet-sdk/README.md).
 
 ```yaml
 jobs:

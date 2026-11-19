@@ -620,6 +620,68 @@ jobs:
           OUTCOME: ${{ steps.bad-mode.outcome }}
         run: test "$OUTCOME" = "failure"
 
+  pin-dotnet-sdk:
+    name: pin-dotnet-sdk (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create a pin when global.json is missing
+        uses: ./.github/actions/pin-dotnet-sdk
+
+      - name: Verify the new pin selects .NET 10
+        shell: pwsh
+        run: |
+          $config = Get-Content -LiteralPath global.json -Raw | ConvertFrom-Json
+          $activeSdk = dotnet --version
+          if ($LASTEXITCODE -ne 0 -or $activeSdk -notmatch '^10\.0\.\d+$' -or $activeSdk -ne $config.sdk.version) {
+            throw "Expected dotnet to select the pinned .NET 10 SDK, found '$activeSdk'."
+          }
+
+      - name: Stage an existing global.json with a .NET 11 pin
+        shell: pwsh
+        run: |
+          @{
+            sdk = @{ version = '11.0.100'; rollForward = 'latestMajor'; paths = @('.dotnet') }
+            'msbuild-sdks' = @{ 'Microsoft.Build.NoTargets' = '3.7.0' }
+            test = @{ runner = 'Microsoft.Testing.Platform' }
+          } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath global.json
+
+      - name: Replace the old SDK pin
+        uses: ./.github/actions/pin-dotnet-sdk
+
+      - name: Verify SDK selection and preserved settings
+        shell: pwsh
+        run: |
+          $config = Get-Content -LiteralPath global.json -Raw | ConvertFrom-Json
+          $activeSdk = dotnet --version
+          if ($LASTEXITCODE -ne 0 -or $activeSdk -notmatch '^10\.0\.\d+$' -or $activeSdk -ne $config.sdk.version) {
+            throw "Expected dotnet to select the pinned .NET 10 SDK, found '$activeSdk'."
+          }
+          if ($config.sdk.rollForward -ne 'disable' -or $config.sdk.allowPrerelease -ne $false -or $config.sdk.paths) {
+            throw 'The SDK configuration still allows a different SDK to be selected.'
+          }
+          if ($config.'msbuild-sdks'.'Microsoft.Build.NoTargets' -ne '3.7.0' -or $config.test.runner -ne 'Microsoft.Testing.Platform') {
+            throw 'The pin changed unrelated global.json settings.'
+          }
+          "PINNED_SDK=$activeSdk" >> $env:GITHUB_ENV
+          "GLOBAL_JSON_HASH=$((Get-FileHash -LiteralPath global.json).Hash)" >> $env:GITHUB_ENV
+
+      - name: Reapply the SDK pin
+        uses: ./.github/actions/pin-dotnet-sdk
+
+      - name: Verify the same SDK pin leaves global.json unchanged
+        shell: pwsh
+        run: |
+          $config = Get-Content -LiteralPath global.json -Raw | ConvertFrom-Json
+          # A new stable SDK may have become available between setup calls.
+          if ($config.sdk.version -eq $env:PINNED_SDK -and (Get-FileHash -LiteralPath global.json).Hash -ne $env:GLOBAL_JSON_HASH) {
+            throw 'Reapplying the same SDK pin changed global.json.'
+          }
+
   update-global-json-sdks:
     name: update-global-json-sdks
     runs-on: ubuntu-latest

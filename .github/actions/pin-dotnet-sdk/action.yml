@@ -1,0 +1,16 @@
+name: Pin .NET 10 SDK
+description: Installs a stable .NET 10 SDK and pins it in the checkout's root global.json.
+runs:
+  using: composite
+  steps:
+    - name: Set up .NET 10 SDK
+      id: setup-dotnet
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Pin SDK in global.json
+      shell: pwsh
+      env:
+        DOTNET_SDK_VERSION: ${{ steps.setup-dotnet.outputs.dotnet-version }}
+      run: '& "$env:GITHUB_ACTION_PATH/pin-dotnet-sdk.ps1"'
