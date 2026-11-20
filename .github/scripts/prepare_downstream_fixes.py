@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -20,6 +22,11 @@ ASSIGNEE = "copilot-swe-agent[bot]"
 COPILOT_ASSIGNEE_LOGINS = {"copilot", "copilot-swe-agent", ASSIGNEE.casefold()}
 LABEL = "downstream-fix"
 MAX_CRITERIA_LENGTH = 16_384
+COMMAND_FORMAT = (
+    f"Expected {COMMAND} on its own first line, then one '### owner/repository' "
+    "heading per target, each followed by nonempty acceptance criteria "
+    "(for example '- Assert the expected output.')."
+)
 
 
 class OrchestrationError(RuntimeError):
@@ -79,17 +86,59 @@ class GitHubClient:
         return json.loads(body) if body else None
 
 
-def parse_command(comment_body: str) -> str:
-    lines = comment_body.replace("\r\n", "\n").split("\n")
-    if not lines or lines[0].strip() != COMMAND:
-        raise OrchestrationError(f"The first line must be exactly {COMMAND}")
-    criteria = "\n".join(lines[1:]).strip()
-    if not criteria:
-        raise OrchestrationError("Add acceptance criteria below the command")
-    if len(criteria) > MAX_CRITERIA_LENGTH:
+def normalize_criteria(criteria: str) -> str:
+    """Ignore line endings, per-line trailing whitespace, and edge blank lines."""
+    lines = criteria.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return "\n".join(line.rstrip() for line in lines).strip("\n")
+
+
+def parse_command(comment_body: str) -> dict[str, str]:
+    lines = comment_body.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if not lines or lines[0] != COMMAND:
+        raise OrchestrationError(f"The first line must be exactly {COMMAND}. {COMMAND_FORMAT}")
+    if len("\n".join(lines[1:])) > MAX_CRITERIA_LENGTH:
         raise OrchestrationError(
-            f"Acceptance criteria exceed the {MAX_CRITERIA_LENGTH}-character limit"
+            f"Acceptance criteria exceed the {MAX_CRITERIA_LENGTH}-character limit. "
+            f"{COMMAND_FORMAT}"
         )
+
+    sections: dict[str, list[str]] = {}
+    seen_repositories: set[str] = set()
+    current_repository: str | None = None
+    for line in lines[1:]:
+        heading = re.fullmatch(
+            r"### ([A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+)", line.rstrip()
+        )
+        if heading:
+            repository = heading[1]
+            if repository.casefold() in seen_repositories:
+                raise OrchestrationError(
+                    f"Duplicate repository heading {repository}. {COMMAND_FORMAT}"
+                )
+            seen_repositories.add(repository.casefold())
+            current_repository = repository
+            sections[repository] = []
+        elif line.lstrip().startswith("#"):
+            raise OrchestrationError(f"Malformed repository heading. {COMMAND_FORMAT}")
+        elif current_repository is None:
+            if line.strip():
+                raise OrchestrationError(
+                    f"Unscoped acceptance criteria are not allowed. {COMMAND_FORMAT}"
+                )
+        else:
+            sections[current_repository].append(line)
+
+    if not sections:
+        raise OrchestrationError(f"No repository sections were provided. {COMMAND_FORMAT}")
+    criteria = {
+        repository: normalize_criteria("\n".join(section))
+        for repository, section in sections.items()
+    }
+    for repository, text in criteria.items():
+        if not text:
+            raise OrchestrationError(
+                f"Acceptance criteria for {repository} are empty. {COMMAND_FORMAT}"
+            )
     return criteria
 
 
@@ -120,6 +169,18 @@ def select_targets(
 def issue_marker(source: SourcePullRequest) -> str:
     marker = {"source": source.repository, "pr": source.number}
     return f"<!-- downstream-fix {json.dumps(marker, separators=(',', ':'))} -->"
+
+
+def task_marker(source: SourcePullRequest, repository: str, criteria: str) -> str:
+    marker = {
+        "source": source.repository,
+        "pr": source.number,
+        "repo": repository,
+        "criteria": hashlib.sha256(
+            normalize_criteria(criteria).encode("utf-8")
+        ).hexdigest(),
+    }
+    return f"<!-- downstream-fix-task {json.dumps(marker, separators=(',', ':'))} -->"
 
 
 def render_issue_body(
@@ -169,22 +230,59 @@ def ensure_label(client: GitHubClient, repository: str) -> None:
 
 
 def find_existing_issue(
-    client: GitHubClient, repository: str, marker: str
+    client: GitHubClient,
+    repository: str,
+    source: SourcePullRequest,
+    criteria: str,
 ) -> dict[str, Any] | None:
-    query = urllib.parse.urlencode(
-        {"state": "all", "labels": LABEL, "per_page": "100"}
-    )
-    issues = client.request("GET", f"/repos/{repository}/issues?{query}")
-    matches = [
-        issue
-        for issue in issues
-        if "pull_request" not in issue and marker in (issue.get("body") or "")
-    ]
+    marker = task_marker(source, repository, criteria)
+    legacy_marker = issue_marker(source)
+    normalized_criteria = normalize_criteria(criteria)
+    matches: dict[int, dict[str, Any]] = {}
+    page = 1
+    while True:
+        query = urllib.parse.urlencode(
+            {
+                "state": "all",
+                "labels": LABEL,
+                "sort": "created",
+                "direction": "asc",
+                "per_page": "100",
+                "page": str(page),
+            }
+        )
+        issues = client.request("GET", f"/repos/{repository}/issues?{query}")
+        for issue in issues:
+            if "pull_request" in issue:
+                continue
+            body = (issue.get("body") or "").replace("\r\n", "\n").replace("\r", "\n")
+            matched = marker in body
+            if (
+                not matched
+                and legacy_marker in body
+                and "<!-- downstream-fix-task " not in body
+            ):
+                _, heading, remainder = body.partition("\n## Acceptance criteria\n\n")
+                old_criteria, constraints, _ = remainder.partition(
+                    "\n\n## Delivery constraints"
+                )
+                matched = bool(
+                    heading
+                    and constraints
+                    and normalize_criteria(old_criteria) == normalized_criteria
+                )
+            if matched:
+                matches[issue["number"]] = issue
+        if len(issues) < 100:
+            break
+        page += 1
+
     if len(matches) > 1:
         raise OrchestrationError(
-            f"Found multiple downstream-fix issues for the source PR in {repository}"
+            "Found multiple downstream-fix issues with the same source PR and "
+            f"acceptance criteria in {repository}; maintainer review is required"
         )
-    return matches[0] if matches else None
+    return next(iter(matches.values()), None)
 
 
 def assign_copilot(
@@ -227,21 +325,26 @@ def prepare_target(
     repository = target["repo"]
     result: dict[str, Any] = {"repo": repository, "status": "failed"}
     try:
-        ensure_label(client, repository)
-        marker = issue_marker(source)
-        issue = find_existing_issue(client, repository, marker)
-        if issue and issue["state"] != "open":
-            raise OrchestrationError(
-                f"Existing issue {issue['html_url']} is closed; maintainer review is required"
+        issue = find_existing_issue(client, repository, source, criteria)
+        if issue and issue["state"] == "closed":
+            result.update(
+                status="closed",
+                issue_url=issue["html_url"],
+                state_reason=issue.get("state_reason") or "unknown",
             )
+            return result
 
         if issue is None:
+            ensure_label(client, repository)
             issue = client.request(
                 "POST",
                 f"/repos/{repository}/issues",
                 {
                     "title": f"[downstream fix] _ReusableWorkflows#{source.number}",
-                    "body": render_issue_body(source, criteria, target["workflows"]),
+                    "body": (
+                        f"{task_marker(source, repository, criteria)}\n"
+                        f"{render_issue_body(source, criteria, target['workflows'])}"
+                    ),
                     "labels": [LABEL],
                 },
                 expected=(201,),
@@ -271,6 +374,12 @@ def render_summary(source: SourcePullRequest, results: list[dict[str, Any]]) -> 
     for result in results:
         if "error" in result:
             lines.append(f"- [FAIL] `{result['repo']}`: {result['error']}")
+        elif result["status"] == "closed":
+            lines.append(
+                f"- [CLOSED] [{result['repo']}]({result['issue_url']}): "
+                f"matching issue closed (state reason: {result.get('state_reason') or 'unknown'}); "
+                "not reopened or reassigned"
+            )
         else:
             lines.append(
                 f"- [OK] [{result['repo']}]({result['issue_url']}): "
@@ -320,18 +429,37 @@ def main() -> int:
 
     results: list[dict[str, Any]] = []
     try:
-        criteria = parse_command(args.comment_file.read_text(encoding="utf-8"))
+        criteria_by_repository = parse_command(
+            args.comment_file.read_text(encoding="utf-8")
+        )
         changed_workflows = {
             line.strip()
             for line in args.changed_workflows_file.read_text(encoding="utf-8").splitlines()
             if line.strip()
         }
-        targets = select_targets(read_json(args.downstream_map_file), changed_workflows)
-        if not targets:
-            raise OrchestrationError("No mapped downstream repositories are affected")
+        downstream_map = read_json(args.downstream_map_file)
+        eligible_targets = {
+            target["repo"]: target
+            for target in select_targets(downstream_map, changed_workflows)
+        }
+        mapped_repositories = {entry["repo"] for entry in downstream_map}
+        for repository in criteria_by_repository:
+            if repository not in mapped_repositories:
+                raise OrchestrationError(
+                    f"Requested repository {repository} is not in DOWNSTREAM_MAP. "
+                    f"{COMMAND_FORMAT}"
+                )
+            if repository not in eligible_targets:
+                raise OrchestrationError(
+                    f"Requested repository {repository} is unaffected by the PR's "
+                    f"changed workflows/actions. {COMMAND_FORMAT}"
+                )
 
         client = GitHubClient(os.environ.get("DOWNSTREAM_ISSUES_TOKEN", ""))
-        results = [prepare_target(client, source, criteria, target) for target in targets]
+        results = [
+            prepare_target(client, source, criteria, eligible_targets[repository])
+            for repository, criteria in criteria_by_repository.items()
+        ]
     except (OSError, json.JSONDecodeError, OrchestrationError) as error:
         results = [{"repo": "orchestration", "status": "failed", "error": str(error)}]
 

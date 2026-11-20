@@ -79,25 +79,46 @@ a maintainer with write access can comment on the source PR:
 
 ```text
 /prepare-downstream-fixes
-- Consume the new workflow output from the caller job.
-- Assert the expected names and URLs in the verify job.
-- Cover both SDK multi-manifest and supported legacy behavior.
+### SkylineCommunications/BOOST-DailyRegression-SharedLibrary
+- Assert the added signing output in the SharedLibrary verify job.
+- Preserve the existing unsigned-file deduplication assertions.
+### SkylineCommunications/BOOST-DailyRegression-MasterWorkflow
+- Assert the expected installer contents in the WiX and mixed scenarios.
+- Retain the existing artifact assertions.
 ```
 
-The first line must match exactly and the following acceptance criteria are
-required. The command maps the PR's changed workflows and composite actions
-through `DOWNSTREAM_MAP`, creates or reuses one linked `downstream-fix` issue
-per affected repository, and assigns `copilot-swe-agent[bot]`. Each assignment
-starts an independent Copilot session in that repository; the resulting pull
-requests must be reviewed and merged separately.
+The first line must match exactly. Add one level-3 heading (`###`) containing
+the full `owner/repository` name for each repository that needs edits, followed
+by its own nonempty acceptance criteria. Use only repositories needing actual
+changes, not every consumer of the same workflow or repositories needing only
+compatibility validation; use `/test` for that validation. Repository names
+mentioned inside acceptance criteria do not select additional targets.
 
-The command is idempotent for a source PR. Re-running it reuses an existing
-open task identified by its machine-readable source marker. It never reopens a
-closed task, pushes to a downstream branch, merges a pull request, or executes
-content from the source PR. The source PR title is not copied into Copilot's
-task; only maintainer-authored acceptance criteria and allowlisted workflow
-names are forwarded. Every run appends an audit summary to the source PR. A
-partial failure leaves successfully created tasks intact and fails the run.
+The command validates every selected repository against `DOWNSTREAM_MAP` and
+the PR's changed workflows and composite-action consumers. Missing or malformed
+sections, duplicate targets, unknown repositories, and repositories unaffected
+by the PR fail the entire plan before downstream changes. The old unscoped
+bullet-list format is rejected rather than broadcast to all mapped consumers.
+Each selected repository receives only its own acceptance criteria in a linked
+`downstream-fix` issue, assigned to `copilot-swe-agent[bot]`. Each assignment
+starts an independent Copilot session; review and merge the resulting pull
+requests separately.
+
+Task identity combines the source PR, downstream repository, and normalized
+per-repository criteria. Retrying identical criteria reuses the matching open
+task without restarting an existing Copilot assignment. If an earlier
+assignment failed and the task is still unassigned, assignment is retried.
+If that task is closed, the command reports it as closed without reopening or
+reassigning it. New criteria create a separate task, even at the same source
+head SHA or when an earlier task is still open. Keep criteria unchanged when
+retrying a request; change them only when intentionally requesting new work.
+Completed earlier fixes therefore do not block later fixes on the same PR.
+
+The command never pushes to a downstream branch, merges a pull request, or
+executes content from the source PR. The source PR title is not copied into
+Copilot's task; only maintainer-authored per-repository criteria and allowlisted
+workflow names are forwarded. Every run appends an audit summary to the source
+PR. A partial failure leaves successfully created tasks intact and fails the run.
 
 Configure `DOWNSTREAM_ISSUES_TOKEN` in `_ReusableWorkflows` before enabling the
 command. Copilot issue assignment requires a user-to-server token. Use a
@@ -110,8 +131,10 @@ administration access.
 Copilot coding agent must be enabled and assignable in every target repository.
 If assignment is unavailable, the downstream issue remains as an auditable
 manual task and the orchestration run reports a failure. Because
-`issue_comment` loads workflows from the default branch, this command becomes
-available only after its orchestrator changes merge.
+`issue_comment` loads the workflow and script from the default branch, format
+and retry changes take effect only after merging there, not by pushing them to
+the source PR. Do not use the new format while the default branch still runs
+the old broadcast implementation.
 
 ## Downstream repositories
 
@@ -161,20 +184,26 @@ default-branch map must still include the retired repositories for
 
 ```text
 /prepare-downstream-fixes
-- In Automation and legacy-connector regression repositories, remove the retired scenarios' daily schedules, tag-push/manual callers, and receivers. Preserve repository history; do not substitute no-op successful tests.
-- Keep SDK-connector and NegativePaths receivers calling Connector Master Workflow.yml. Preserve connector BRANCH/RELEASE coverage and the solution-filter-name positive control; leave other mapped repositories' existing scenarios intact.
-- Retained SDK connector runs must produce Connector Package and validatorResults; tag runs must also produce SBOM and complete Artifact Registration and Upload. Critical-validator and missing-results connector scenarios must fail at SDK Skyline Quality Gate.
+### SkylineCommunications/BOOST-DailyRegression-Connector-Legacy
+- Remove the retired legacy-connector scenarios' daily schedules, tag-push/manual callers, and receiver.
+- Preserve repository history; do not substitute no-op successful tests.
+### SkylineCommunications/BOOST-DailyRegression-Automation-SDK
+- Remove the retired SDK-automation scenarios' daily schedules, tag-push/manual callers, and receiver.
+- Preserve repository history; do not substitute no-op successful tests.
+### SkylineCommunications/BOOST-DailyRegression-Automation-Legacy
+- Remove the retired legacy-automation scenarios' daily schedules, tag-push/manual callers, and receiver.
+- Preserve repository history; do not substitute no-op successful tests.
 ```
 
 The affected retirement repositories are
 `SkylineCommunications/BOOST-DailyRegression-Connector-Legacy`,
 `SkylineCommunications/BOOST-DailyRegression-Automation-SDK`, and
-`SkylineCommunications/BOOST-DailyRegression-Automation-Legacy`. The same
-command also targets the retained Connector SDK and NegativePaths repositories
-for compatibility validation. Review the linked downstream PRs separately:
-merge the map pruning first, then retire the old callers and schedules before
-releasing the workflow removal. Removing an entry from the map does not stop
-its independent daily regression schedule.
+`SkylineCommunications/BOOST-DailyRegression-Automation-Legacy`. Retained
+Connector SDK and NegativePaths repositories need compatibility validation,
+not new issues unless their callers or assertions actually need edits. Review
+the linked downstream PRs separately: merge the map pruning first, then retire
+the old callers and schedules before releasing the workflow removal. Removing
+an entry from the map does not stop its independent daily regression schedule.
 
 For the cutover, verify:
 

@@ -26,9 +26,10 @@ concurrency:
 #                this PR (successes carry over; requires an unchanged head SHA)
 #   /prepare-test [head-sha] - create/update a self-consistent test-pr-<number>
 #                   tag; fork PRs must supply the full reviewed head SHA
-#   /prepare-downstream-fixes - create an issue in each affected downstream
-#                   repo and assign Copilot; acceptance criteria are required
-#                   on the following lines
+#   /prepare-downstream-fixes - create tasks only in explicitly selected,
+#                   affected mapped repos and assign Copilot; follow with one
+#                   ### owner/repository heading per target and that repo's
+#                   nonempty acceptance criteria (for example "- Assert output")
 #
 # To add a new target repo:
 #   1. Add an entry to DOWNSTREAM_MAP below with the repo and its dependent workflow files
