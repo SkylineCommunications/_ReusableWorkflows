@@ -24,7 +24,7 @@ runs:
   steps:
     - name: Register SkylineCommunications GitHub NuGet source
       if: ${{ inputs.skylinecommunications-github-token != '' }}
-      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@test-downstream
       with:
         organization: SkylineCommunications
         token: ${{ inputs.skylinecommunications-github-token }}
@@ -32,7 +32,7 @@ runs:
 
     - name: Register SkylineCommunicationsCore GitHub NuGet source
       if: ${{ inputs.skylinecommunicationscore-github-token != '' }}
-      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@main
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-github-nuget-source@test-downstream
       with:
         organization: SkylineCommunicationsCore
         token: ${{ inputs.skylinecommunicationscore-github-token }}
@@ -40,7 +40,7 @@ runs:
 
     - name: Register Skyline Cloud NuGet source
       if: ${{ inputs.azure-token != '' }}
-      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@main
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@test-downstream
       with:
         url: https://pkgs.dev.azure.com/skyline-cloud/Cloud_NuGets/_packaging/CloudNuGet/nuget/v3/index.json
         token: ${{ inputs.azure-token }}
@@ -48,7 +48,7 @@ runs:
 
     - name: Register Skyline Private Azure NuGet source
       if: ${{ inputs.azure-token != '' }}
-      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@main
+      uses: SkylineCommunications/_ReusableWorkflows/.github/actions/add-azure-nuget-source@test-downstream
       with:
         url: https://pkgs.dev.azure.com/skyline-cloud/_packaging/skyline-private-nugets/nuget/v3/index.json
         token: ${{ inputs.azure-token }}
