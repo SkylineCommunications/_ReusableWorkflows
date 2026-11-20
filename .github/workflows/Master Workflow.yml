@@ -826,13 +826,9 @@ jobs:
             -p:GenerateDataMinerPackage=false
         shell: bash
 
-      # Signs in place so later package builds consume the signed binaries.
-      # Deduplicates by content hash first: solutions copy the same third-party
-      # assemblies into every project's bin folder, and signing each copy
-      # separately bursts past the per-vault Azure Key Vault rate limit
-      # (429 VaultRequestTypeLimitReached). Every path still ends up holding the
-      # signed bytes — the composite copies each signed file back over its
-      # byte-identical duplicates.
+      # Preserve trusted embedded Authenticode signatures. Group unsigned
+      # outputs by content hash to avoid redundant Key Vault requests, then
+      # copy signed representatives back before package builds consume them.
       - name: Sign assemblies
         id: sign-assemblies
         if: >-

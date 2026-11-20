@@ -62,6 +62,21 @@ jobs:
     secrets: inherit
 ```
 
+### Preserving already-signed assemblies
+
+Before building WiX installers or DataMiner packages, the Windows packaging
+job uses [`sign-assemblies`](.github/actions/sign-assemblies/README.md) to
+preserve DLLs and EXEs with a valid **embedded Authenticode signature from any
+Windows-trusted signer**, including third-party publishers. This is automatic;
+no caller input is required. Unsigned outputs are still signed once per unique
+file content and copied back over their duplicates. Invalid signatures and
+verification errors stop the step instead of silently bypassing signing.
+
+The action reports preserved files through `files-skipped`. This reduces
+redundant Key Vault requests, but does not coordinate rate limits across runs.
+MSI signing, NuGet package signing (including recursive signing inside
+packages), and DataMiner package signing are unchanged.
+
 ### Prerelease from a fork PR
 
 Install a thin `issue_comment: created` caller on the repository's default
