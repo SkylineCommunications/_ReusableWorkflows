@@ -1,5 +1,5 @@
 # Central source of truth for all managed SDK versions.
-$DATAMINER_SDK_VERSION = '2.7.2-msbuild.1'
+$DATAMINER_SDK_VERSION = '2.8.0-webapplication.1'
 
 $dataMinerSdkPatterns = @(
     '^Skyline\.DataMiner\..*'
