@@ -42,6 +42,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `setup-nuget-sources` | Registers GitHub and optional Skyline NuGet feeds. | [setup-nuget-sources/README.md](setup-nuget-sources/README.md) |
 | `setup-skyline-nuget-sources` | Registers all Skyline GitHub and Azure NuGet feeds. | [setup-skyline-nuget-sources/README.md](setup-skyline-nuget-sources/README.md) |
 | `validate-inputs` | Validates mandatory Sonar/DataMiner inputs based on context. | [validate-inputs/README.md](validate-inputs/README.md) |
+| `pin-dotnet-sdk` | Honors the SDK version in the root `global.json`, or installs and pins stable .NET 10 if none is set. | [pin-dotnet-sdk/README.md](pin-dotnet-sdk/README.md) |
 | `update-global-json-sdks` | Rewrites managed `msbuild-sdks` versions in `global.json`. | [update-global-json-sdks/README.md](update-global-json-sdks/README.md) |
 | `apply-catalog-identifiers` | Rewrites manifest `id:` fields from mapping input. | [apply-catalog-identifiers/README.md](apply-catalog-identifiers/README.md) |
 | `notify-dataminer-dependabot` | Sends signed publication notifications for published Catalog IDs. | [notify-dataminer-dependabot/README.md](notify-dataminer-dependabot/README.md) |
@@ -50,7 +51,7 @@ Usage examples in each action README are sourced from the master workflows in
 | `set-repo-type` | Writes the enterprise `Workflow-Repo-Type` custom property (idempotent read-before-write). | [set-repo-type/README.md](set-repo-type/README.md) |
 | `remove-wix-projects` | Strips WiX projects from a solution for cross-platform CI builds. | [remove-wix-projects/README.md](remove-wix-projects/README.md) |
 | `partition-solution-projects` | Splits a solution into remaining, WiX, and DataMiner package build stages. | [partition-solution-projects/README.md](partition-solution-projects/README.md) |
-| `sign-assemblies` | Signs build outputs through Azure Key Vault, signing each unique file content once and copying the result over its duplicates. | [sign-assemblies/README.md](sign-assemblies/README.md) |
+| `sign-assemblies` | Preserves Windows-trusted embedded Authenticode signatures, then signs remaining unique build output contents through Azure Key Vault and copies the result over their duplicates. | [sign-assemblies/README.md](sign-assemblies/README.md) |
 | `package-debian` | Builds a `.deb` per DxM project from per-project Debian skeletons. | [package-debian/README.md](package-debian/README.md) |
 | `apply-source-code-url` | Fills empty `source_code_url:` fields in catalog manifests. | [apply-source-code-url/README.md](apply-source-code-url/README.md) |
 | `sonarcloud-status` | Checks SonarCloud project status and emits analysis flag. | [sonarcloud-status/README.md](sonarcloud-status/README.md) |

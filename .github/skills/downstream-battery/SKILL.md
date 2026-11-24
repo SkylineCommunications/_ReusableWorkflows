@@ -46,31 +46,43 @@ It does not dispatch the battery or interfere with `test-downstream`.
 Copilot code-review autofix and each coding-agent session can modify only one
 repository. When a source PR requires battery-repository edits, produce an
 exact maintainer command instead of implying that the source autofix can make
-those edits:
+those edits. Select only repositories needing concrete code, fixture, caller,
+or assertion changes; use `/test` for unchanged consumers needing validation.
+Emit one `### owner/repository` heading per target, with only that repository's
+observable acceptance criteria:
 
 ```text
 /prepare-downstream-fixes
-- <observable downstream behavior to add or change>
-- <specific caller output, artifact, job, or URL to assert>
-- <required SDK, legacy, branch, or release scenarios>
+### SkylineCommunications/BOOST-DailyRegression-SharedLibrary
+- <SharedLibrary behavior to change and output or packaged bytes to assert>
+- <required branch or release scenarios; preserve existing deduplication checks>
+### SkylineCommunications/BOOST-DailyRegression-MasterWorkflow
+- <MasterWorkflow fixture or caller change and matching verify assertion>
+- <required feature-matrix scenarios; preserve existing artifact checks>
 ```
 
 The maintainer posts this on an `_ReusableWorkflows` PR. The default-branch
-`Test Downstream.yml` maps changed workflows and actions through its hard
-allowlist, creates or reuses a linked issue in every affected repository, and
-assigns `copilot-swe-agent[bot]`. Fork-controlled PR titles are not forwarded
-to Copilot. Each issue must instruct Copilot to open a PR, avoid direct default-
-branch pushes and automatic merges, retain normal production refs, validate
-the receiver scenario, and link the source PR.
+`Test Downstream.yml` validates all selected repositories against its hard
+allowlist and changed workflow/action consumers before creating tasks. Empty,
+duplicate, unknown, or unaffected targets and unscoped bullet lists fail the
+plan; repository mentions inside criteria do not select targets. Only explicit,
+eligible targets receive issues, each with its own criteria, assigned to
+`copilot-swe-agent[bot]`. See the [command contract](../../../TESTING.md#preparing-downstream-fix-pull-requests)
+for validation and retry semantics. Fork-controlled PR titles are not forwarded
+to Copilot. Each issue must instruct Copilot to open a PR, avoid direct
+default-branch pushes and automatic merges, retain normal production refs,
+validate the receiver scenario, and link the source PR.
 
 Treat the command comment as human approval for task creation and Copilot
-assignment. Never infer acceptance criteria silently, accept repository names
-from comment input, execute PR content, or broaden the map. The dedicated
+assignment. Select names only from `DOWNSTREAM_MAP`, never broaden the map or
+infer targets or criteria from prose, and never execute PR content. The dedicated
 `DOWNSTREAM_ISSUES_TOKEN` must be a user-to-server token scoped only to mapped
 repositories. Copilot assignment requires metadata read plus Actions, Contents,
 Issues, and Pull requests read/write; GitHub App installation tokens are not
-supported. Repeated commands reuse the source marker; closed tasks require
-manual review rather than reopening.
+supported. Keep per-repository criteria unchanged when retrying: matching open
+tasks are reused and matching closed tasks are reported without restarting them.
+New criteria intentionally create a separate task on the same source PR, even
+after earlier fixes are done or while another task is still open.
 
 ## Diagnosis path for a red battery
 

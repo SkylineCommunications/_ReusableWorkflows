@@ -68,8 +68,8 @@ function Get-SignGroup {
 
     $groups = @()
     foreach ($group in ($candidates | Group-Object { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash })) {
-        # Sort so the representative is stable between runs, which keeps re-runs
-        # signing the same path and makes the logs comparable.
+        # Keep verification and any remaining signing on a stable representative
+        # so the paths in the logs remain comparable between runs.
         $paths = @($group.Group | ForEach-Object { $_.FullName } | Sort-Object)
         $groups += [PSCustomObject]@{
             Representative = $paths[0]
@@ -162,14 +162,75 @@ $duplicateCount = @($groups | ForEach-Object { $_.Duplicates }).Count
 $totalFiles = $groups.Count + $duplicateCount
 
 Write-Host "Found $totalFiles build output file(s) under '$rootFullPath' matching: $($extensions -join ', ')."
+
+# Finish preflight for every content group before signing or copying anything.
+# Windows trust is the policy: an embedded signature from any trusted publisher
+# is preserved, rather than replaced with the configured signing certificate.
+$pendingGroups = @()
+$skippedCount = 0
+if ($groups.Count -gt 0 -and $null -eq (Get-Command Get-AuthenticodeSignature -ErrorAction SilentlyContinue)) {
+    throw 'Get-AuthenticodeSignature is required to inspect build outputs. Run this action on Windows.'
+}
+
+foreach ($group in $groups) {
+    $path = $group.Representative
+    try {
+        $signatureResults = @(Get-AuthenticodeSignature -LiteralPath $path -ErrorAction Stop)
+    } catch {
+        throw "Signature verification failed for '$path' (status unavailable): $($_.Exception.Message)"
+    }
+
+    if ($signatureResults.Count -ne 1 -or $null -eq $signatureResults[0]) {
+        throw "Signature verification for '$path' returned $($signatureResults.Count) result(s); expected exactly one non-null signature result (status unavailable)."
+    }
+
+    $signature = $signatureResults[0]
+    $statusProperty = $signature.PSObject.Properties['Status']
+    $status = if ($null -ne $statusProperty) { [string]$statusProperty.Value } else { '<missing>' }
+    if ($status -eq 'NotSigned') {
+        $pendingGroups += $group
+        continue
+    }
+
+    if ($status -ne 'Valid') {
+        $messageProperty = $signature.PSObject.Properties['StatusMessage']
+        $statusMessage = if ($null -ne $messageProperty) { [string]$messageProperty.Value } else { '' }
+        throw "Signature preflight failed for '$path': unsupported or missing status '$status'. $statusMessage"
+    }
+
+    $typeProperty = $signature.PSObject.Properties['SignatureType']
+    $signatureType = if ($null -ne $typeProperty) { [string]$typeProperty.Value } else { '<missing>' }
+    $signerProperty = $signature.PSObject.Properties['SignerCertificate']
+    if ($null -eq $signerProperty -or $null -eq $signerProperty.Value) {
+        throw "Signature preflight failed for '$path': status 'Valid' with no signer certificate (signature type '$signatureType')."
+    }
+
+    if ($signatureType -eq 'Authenticode') {
+        $skippedCount += 1 + $group.Duplicates.Count
+        continue
+    }
+
+    if ($signatureType -eq 'Catalog') {
+        Write-Host "Valid catalog signature for '$path' is not portable embedded Authenticode; keeping this group on the signing path."
+        $pendingGroups += $group
+        continue
+    }
+
+    throw "Signature preflight failed for '$path': status 'Valid' with unsupported or missing signature type '$signatureType'."
+}
+
+$groups = $pendingGroups
+$duplicateCount = @($groups | ForEach-Object { $_.Duplicates }).Count
 Write-Host "$($groups.Count) unique file content(s) to sign, $duplicateCount duplicate(s) to copy afterwards."
+Write-Host "Skipped $skippedCount matching file(s) with Windows-trusted embedded Authenticode signatures."
 
 if ($groups.Count -eq 0) {
     Write-StepOutput -Values @{
-        'files-total'  = 0
-        'files-signed' = 0
-        'files-copied' = 0
-        'batches'      = 0
+        'files-total'   = $totalFiles
+        'files-signed'  = 0
+        'files-copied'  = 0
+        'files-skipped' = $skippedCount
+        'batches'       = 0
     }
     return
 }
@@ -180,10 +241,11 @@ $batches = @(Get-SignBatch -RelativePath $relativePaths)
 if ($dryRun) {
     Write-Host 'Dry run: not invoking the Sign CLI and not copying representatives.'
     Write-StepOutput -Values @{
-        'files-total'  = $totalFiles
-        'files-signed' = $groups.Count
-        'files-copied' = $duplicateCount
-        'batches'      = $batches.Count
+        'files-total'   = $totalFiles
+        'files-signed'  = $groups.Count
+        'files-copied'  = $duplicateCount
+        'files-skipped' = $skippedCount
+        'batches'       = $batches.Count
     }
     return
 }
@@ -228,8 +290,9 @@ foreach ($group in $groups) {
 Write-Host "Signed $($groups.Count) unique file(s) and copied the signed result over $duplicateCount duplicate(s)."
 
 Write-StepOutput -Values @{
-    'files-total'  = $totalFiles
-    'files-signed' = $groups.Count
-    'files-copied' = $duplicateCount
-    'batches'      = $batches.Count
+    'files-total'   = $totalFiles
+    'files-signed'  = $groups.Count
+    'files-copied'  = $duplicateCount
+    'files-skipped' = $skippedCount
+    'batches'       = $batches.Count
 }
