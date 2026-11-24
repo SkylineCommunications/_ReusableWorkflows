@@ -57,7 +57,7 @@ In the job's steps, after building the solution:
 
 On pull requests, check out `${{ github.event.pull_request.head.sha || github.sha }}` so the report matches the commit GitHub annotates. Run on default-branch pushes as well to establish a coverage baseline.
 
-See [coverage publishing](../run-unit-tests/README.md#coverage-publishing) for report locations and OS-specific labels. The shared Master Workflow does not opt in.
+See [coverage publishing](../run-unit-tests/README.md#coverage-publishing) for report locations and OS-specific labels. To try the upload via the Master Workflow, use the [coverage pilot](../../../TESTING.md#master-workflow-coverage-pilot) on a preview ref.
 
 ### Consume detected runner mode
 
