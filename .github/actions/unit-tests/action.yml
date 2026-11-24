@@ -12,11 +12,18 @@ inputs:
     description: Build configuration to test against (must match the prior build).
     required: false
     default: 'Release'
+  coverage:
+    description: '`off` leaves existing coverage collection unchanged, `report` prepares a merged Cobertura report, and `upload` also publishes it to GitHub.'
+    required: false
+    default: 'off'
 
 outputs:
   test-runner-mode:
     description: '`mtp` when MTP is configured in `global.json`, otherwise `vstest`.'
     value: ${{ steps.detect.outputs.mode }}
+  coverage-report:
+    description: Path to the merged Cobertura report, if one was produced.
+    value: ${{ steps.test.outputs.coverage-report }}
 
 runs:
   using: composite
@@ -26,8 +33,10 @@ runs:
       uses: SkylineCommunications/_ReusableWorkflows/.github/actions/detect-test-runner@main
 
     - name: Run unit tests
+      id: test
       uses: SkylineCommunications/_ReusableWorkflows/.github/actions/run-unit-tests@main
       with:
         solution-path: ${{ inputs.solution-path }}
         configuration: ${{ inputs.configuration }}
         test-runner-mode: ${{ steps.detect.outputs.mode }}
+        coverage: ${{ inputs.coverage }}

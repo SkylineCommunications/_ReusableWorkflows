@@ -5,6 +5,7 @@ permissions:
   id-token: write
   packages: write
   actions: read
+  code-quality: write
 
 on:
   workflow_call:
@@ -552,6 +553,7 @@ jobs:
         with:
           solution-path: ${{ needs.discover_projects.outputs.solution-path }}
           configuration: ${{ inputs.configuration }}
+          coverage: upload
 
       - name: Stop Analysis
         if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true'

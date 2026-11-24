@@ -580,42 +580,78 @@ jobs:
         run: test "$MODE" = "mtp"
 
   unit-tests:
-    name: run-unit-tests
-    runs-on: ubuntu-latest
+    name: run-unit-tests (${{ matrix.mode }}, ${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        mode: [vstest, mtp]
+        runner: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
       - name: Scaffold a minimal MSTest solution
         shell: bash
+        env:
+          TEST_MODE: ${{ matrix.mode }}
         run: |
           mkdir sample && cd sample
           dotnet new sln -n Sample
-          dotnet new mstest -n Sample.Tests --framework net8.0
-          dotnet sln add Sample.Tests/Sample.Tests.csproj
-          # Force a VSTest layout: strip the MTP package reference the template adds.
-          sed -i '/Microsoft\.Testing\.Platform/d' Sample.Tests/Sample.Tests.csproj
+          runner=VSTest
+          collector=coverlet
+          if [[ "$TEST_MODE" == 'mtp' ]]; then
+            runner=Microsoft.Testing.Platform
+            collector=Microsoft.CodeCoverage
+          fi
+          for name in First Second; do
+            dotnet new classlib -n "$name" --framework net10.0 --no-restore
+            dotnet new mstest -n "$name.Tests" --framework net10.0 \
+              --test-runner "$runner" --coverage-tool "$collector" --no-restore
+            printf 'namespace CoverageFixture;\npublic static class %s { public static int Run() => 42; }\n' "$name" > "$name/$name.cs"
+            printf 'using Microsoft.VisualStudio.TestTools.UnitTesting;\n[TestClass] public class CoverageTests { [TestMethod] public void Run() => Assert.AreEqual(42, CoverageFixture.%s.Run()); }\n' \
+              "$name" > "$name.Tests/CoverageTests.cs"
+            dotnet add "$name.Tests/$name.Tests.csproj" reference "$name/$name.csproj"
+            dotnet sln add "$name/$name.csproj" "$name.Tests/$name.Tests.csproj"
+          done
           dotnet build --configuration Release
+          if [[ "$TEST_MODE" == 'mtp' ]]; then
+            printf '%s\n' '{"test":{"runner":"Microsoft.Testing.Platform"}}' > ../global.json
+          fi
 
-      - name: Invoke run-unit-tests (vstest)
+      - name: Invoke run-unit-tests with coverage report
+        id: coverage
         uses: ./.github/actions/run-unit-tests
         with:
           solution-path: ${{ github.workspace }}/sample/Sample.slnx
-          test-runner-mode: vstest
+          test-runner-mode: ${{ matrix.mode }}
+          coverage: report
 
-      - name: Assert TRX produced
-        shell: bash
+      - name: Assert TRX and coverage from both projects
+        shell: pwsh
+        env:
+          COVERAGE_REPORT: ${{ steps.coverage.outputs.coverage-report }}
         run: |
-          find sample -path '*/TestResults/*unitTestResults.trx' | grep -q .
+          [xml] $report = Get-Content -LiteralPath $env:COVERAGE_REPORT -Raw
+          foreach ($name in 'First', 'Second') {
+            $covered = $report.SelectSingleNode("//class[@name='CoverageFixture.$name']/lines/line[@hits > 0]")
+            if (-not $covered) {
+              throw "No covered lines for $name in the merged Cobertura report."
+            }
+            if (-not (Get-ChildItem -LiteralPath "sample/$name.Tests/TestResults" -Recurse -Filter unitTestResults.trx)) {
+              throw "No TRX report for $name."
+            }
+          }
 
       - name: Invoke run-unit-tests with invalid mode (must fail)
+        if: matrix.mode == 'vstest' && runner.os == 'Linux'
         id: bad-mode
         continue-on-error: true
         uses: ./.github/actions/run-unit-tests
         with:
-          solution-path: ${{ github.workspace }}/sample/Sample.sln
+          solution-path: ${{ github.workspace }}/sample/Sample.slnx
           test-runner-mode: bogus
 
       - name: Assert invalid mode rejected
+        if: matrix.mode == 'vstest' && runner.os == 'Linux'
         env:
           OUTCOME: ${{ steps.bad-mode.outcome }}
         run: test "$OUTCOME" = "failure"
