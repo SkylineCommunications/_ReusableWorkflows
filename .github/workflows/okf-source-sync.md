@@ -50,6 +50,34 @@ steps:
     with:
       changed-files: ${{ needs.prepare.outputs.changed-files }}
       report-path: ${{ github.workspace }}/.okf-source-sync-report.json
+  - name: Verify source drift report
+    shell: bash
+    env:
+      REPORT_PATH: ${{ github.workspace }}/.okf-source-sync-report.json
+    run: |
+      export EXPECTED_COMMIT="$(git rev-parse HEAD)"
+      node <<'NODE'
+      const fs = require("node:fs");
+      const report = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, "utf8").replace(/^\uFEFF/, ""));
+      if (!report || typeof report !== "object" || Array.isArray(report) ||
+          report.schema !== "skyline.okf-source-sync/0.1" ||
+          !["no-change", "changes-detected"].includes(report.status) ||
+          typeof report.dry_run !== "boolean" ||
+          report.repository !== process.env.GITHUB_REPOSITORY ||
+          typeof report.okf_root !== "string" || !report.okf_root ||
+          report.candidate_commit !== process.env.EXPECTED_COMMIT ||
+          report.scoped_detection !== true ||
+          !Number.isSafeInteger(report.concepts_scanned) || report.concepts_scanned < 0 ||
+          !Array.isArray(report.changed_paths) || report.changed_paths.length === 0 ||
+          !report.changed_paths.every(path => typeof path === "string" && path.length > 0) ||
+          !Array.isArray(report.declared_sources) ||
+          !Array.isArray(report.affected_concepts) ||
+          !Array.isArray(report.diagnostics) || report.diagnostics.length !== 0 ||
+          !Array.isArray(report.limitations) ||
+          !report.limitations.every(item => typeof item === "string")) {
+        throw new Error("Source drift report is blocked or malformed.");
+      }
+      NODE
 jobs:
   pre_activation:
     pre-steps:
@@ -145,13 +173,13 @@ jobs:
     if: needs.prepare.outputs.skip != 'true'
   safe_outputs:
     needs: [prepare]
+    if: needs.agent.result == 'success'
   request_review:
     needs: [prepare, safe_outputs]
     if: >-
       !inputs.preview &&
       (needs.safe_outputs.outputs.created_pr_number != '' || needs.safe_outputs.outputs.push_commit_sha != '')
     permissions:
-      actions: read
       contents: read
       pull-requests: write
     uses: ./.github/workflows/OKF%20Source%20Sync%20Review%20Workflow.yml

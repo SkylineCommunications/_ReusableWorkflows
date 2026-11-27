@@ -2,6 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
+const { spawnSync } = require("node:child_process");
 
 const root = path.resolve(__dirname, "../../..");
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -49,7 +51,7 @@ function syncPr(number, source = 10, overrides = {}) {
     number,
     state: "open",
     base: { ref: "main" },
-    head: { ref: `automation/okf-source-sync-pr-${source}`, repo: { full_name: `${owner}/${repo}` } },
+    head: { ref: `automation/okf-source-sync-pr-${source}`, sha, repo: { full_name: `${owner}/${repo}` } },
     body: `Source-sync for merged PR #${source}\n<!-- gh-aw-workflow-id: okf-source-sync -->`,
     user: { login: "github-actions[bot]" },
     ...overrides,
@@ -116,19 +118,20 @@ test("merges of generated PRs are skipped", async () => {
   assert.equal((await select({ source })).skip, "true");
 });
 
-async function review({ generated = syncPr(20), source = sourcePr(), requested = [], direct = true, prefix = "automation/okf-source-sync-pr-" } = {}) {
+async function review({ generated = syncPr(20), source = sourcePr(), requested = [], reviews = [], permission = { permission: "write" }, direct = true, prefix = "automation/okf-source-sync-pr-" } = {}) {
   const calls = [];
   const github = {
     rest: {
       pulls: {
         get: async ({ pull_number }) => ({ data: pull_number === 20 ? generated : source }),
         list: {},
+        listReviews: {},
         listRequestedReviewers: async () => ({ data: { users: requested } }),
         requestReviewers: async request => { calls.push(request); },
       },
-      repos: { getCollaboratorPermissionLevel: async () => ({ data: { permission: "write" } }) },
+      repos: { getCollaboratorPermissionLevel: async () => ({ data: permission }) },
     },
-    paginate: async () => [generated],
+    paginate: async method => method === github.rest.pulls.listReviews ? reviews : [generated],
   };
   const replacements = {
     "${{ toJSON(inputs.workflow-id) }}": JSON.stringify("okf-source-sync"),
@@ -163,4 +166,68 @@ test("direct review rejects untrusted PRs; workflow-run matching remains support
   await assert.rejects(review({ generated: syncPr(20, 10, { user: { login: "someone" } }) }), /not a trusted/);
   const legacy = syncPr(20, 10, { body: "Source-sync for merged PR #10\nid: 42, workflow_id: okf-source-sync" });
   assert.equal((await review({ generated: legacy, direct: false })).length, 1);
+});
+
+test("review eligibility recognizes triage without accepting read-only collaborators", async () => {
+  assert.equal((await review({ permission: { permission: "read", role_name: "triage" } })).length, 1);
+  assert.equal((await review({ permission: { permission: "read", role_name: "read" } })).length, 0);
+});
+
+test("completed reviews on the current head prevent duplicate requests", async () => {
+  const completed = { user: { login: "author" }, commit_id: sha, state: "APPROVED" };
+  assert.equal((await review({ reviews: [completed] })).length, 0);
+  assert.equal((await review({ reviews: [{ ...completed, state: "DISMISSED" }] })).length, 1);
+  assert.equal((await review({ reviews: [{ ...completed, commit_id: "b".repeat(40) }] })).length, 1);
+  assert.equal((await review({ reviews: [{ ...completed, user: { login: "other" } }] })).length, 1);
+});
+
+test("report gate fails closed before agent execution and publication", () => {
+  const workflow = fs.readFileSync(path.join(root, ".github/workflows/okf-source-sync.md"), "utf8").replace(/\r\n/g, "\n");
+  const match = workflow.match(/node <<'NODE'\n([\s\S]*?)\n      NODE/);
+  assert.ok(match);
+  const script = match[1].split("\n").map(line => line.slice(6)).join("\n");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "okf-report-test-"));
+  const reportPath = path.join(directory, "report.json");
+  const run = () => spawnSync(process.execPath, ["-e", script], {
+    env: { ...process.env, REPORT_PATH: reportPath, GITHUB_REPOSITORY: `${owner}/${repo}`, EXPECTED_COMMIT: sha },
+  }).status;
+  const report = {
+    schema: "skyline.okf-source-sync/0.1",
+    status: "no-change",
+    dry_run: true,
+    repository: `${owner}/${repo}`,
+    okf_root: "OKF",
+    candidate_commit: sha,
+    scoped_detection: true,
+    concepts_scanned: 0,
+    changed_paths: ["docs/source.md"],
+    declared_sources: [],
+    affected_concepts: [],
+    diagnostics: [],
+    limitations: [],
+  };
+  try {
+    assert.notEqual(run(), 0);
+    for (const status of ["no-change", "changes-detected"]) {
+      fs.writeFileSync(reportPath, JSON.stringify({ ...report, status }));
+      assert.equal(run(), 0);
+    }
+    for (const invalid of [
+      "{",
+      JSON.stringify({ ...report, status: "blocked" }),
+      JSON.stringify({ ...report, status: "unknown" }),
+      JSON.stringify({ ...report, candidate_commit: "b".repeat(40) }),
+      JSON.stringify({ ...report, scoped_detection: false }),
+      JSON.stringify({ ...report, diagnostics: [{}] }),
+      JSON.stringify({ ...report, affected_concepts: null }),
+    ]) {
+      fs.writeFileSync(reportPath, invalid);
+      assert.notEqual(run(), 0);
+    }
+  } finally {
+    fs.rmSync(directory, { recursive: true });
+  }
+  const lock = fs.readFileSync(path.join(root, ".github/workflows/okf-source-sync.lock.yml"), "utf8");
+  assert.match(lock, /name: Verify source drift report[\s\S]*?name: Configure Git credentials/);
+  assert.match(lock, /safe_outputs:[\s\S]*?\(needs\.agent\.result == 'success'\)/);
 });

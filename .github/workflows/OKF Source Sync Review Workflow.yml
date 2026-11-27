@@ -41,7 +41,6 @@ jobs:
     name: Request source PR author review
     runs-on: ubuntu-latest
     permissions:
-      actions: read
       contents: read
       pull-requests: write
     steps:
@@ -51,7 +50,6 @@ jobs:
       - name: Request review from original source PR author
         uses: actions/github-script@v9.0.0
         with:
-          github-token: ${{ github.token }}
           script: |
             const workflowId = ${{ toJSON(inputs.workflow-id) }};
             const generatedBranchPrefix = ${{ toJSON(inputs.generated-branch-prefix) }};
@@ -165,7 +163,8 @@ jobs:
               }
               throw error;
             }
-            if (!["admin", "maintain", "write", "triage"].includes(permission.permission)) {
+            if (!["admin", "maintain", "write"].includes(permission.permission) &&
+                permission.role_name !== "triage") {
               core.info(
                 `Skipping PR #${generatedPullRequest.number}: ${reviewer} is not eligible to review this repository.`
               );
@@ -183,6 +182,23 @@ jobs:
             ) {
               core.info(
                 `Review is already requested from ${reviewer} on PR #${generatedPullRequest.number}.`
+              );
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner,
+              repo,
+              pull_number: generatedPullRequest.number,
+              per_page: 100,
+            });
+            if (reviews.some(review =>
+              review.user?.login === reviewer &&
+              review.commit_id === generatedPullRequest.head.sha &&
+              ["APPROVED", "CHANGES_REQUESTED", "COMMENTED"].includes(review.state)
+            )) {
+              core.info(
+                `${reviewer} already reviewed the current head of PR #${generatedPullRequest.number}.`
               );
               return;
             }

@@ -85,13 +85,11 @@ on:
     types:
       - completed
 
-permissions:
-  actions: read
-  contents: read
-  pull-requests: write
-
 jobs:
   request-review:
+    permissions:
+      contents: read
+      pull-requests: write
     uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/OKF%20Source%20Sync%20Review%20Workflow.yml@main
 ```
 
