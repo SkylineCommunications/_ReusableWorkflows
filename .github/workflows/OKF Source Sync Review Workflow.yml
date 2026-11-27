@@ -1,0 +1,214 @@
+name: OKF Source Sync Review Workflow
+
+on:
+  workflow_call:
+    inputs:
+      generated-branch-prefix:
+        description: Prefix used by generated pull request branches.
+        required: false
+        type: string
+        default: automation/okf-source-sync-pr
+      workflow-id:
+        description: Marker value written in generated pull request bodies.
+        required: false
+        type: string
+        default: okf-source-sync
+      source-pr-pattern:
+        description: Regular expression with one capture group for the source pull request number.
+        required: false
+        type: string
+        default: 'Source-sync for merged PR #(\d+)'
+      base-branch:
+        description: Base branch for generated and source pull requests.
+        required: false
+        type: string
+        default: main
+      generated-pr-number:
+        description: Generated PR number when called directly after publication; zero uses workflow_run matching.
+        required: false
+        type: number
+        default: 0
+      source-pr-number:
+        description: Merged source PR number when called directly after publication.
+        required: false
+        type: number
+        default: 0
+
+permissions: {}
+
+jobs:
+  request-review:
+    name: Request source PR author review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Reject unsafe trigger
+        uses: SkylineCommunications/_ReusableWorkflows/.github/actions/guard-trigger@main
+
+      - name: Request review from original source PR author
+        uses: actions/github-script@v9.0.0
+        with:
+          script: |
+            const workflowId = ${{ toJSON(inputs.workflow-id) }};
+            const generatedBranchPrefix = ${{ toJSON(inputs.generated-branch-prefix) }};
+            const baseBranch = ${{ toJSON(inputs.base-branch) }};
+            const sourcePullRequestPattern = new RegExp(${{ toJSON(inputs.source-pr-pattern) }});
+            const directGeneratedNumber = ${{ inputs.generated-pr-number }};
+            const directSourceNumber = ${{ inputs.source-pr-number }};
+            const { owner, repo } = context.repo;
+            let generatedPullRequest;
+            let sourcePullRequestNumber;
+            if (directGeneratedNumber || directSourceNumber) {
+              if (!Number.isSafeInteger(directGeneratedNumber) || directGeneratedNumber <= 0 ||
+                  !Number.isSafeInteger(directSourceNumber) || directSourceNumber <= 0) {
+                throw new Error("Both direct PR numbers must be positive integers.");
+              }
+              generatedPullRequest = (await github.rest.pulls.get({
+                owner, repo, pull_number: directGeneratedNumber,
+              })).data;
+              if (generatedPullRequest.state !== "open" ||
+                  generatedPullRequest.base.ref !== baseBranch ||
+                  generatedPullRequest.head.repo?.full_name !== `${owner}/${repo}` ||
+                  !generatedPullRequest.head.ref.startsWith(generatedBranchPrefix) ||
+                  generatedPullRequest.user?.login !== "github-actions[bot]" ||
+                  !generatedPullRequest.body?.includes(`<!-- gh-aw-workflow-id: ${workflowId} -->`)) {
+                throw new Error(`PR #${directGeneratedNumber} is not a trusted generated OKF sync PR.`);
+              }
+              sourcePullRequestNumber = directSourceNumber;
+            } else {
+              const run = context.payload.workflow_run;
+              if (!run || run.conclusion !== "success") {
+                core.info("The triggering workflow run was not successful; no review requested.");
+                return;
+              }
+              const marker = `id: ${run.id}, workflow_id: ${workflowId}`;
+              const pullRequests = await github.paginate(github.rest.pulls.list, {
+                owner, repo, state: "open", base: baseBranch, per_page: 100,
+              });
+              const generatedPullRequests = pullRequests.filter(pullRequest =>
+                pullRequest.head.repo?.full_name === `${owner}/${repo}` &&
+                pullRequest.head.ref.startsWith(generatedBranchPrefix) &&
+                pullRequest.body?.includes(marker)
+              );
+              if (generatedPullRequests.length === 0) {
+                core.info("No generated pull request was created by this workflow run.");
+                return;
+              }
+              if (generatedPullRequests.length > 1) {
+                core.warning(
+                  `Found ${generatedPullRequests.length} generated pull requests for workflow run ${run.id}; skipping to avoid requesting review on the wrong pull request.`
+                );
+                return;
+              }
+              generatedPullRequest = generatedPullRequests[0];
+              const match = generatedPullRequest.body.match(sourcePullRequestPattern);
+              sourcePullRequestNumber = match && Number.parseInt(match[1], 10);
+              if (!Number.isSafeInteger(sourcePullRequestNumber) || sourcePullRequestNumber <= 0) {
+                core.warning(
+                  `Skipping PR #${generatedPullRequest.number}: source pull request number is missing or invalid.`
+                );
+                return;
+              }
+            }
+
+            let sourcePullRequest;
+            try {
+              const response = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: sourcePullRequestNumber,
+              });
+              sourcePullRequest = response.data;
+            } catch (error) {
+              if (error.status === 404) {
+                core.warning(
+                  `Skipping PR #${generatedPullRequest.number}: source PR #${sourcePullRequestNumber} was not found.`
+                );
+                return;
+              }
+              throw error;
+            }
+
+            if (sourcePullRequest.base.ref !== baseBranch || !sourcePullRequest.merged_at) {
+              core.warning(
+                `Skipping PR #${generatedPullRequest.number}: source PR #${sourcePullRequestNumber} is not a merged PR targeting ${baseBranch}.`
+              );
+              return;
+            }
+
+            const reviewer = sourcePullRequest.user?.login;
+            if (!reviewer) {
+              core.warning(
+                `Skipping PR #${generatedPullRequest.number}: source PR #${sourcePullRequestNumber} has no resolvable author.`
+              );
+              return;
+            }
+
+            let permission;
+            try {
+              const response = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner,
+                repo,
+                username: reviewer,
+              });
+              permission = response.data;
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(
+                  `Skipping PR #${generatedPullRequest.number}: ${reviewer} is not a repository collaborator.`
+                );
+                return;
+              }
+              throw error;
+            }
+            if (!["admin", "maintain", "write"].includes(permission.permission) &&
+                permission.role_name !== "triage") {
+              core.info(
+                `Skipping PR #${generatedPullRequest.number}: ${reviewer} is not eligible to review this repository.`
+              );
+              return;
+            }
+
+            const { data: requestedReviewers } =
+              await github.rest.pulls.listRequestedReviewers({
+                owner,
+                repo,
+                pull_number: generatedPullRequest.number,
+              });
+            if (
+              requestedReviewers.users.some(user => user.login === reviewer)
+            ) {
+              core.info(
+                `Review is already requested from ${reviewer} on PR #${generatedPullRequest.number}.`
+              );
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner,
+              repo,
+              pull_number: generatedPullRequest.number,
+              per_page: 100,
+            });
+            if (reviews.some(review =>
+              review.user?.login === reviewer &&
+              review.commit_id === generatedPullRequest.head.sha &&
+              ["APPROVED", "CHANGES_REQUESTED", "COMMENTED"].includes(review.state)
+            )) {
+              core.info(
+                `${reviewer} already reviewed the current head of PR #${generatedPullRequest.number}.`
+              );
+              return;
+            }
+
+            await github.rest.pulls.requestReviewers({
+              owner,
+              repo,
+              pull_number: generatedPullRequest.number,
+              reviewers: [reviewer],
+            });
+            core.info(
+              `Requested review from ${reviewer} on PR #${generatedPullRequest.number}.`
+            );

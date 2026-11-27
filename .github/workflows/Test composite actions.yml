@@ -11,10 +11,18 @@ on:
     paths:
       - '.github/actions/**'
       - '.github/workflows/Test composite actions.yml'
+      - '.github/workflows/okf-source-sync.md'
+      - '.github/workflows/okf-source-sync.lock.yml'
+      - '.github/workflows/OKF Source Sync Review Workflow.yml'
+      - '.github/scripts/tests/test_okf_source_sync.js'
   pull_request:
     paths:
       - '.github/actions/**'
       - '.github/workflows/Test composite actions.yml'
+      - '.github/workflows/okf-source-sync.md'
+      - '.github/workflows/okf-source-sync.lock.yml'
+      - '.github/workflows/OKF Source Sync Review Workflow.yml'
+      - '.github/scripts/tests/test_okf_source_sync.js'
   workflow_dispatch:
 
 permissions:
@@ -95,6 +103,10 @@ jobs:
       - name: Exercise script regression tests
         shell: pwsh
         run: pwsh -NoLogo -NoProfile -File .github/actions/okf-source-sync/test.ps1
+
+      - name: Test PR selection and reviewer requests
+        shell: bash
+        run: node --test .github/scripts/tests/test_okf_source_sync.js
 
   guard-trigger:
     name: guard-trigger
