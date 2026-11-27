@@ -17,7 +17,58 @@ across the fleet and can be evolved in a single place.
 | `DataMiner App Packages Master Workflow.yml`              | *(deprecated)* Thin redirect to `Master Workflow.yml` for app packages.       |
 | `Update Catalog Details Workflow.yml`                     | Update Catalog metadata on release.                                           |
 | `Create Prerelease Workflow.yml`                           | Admin-only `/create-prerelease` command for forked NuGet PRs.                 |
+| `okf-source-sync.lock.yml`                                | Copilot-assisted OKF updates for merged source PRs, with configurable PR reuse. |
 | `OKF Source Sync Review Workflow.yml`                      | Requests the original source PR author to review a generated OKF sync PR.      |
+
+### OKF source sync
+
+The reusable Copilot workflow checks the changed files of a verified PR merged
+into `main`, assesses the `OKF/` bundle, and opens a draft update PR when
+needed. Set `pr-mode` to `per-pr` (default) for one update PR per source PR,
+or `single` to add changes to an existing open update PR. Repeated runs for
+the same source PR reuse its open update PR in either mode.
+
+The workflow queues runs per repository, limits published changes to `OKF/**`,
+and does not force-push or fall back to another PR if an update fails. It
+selects only same-repository `github-actions[bot]` PRs with the generated
+branch prefix and workflow marker; ambiguous or modified identities fail
+closed. Existing update PRs created with other credentials need manual
+resolution before enabling this workflow. The agent reports conflicts or
+insufficient evidence instead of overwriting changes. `preview` defaults to
+`true`; set it to `false` to publish. The publisher also blocks protected
+filenames such as `README.md`, including under `OKF/`.
+
+For example, a caller can dispatch from a validated merged-PR trigger:
+
+```yaml
+jobs:
+  sync:
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/okf-source-sync.lock.yml@main
+    permissions:
+      actions: read
+      contents: write
+      issues: write
+      pull-requests: write
+      copilot-requests: write
+    with:
+      source-pr: ${{ fromJSON(needs.find-pr.outputs.number) }}
+      pr-mode: single
+      preview: false
+    needs: find-pr
+```
+
+The caller supplies `find-pr.outputs.number` after verifying the merged PR
+associated with the `main` push; do not infer it from the merge actor. Grant
+Copilot access to the caller's Actions token. The generated workflow admits
+actors with repository write, maintain, or admin access; other actors,
+including automation identities without those permissions, are not guaranteed
+to start the agent. The generated workflow uses
+`GITHUB_TOKEN` by default, needs Python and network access for the pinned
+front-matter parser dependency, and requires the caller to allow Actions to
+create pull requests. PRs created with `GITHUB_TOKEN` do not normally trigger
+other workflows. It requests review from the merged PR's eligible author;
+it never assigns users. Its compiled lock file is regenerated with
+`gh aw compile okf-source-sync --strict` using gh-aw v1.2.2.
 
 ### OKF source-sync reviewer follow-up
 
