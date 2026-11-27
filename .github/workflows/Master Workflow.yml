@@ -300,6 +300,7 @@ jobs:
       packages: write
       actions: read
       pull-requests: write # required by quality-gate-summary to post the sticky PR comment
+      code-quality: write # required by the coverage upload pilot
     env:
       # DataMiner compile constants, exposed as an ENVIRONMENT variable instead of a
       # -p:DefineConstants global property on purpose: a global property overrides the
@@ -552,6 +553,11 @@ jobs:
         with:
           solution-path: ${{ needs.discover_projects.outputs.solution-path }}
           configuration: ${{ inputs.configuration }}
+          coverage: >-
+            ${{ vars.PILOT_GITHUB_CODE_COVERAGE == 'true' &&
+                github.event_name == 'push' &&
+                github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+                'upload' || 'off' }}
 
       - name: Stop Analysis
         if: github.actor != 'dependabot[bot]' && inputs.sonarcloud-project-name != '' && needs.check_oidc.outputs.is-fork != 'true'

@@ -11,10 +11,19 @@ The runner is controlled by the required `test-runner-mode` input and integratio
 | `solution-path` | yes | - | Path to `.sln` or `.slnx`. |
 | `configuration` | no | `Release` | Build configuration to test. |
 | `test-runner-mode` | yes | - | `mtp` or `vstest`. |
+| `coverage` | no | `off` | Use `report` to merge the current run's reports into one Cobertura XML file, or `upload` to also publish it to GitHub. `off` keeps the existing test output layout and does not publish. |
 
 ## Outputs
 
-No explicit outputs.
+| Output | Description |
+| --- | --- |
+| `coverage-report` | Path to the merged Cobertura report. Empty when `coverage` is `off` or no coverage was collected. |
+
+## Coverage publishing
+
+Enable [GitHub Code Quality](https://docs.github.com/en/code-security/how-tos/maintain-quality-code/enable-code-quality), set `coverage: upload`, and grant the calling job `code-quality: write` in addition to `contents: read`. For non-default-branch pushes, also grant `pull-requests: read` so the action can look up the PR. GitHub skips uploads from fork PRs. The upload uses `code-coverage/unit-tests-${{ runner.os }}` as its label (`Linux` on Ubuntu, `Windows` on Windows).
+
+Both `report` and `upload` store the raw test results in a run-specific subdirectory under each project's `TestResults` and merge coverage with ReportGenerator (.NET 8 or later). Existing OpenCover and Visual Studio XML formats are retained. The merged report is stored in the runner's temporary directory. If no coverage was collected, nothing is uploaded.
 
 ## Used by
 

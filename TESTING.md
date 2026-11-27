@@ -72,6 +72,39 @@ again after an internal PR changes, or review the new fork head and run
 its own tag, so preparing a manual ref does not move or interfere with the
 shared `test-downstream` tag used by the integration-test battery.
 
+### Master Workflow coverage pilot
+
+After pushing the pilot changes to the PR, comment `/prepare-test` to generate
+the preview tag. Use that tag, not `@main`, so the workflow and both unit-test
+actions come from the same revision. In the pilot repository, enable GitHub
+Code Quality and set the Actions variable `PILOT_GITHUB_CODE_COVERAGE` to
+`true`. Grant the calling job the additional `code-quality: write` permission
+without dropping its existing grants:
+
+```yaml
+jobs:
+  ci:
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      packages: write
+      pull-requests: write
+      code-quality: write
+    uses: SkylineCommunications/_ReusableWorkflows/.github/workflows/Master Workflow.yml@test-pr-206
+    secrets: inherit
+```
+
+Trigger the caller with a push to its default branch and look for the
+**Upload unit test coverage** step in **Unit Tests**. The report label ends
+with `-Linux` on Ubuntu or `-Windows` on Windows. The pilot does not upload
+from pull requests or tags.
+
+Do not merge the pilot permission requirement into `main` as-is. Any caller
+using the preview ref must grant `code-quality: write` even if it leaves
+the pilot variable unset, because GitHub validates reusable workflow
+permissions before running the jobs.
+
 ## Preparing downstream fix pull requests
 
 When a reusable-workflow change requires edits to one or more battery repos,

@@ -15,14 +15,34 @@ inputs:
   test-runner-mode:
     description: '`mtp` to use Microsoft.Testing.Platform, `vstest` for the default VSTest runner.'
     required: true
+  coverage:
+    description: '`off` leaves existing coverage collection unchanged, `report` prepares a merged Cobertura report, and `upload` also publishes it to GitHub.'
+    required: false
+    default: 'off'
+
+outputs:
+  coverage-report:
+    description: Path to the merged Cobertura report, if one was produced.
+    value: ${{ steps.test.outputs.coverage-report }}
 
 runs:
   using: composite
   steps:
     - name: Run unit tests
+      id: test
       shell: bash
       env:
         SOLUTION_PATH: ${{ inputs.solution-path }}
         CONFIGURATION: ${{ inputs.configuration }}
         TEST_RUNNER_MODE: ${{ inputs.test-runner-mode }}
-      run: bash "${{ github.action_path }}/run-unit-tests.sh"
+        COVERAGE_MODE: ${{ inputs.coverage }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: bash "$ACTION_PATH/run-unit-tests.sh"
+
+    - name: Upload unit test coverage
+      if: inputs.coverage == 'upload' && steps.test.outputs.coverage-report != ''
+      uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52 # v1.4.4
+      with:
+        file: ${{ steps.test.outputs.coverage-report }}
+        language: C#
+        label: code-coverage/unit-tests-${{ runner.os }}
