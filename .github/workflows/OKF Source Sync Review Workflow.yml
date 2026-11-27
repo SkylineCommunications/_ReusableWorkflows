@@ -7,7 +7,7 @@ on:
         description: Prefix used by generated pull request branches.
         required: false
         type: string
-        default: automation/okf-source-sync-pr-
+        default: automation/okf-source-sync-pr
       workflow-id:
         description: Marker value written in generated pull request bodies.
         required: false
